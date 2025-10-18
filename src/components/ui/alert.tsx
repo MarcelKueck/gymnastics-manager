@@ -1,21 +1,35 @@
 import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
-import { AlertCircle, CheckCircle2, Info, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, XCircle } from 'lucide-react';
 
 export interface AlertProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: 'info' | 'success' | 'warning' | 'error';
+  variant?: 'default' | 'success' | 'warning' | 'error';
 }
 
+const variantStyles = {
+  default: 'bg-blue-50 text-blue-900 border-blue-200',
+  success: 'bg-green-50 text-green-900 border-green-200',
+  warning: 'bg-yellow-50 text-yellow-900 border-yellow-200',
+  error: 'bg-red-50 text-red-900 border-red-200',
+};
+
 export const Alert = forwardRef<HTMLDivElement, AlertProps>(
-  ({ className, variant = 'info', children, ...props }, ref) => {
-    const icons = {
-      info: Info,
-      success: CheckCircle2,
-      warning: AlertCircle,
-      error: XCircle,
+  ({ className, variant = 'default', children, ...props }, ref) => {
+    // Get the appropriate icon component
+    const getIcon = () => {
+      switch (variant) {
+        case 'success':
+          return CheckCircle;
+        case 'warning':
+          return AlertCircle;
+        case 'error':
+          return XCircle;
+        default:
+          return Info;
+      }
     };
 
-    const Icon = icons[variant];
+    const IconComponent = getIcon();
 
     return (
       <div
@@ -23,18 +37,13 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(
         role="alert"
         className={cn(
           'relative w-full rounded-lg border p-4',
-          {
-            'bg-blue-50 border-blue-200 text-blue-900': variant === 'info',
-            'bg-green-50 border-green-200 text-green-900': variant === 'success',
-            'bg-yellow-50 border-yellow-200 text-yellow-900': variant === 'warning',
-            'bg-red-50 border-red-200 text-red-900': variant === 'error',
-          },
+          variantStyles[variant],
           className
         )}
         {...props}
       >
-        <div className="flex items-start gap-3">
-          <Icon className="h-5 w-5 mt-0.5 flex-shrink-0" />
+        <div className="flex gap-3">
+          <IconComponent className="h-5 w-5 flex-shrink-0" />
           <div className="flex-1">{children}</div>
         </div>
       </div>

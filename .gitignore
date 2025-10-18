@@ -43,5 +43,5 @@ next-env.d.ts
 /src/generated/prisma
 
 # uploads
-uploads/*
+uploads/
 !uploads/.gitkeep

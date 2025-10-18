@@ -1,72 +1,34 @@
-// Save as: src/middleware.ts
+import { withAuth } from 'next-auth/middleware';
+import { NextResponse } from 'next/server';
 
-import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
-import type { NextRequest } from "next/server";
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token;
+    const path = req.nextUrl.pathname;
 
-export async function middleware(req: NextRequest) {
-  const path = req.nextUrl.pathname;
+    // Trainer routes
+    if (path.startsWith('/trainer')) {
+      if (token?.role !== 'TRAINER' && token?.role !== 'ADMIN') {
+        return NextResponse.redirect(new URL('/unauthorized', req.url));
+      }
+    }
 
-  // Public routes - always allow
-  const publicRoutes = [
-    "/",
-    "/login",
-    "/register",
-    "/unauthorized",
-    "/api/auth/signin",
-    "/api/auth/callback",
-    "/api/auth/error",
-  ];
+    // Athlete routes
+    if (path.startsWith('/athlete')) {
+      if (token?.role !== 'ATHLETE') {
+        return NextResponse.redirect(new URL('/unauthorized', req.url));
+      }
+    }
 
-  // Check if path is public or is an API auth route
-  if (
-    publicRoutes.includes(path) ||
-    path.startsWith("/api/auth") ||
-    path.startsWith("/_next") ||
-    path.startsWith("/favicon")
-  ) {
     return NextResponse.next();
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
   }
-
-  // Get the token
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-
-  // Require authentication for protected routes
-  if (!token) {
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", req.url);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // Athlete routes - only athletes can access
-  if (path.startsWith("/athlete")) {
-    if (token.userType !== "athlete") {
-      return NextResponse.redirect(new URL("/unauthorized", req.url));
-    }
-  }
-
-  // Trainer routes - only trainers and admins can access
-  if (path.startsWith("/trainer")) {
-    if (token.userType !== "trainer" && token.role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/unauthorized", req.url));
-    }
-  }
-
-  return NextResponse.next();
-}
+);
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ['/athlete/:path*', '/trainer/:path*'],
 };
