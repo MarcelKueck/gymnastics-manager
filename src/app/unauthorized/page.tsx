@@ -1,7 +1,7 @@
 // Save as: src/app/unauthorized/page.tsx
 
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 export default function UnauthorizedPage() {
   return (
