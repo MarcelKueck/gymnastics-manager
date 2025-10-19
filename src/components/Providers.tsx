@@ -1,9 +1,18 @@
-// Save as: src/components/Providers.tsx
+// src/components/Providers.tsx
+'use client';
 
-"use client";
-
-import { SessionProvider } from "next-auth/react";
+import { SessionProvider } from 'next-auth/react';
+import { ErrorBoundary } from './ErrorBoundary';
+import { ToastProvider } from './ui/toast';
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <ErrorBoundary>
+      <SessionProvider>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
+      </SessionProvider>
+    </ErrorBoundary>
+  );
 }

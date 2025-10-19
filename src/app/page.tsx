@@ -31,7 +31,7 @@ export default function Home() {
               <div className="text-4xl mb-4">👤</div>
               <h3 className="text-xl font-semibold mb-2 text-gray-900">Athletenportal</h3>
               <p className="text-gray-600">
-                Verwalte deine Trainingszeiten, sage Termine ab und lade Trainingspläne herunter.
+                Verwalte deine Trainingszeiten, sage Termine ab und lade Trainingstermine herunter.
               </p>
             </div>
 
@@ -39,7 +39,7 @@ export default function Home() {
               <div className="text-4xl mb-4">🏋️</div>
               <h3 className="text-xl font-semibold mb-2 text-gray-900">Übungsleiterportal</h3>
               <p className="text-gray-600">
-                Verwalte Athleten, Gruppen und Anwesenheit. Organisiere Trainingspläne zentral.
+                Verwalte Athleten, Gruppen und Anwesenheit. Organisiere Trainingstermine zentral.
               </p>
             </div>
 

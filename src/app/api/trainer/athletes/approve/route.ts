@@ -1,45 +1,9 @@
+// src/app/api/trainer/athletes/approve/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { addWeeks, startOfDay, setHours, setMinutes } from 'date-fns';
-
-type DayOfWeek = 'MONDAY' | 'THURSDAY' | 'FRIDAY';
-
-interface TrainingConfig {
-  youthCategory: 'F' | 'E' | 'D';
-  trainingDays: {
-    MONDAY: boolean;
-    THURSDAY: boolean;
-    FRIDAY: boolean;
-  };
-  hours: {
-    MONDAY: number[];
-    THURSDAY: number[];
-    FRIDAY: number[];
-  };
-  groupNumbers: {
-    MONDAY: number;
-    THURSDAY: number;
-    FRIDAY: number;
-  };
-  competitionParticipation: boolean;
-}
-
-const dayOfWeekMap: Record<string, number> = {
-  MONDAY: 1,
-  THURSDAY: 4,
-  FRIDAY: 5,
-};
-
-function getNextOccurrence(targetDay: number): Date {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const daysUntilTarget = (targetDay - currentDay + 7) % 7 || 7;
-  const nextDate = new Date(today);
-  nextDate.setDate(today.getDate() + daysUntilTarget);
-  return startOfDay(nextDate);
-}
+import { sendAthleteApprovalEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,23 +14,63 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { athleteId, config } = body as { athleteId: string; config: TrainingConfig };
+    const {
+      athleteId,
+      trainingDays,
+      trainingHours,
+      group,
+      youthCategory,
+      isCompetition,
+    } = body;
 
-    // Validation
-    if (!athleteId || !config) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    const selectedDays = Object.values(config.trainingDays).filter(Boolean).length;
-    if (selectedDays === 0) {
+    // Validate required fields
+    if (!athleteId || !trainingDays || !trainingHours || !group || !youthCategory) {
       return NextResponse.json(
-        { error: 'At least one training day must be selected' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Check athlete exists and is not already approved
-    const athlete = await prisma.athlete.findUnique({
+    // Validate training days
+    const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    if (!Array.isArray(trainingDays) || trainingDays.length === 0) {
+      return NextResponse.json(
+        { error: 'Training days must be a non-empty array' },
+        { status: 400 }
+      );
+    }
+    if (!trainingDays.every((day: string) => validDays.includes(day.toLowerCase()))) {
+      return NextResponse.json(
+        { error: 'Invalid training day' },
+        { status: 400 }
+      );
+    }
+
+    // Validate training hours
+    const validHours = ['first', 'second', 'both'];
+    if (!Array.isArray(trainingHours) || trainingHours.length === 0) {
+      return NextResponse.json(
+        { error: 'Training hours must be a non-empty array' },
+        { status: 400 }
+      );
+    }
+    if (!trainingHours.every((hour: string) => validHours.includes(hour.toLowerCase()))) {
+      return NextResponse.json(
+        { error: 'Invalid training hour' },
+        { status: 400 }
+      );
+    }
+
+    // Validate group
+    if (![1, 2, 3].includes(Number(group))) {
+      return NextResponse.json(
+        { error: 'Group must be 1, 2, or 3' },
+        { status: 400 }
+      );
+    }
+
+    // Get athlete data
+    const athlete = await prisma.user.findUnique({
       where: { id: athleteId },
     });
 
@@ -74,123 +78,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
     }
 
-    if (athlete.isApproved) {
-      return NextResponse.json({ error: 'Athlete already approved' }, { status: 400 });
+    if (athlete.role !== 'ATHLETE') {
+      return NextResponse.json(
+        { error: 'User is not an athlete' },
+        { status: 400 }
+      );
     }
 
-    const trainerId = session.user.id;
-    const now = new Date();
-
-    // Start a transaction
-    await prisma.$transaction(async (tx) => {
-      // 1. Update athlete - approve and set configuration
-      await tx.athlete.update({
-        where: { id: athleteId },
-        data: {
-          isApproved: true,
-          approvedBy: trainerId,
-          approvedAt: now,
-          configuredAt: now,
-          youthCategory: config.youthCategory,
-          competitionParticipation: config.competitionParticipation,
-        },
-      });
-
-      // 2. Create group assignments for each selected day/hour combination
-      const assignments: any[] = [];
-
-      for (const [day, enabled] of Object.entries(config.trainingDays)) {
-        if (enabled) {
-          const dayKey = day as DayOfWeek;
-          const hours = config.hours[dayKey];
-          const groupNumber = config.groupNumbers[dayKey];
-
-          for (const hour of hours) {
-            assignments.push({
-              athleteId,
-              trainingDay: dayKey,
-              hourNumber: hour,
-              groupNumber,
-              assignedBy: trainerId,
-              isActive: true,
-            });
-          }
-        }
-      }
-
-      if (assignments.length > 0) {
-        await tx.athleteGroupAssignment.createMany({
-          data: assignments,
-        });
-      }
-
-      // 3. Generate future training sessions (next 12 weeks)
-      const sessions: any[] = [];
-      const weeksToGenerate = 12;
-
-      for (const [day, enabled] of Object.entries(config.trainingDays)) {
-        if (enabled) {
-          const dayKey = day as DayOfWeek;
-          const hours = config.hours[dayKey];
-          const groupNumber = config.groupNumbers[dayKey];
-          const targetDayNumber = dayOfWeekMap[dayKey];
-
-          // Get the next occurrence of this day
-          let sessionDate = getNextOccurrence(targetDayNumber);
-
-          for (let week = 0; week < weeksToGenerate; week++) {
-            for (const hour of hours) {
-              // Set time based on hour (e.g., 1st hour = 16:00, 2nd hour = 17:30)
-              const hourTime = hour === 1 ? 16 : 17;
-              const minuteTime = hour === 1 ? 0 : 30;
-              const sessionDateTime = setMinutes(setHours(sessionDate, hourTime), minuteTime);
-
-              sessions.push({
-                date: sessionDateTime,
-                dayOfWeek: dayKey,
-                hourNumber: hour,
-                groupNumber,
-              });
-            }
-            sessionDate = addWeeks(sessionDate, 1);
-          }
-        }
-      }
-
-      // Create sessions (use createMany with skipDuplicates to avoid conflicts)
-      if (sessions.length > 0) {
-        await tx.trainingSession.createMany({
-          data: sessions,
-          skipDuplicates: true,
-        });
-      }
-
-      // 4. Create audit log entry
-      await tx.auditLog.create({
-        data: {
-          entityType: 'athlete',
-          entityId: athleteId,
-          action: 'create',
-          changes: {
-            approved: true,
-            configuration: config,
-            sessionsGenerated: sessions.length,
+    // Update athlete status and create training configuration
+    const updatedAthlete = await prisma.user.update({
+      where: { id: athleteId },
+      data: {
+        isApproved: true,
+        trainingConfig: {
+          create: {
+            trainingDays,
+            trainingHours,
+            group: Number(group),
+            youthCategory,
+            isCompetition: Boolean(isCompetition),
           },
-          performedBy: trainerId,
-          reason: 'Athlete approved and configured',
         },
-      });
+      },
+      include: {
+        trainingConfig: true,
+      },
     });
 
-    // TODO: Send email notification to athlete
-    // This would be implemented with a service like Resend or SendGrid
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: session.user.id,
+        action: 'APPROVE_ATHLETE',
+        entityType: 'USER',
+        entityId: athleteId,
+        details: {
+          athleteName: athlete.name,
+          athleteEmail: athlete.email,
+          trainingDays,
+          trainingHours,
+          group,
+          youthCategory,
+          isCompetition,
+        },
+      },
+    });
+
+    // Send approval email
+    try {
+      await sendAthleteApprovalEmail({
+        athleteEmail: athlete.email,
+        guardianEmail: athlete.guardianEmail,
+        athleteName: athlete.name,
+        trainingDays,
+        trainingHours,
+        group: Number(group),
+        youthCategory,
+        isCompetition: Boolean(isCompetition),
+      });
+      console.log('✅ Approval email sent successfully');
+    } catch (emailError) {
+      // Log error but don't fail the request
+      console.error('❌ Failed to send approval email:', emailError);
+    }
 
     return NextResponse.json({
-      success: true,
-      message: 'Athlete approved and configured successfully',
+      message: 'Athlete approved successfully',
+      athlete: updatedAthlete,
     });
   } catch (error) {
-    console.error('Approve athlete error:', error);
+    console.error('Error approving athlete:', error);
     return NextResponse.json(
       { error: 'Failed to approve athlete' },
       { status: 500 }

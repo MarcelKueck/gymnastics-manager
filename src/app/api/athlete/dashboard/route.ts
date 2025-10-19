@@ -38,13 +38,17 @@ export async function GET() {
     // If not approved, return limited data
     if (!athlete.isApproved) {
       return NextResponse.json({
+        upcomingSessions: 0,
+        totalPresent: 0,
+        totalAbsent: 0,
+        unexcusedAbsences: 0,
+        recentSessions: [],
         athlete: {
           firstName: athlete.firstName,
           lastName: athlete.lastName,
           isApproved: false,
         },
         nextSession: null,
-        upcomingSessionsCount: 0,
         attendancePercentage: 0,
       });
     }
@@ -103,16 +107,41 @@ export async function GET() {
           },
         },
       },
+      include: {
+        trainingSession: true,
+      },
+      orderBy: {
+        trainingSession: {
+          date: 'desc',
+        },
+      },
+      take: 10,
     });
 
     const totalSessions = attendanceRecords.length;
     const presentSessions = attendanceRecords.filter(
       (record) => record.status === 'PRESENT'
     ).length;
+    const absentSessions = attendanceRecords.filter(
+      (record) => record.status === 'ABSENT_EXCUSED' || record.status === 'ABSENT_UNEXCUSED'
+    ).length;
+    const unexcusedAbsences = attendanceRecords.filter(
+      (record) => record.status === 'ABSENT_UNEXCUSED'
+    ).length;
+
     const attendancePercentage =
       totalSessions > 0 ? Math.round((presentSessions / totalSessions) * 100) : 0;
 
     return NextResponse.json({
+      upcomingSessions: upcomingSessionsCount,
+      totalPresent: presentSessions,
+      totalAbsent: absentSessions,
+      unexcusedAbsences: unexcusedAbsences,
+      recentSessions: attendanceRecords.map((record) => ({
+        date: record.trainingSession.date.toISOString(),
+        status: record.status,
+      })),
+      // Legacy fields for backward compatibility
       athlete: {
         firstName: athlete.firstName,
         lastName: athlete.lastName,
@@ -128,7 +157,6 @@ export async function GET() {
             isCancelled: nextSession.cancellations.length > 0,
           }
         : null,
-      upcomingSessionsCount,
       attendancePercentage,
     });
   } catch (error) {

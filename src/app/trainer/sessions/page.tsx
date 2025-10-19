@@ -86,7 +86,7 @@ export default function SessionsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Trainingsübersicht</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Trainingstermine</h1>
         <p className="text-gray-600 mt-1">Anwesenheit markieren und Sessions verwalten</p>
       </div>
 

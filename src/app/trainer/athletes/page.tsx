@@ -238,7 +238,7 @@ export default function AthletesList() {
 
                 {/* Schedule */}
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Trainingsplan</p>
+                  <p className="text-xs text-gray-500 mb-1">Trainingstermine</p>
                   <p className="text-sm text-gray-700">{getScheduleDisplay(athlete.groupAssignments)}</p>
                 </div>
 

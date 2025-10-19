@@ -289,7 +289,7 @@ export default function AthleteDetailPage() {
 
               {/* Training Schedule */}
               <div>
-                <p className="text-sm text-gray-500 mb-2">Trainingsplan</p>
+                <p className="text-sm text-gray-500 mb-2">Trainingstermine</p>
                 <div className="space-y-2">
                   {athlete.groupAssignments.map((assignment) => (
                     <div

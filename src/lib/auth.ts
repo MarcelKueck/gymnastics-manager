@@ -21,23 +21,40 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Email and password required");
         }
 
-        const userType = credentials.userType || "athlete";
-
         let user;
         let role;
+        let userType;
 
-        if (userType === "trainer") {
-          // Look for trainer
-          user = await prisma.trainer.findUnique({
-            where: { email: credentials.email },
-          });
-          role = user?.role || "TRAINER";
+        // First, try to find a trainer
+        const trainer = await prisma.trainer.findUnique({
+          where: { email: credentials.email },
+        });
+
+        if (trainer) {
+          user = trainer;
+          role = trainer.role;
+          userType = "trainer";
+
+          // Check if trainer is active
+          if (!trainer.isActive) {
+            throw new Error("Account is inactive");
+          }
         } else {
-          // Look for athlete
-          user = await prisma.athlete.findUnique({
+          // If not a trainer, try to find an athlete
+          const athlete = await prisma.athlete.findUnique({
             where: { email: credentials.email },
           });
-          role = "ATHLETE";
+
+          if (athlete) {
+            user = athlete;
+            role = "ATHLETE";
+            userType = "athlete";
+
+            // Check if athlete is approved
+            if (!athlete.isApproved) {
+              throw new Error("Account pending approval");
+            }
+          }
         }
 
         if (!user || !user.passwordHash) {
@@ -51,16 +68,6 @@ export const authOptions: NextAuthOptions = {
 
         if (!isPasswordValid) {
           throw new Error("Invalid credentials");
-        }
-
-        // Check if athlete is approved
-        if (userType === "athlete" && !user.isApproved) {
-          throw new Error("Account pending approval");
-        }
-
-        // Check if trainer is active
-        if (userType === "trainer" && !user.isActive) {
-          throw new Error("Account is inactive");
         }
 
         return {

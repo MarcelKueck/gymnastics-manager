@@ -1,45 +1,9 @@
+// src/app/api/trainer/athletes/[id]/config/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { addWeeks, startOfDay, setHours, setMinutes } from 'date-fns';
-
-type DayOfWeek = 'MONDAY' | 'THURSDAY' | 'FRIDAY';
-
-interface TrainingConfig {
-  youthCategory: 'F' | 'E' | 'D';
-  trainingDays: {
-    MONDAY: boolean;
-    THURSDAY: boolean;
-    FRIDAY: boolean;
-  };
-  hours: {
-    MONDAY: number[];
-    THURSDAY: number[];
-    FRIDAY: number[];
-  };
-  groupNumbers: {
-    MONDAY: number;
-    THURSDAY: number;
-    FRIDAY: number;
-  };
-  competitionParticipation: boolean;
-}
-
-const dayOfWeekMap: Record<string, number> = {
-  MONDAY: 1,
-  THURSDAY: 4,
-  FRIDAY: 5,
-};
-
-function getNextOccurrence(targetDay: number): Date {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const daysUntilTarget = (targetDay - currentDay + 7) % 7 || 7;
-  const nextDate = new Date(today);
-  nextDate.setDate(today.getDate() + daysUntilTarget);
-  return startOfDay(nextDate);
-}
+import { sendScheduleChangeEmail } from '@/lib/email';
 
 export async function PUT(
   request: NextRequest,
@@ -52,149 +16,118 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { config } = body as { config: TrainingConfig };
     const athleteId = params.id;
+    const body = await request.json();
+    const {
+      trainingDays,
+      trainingHours,
+      group,
+      youthCategory,
+      isCompetition,
+    } = body;
 
-    // Validation
-    if (!config) {
-      return NextResponse.json({ error: 'Missing configuration' }, { status: 400 });
-    }
-
-    const selectedDays = Object.values(config.trainingDays).filter(Boolean).length;
-    if (selectedDays === 0) {
+    // Validate required fields
+    if (!trainingDays || !trainingHours || !group || !youthCategory) {
       return NextResponse.json(
-        { error: 'At least one training day must be selected' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Check athlete exists
-    const athlete = await prisma.athlete.findUnique({
-      where: { id: athleteId, isApproved: true },
+    // Get athlete and current config
+    const athlete = await prisma.user.findUnique({
+      where: { id: athleteId },
+      include: {
+        trainingConfig: true,
+      },
     });
 
     if (!athlete) {
       return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
     }
 
-    const trainerId = session.user.id;
-    const now = new Date();
+    if (!athlete.trainingConfig) {
+      return NextResponse.json(
+        { error: 'No training configuration found' },
+        { status: 404 }
+      );
+    }
 
-    // Start a transaction
-    await prisma.$transaction(async (tx) => {
-      // 1. Update athlete basic config
-      await tx.athlete.update({
-        where: { id: athleteId },
-        data: {
-          youthCategory: config.youthCategory,
-          competitionParticipation: config.competitionParticipation,
-          configuredAt: now,
-        },
-      });
+    // Store old config for comparison
+    const oldConfig = {
+      trainingDays: athlete.trainingConfig.trainingDays,
+      trainingHours: athlete.trainingConfig.trainingHours,
+      group: athlete.trainingConfig.group,
+    };
 
-      // 2. Deactivate all existing assignments
-      await tx.athleteGroupAssignment.updateMany({
-        where: { athleteId },
-        data: { isActive: false },
-      });
-
-      // 3. Create new assignments
-      const assignments: any[] = [];
-
-      for (const [day, enabled] of Object.entries(config.trainingDays)) {
-        if (enabled) {
-          const dayKey = day as DayOfWeek;
-          const hours = config.hours[dayKey];
-          const groupNumber = config.groupNumbers[dayKey];
-
-          for (const hour of hours) {
-            assignments.push({
-              athleteId,
-              trainingDay: dayKey,
-              hourNumber: hour,
-              groupNumber,
-              assignedBy: trainerId,
-              isActive: true,
-            });
-          }
-        }
-      }
-
-      if (assignments.length > 0) {
-        await tx.athleteGroupAssignment.createMany({
-          data: assignments,
-        });
-      }
-
-      // 4. Generate future training sessions (next 12 weeks)
-      const sessions: any[] = [];
-      const weeksToGenerate = 12;
-
-      for (const [day, enabled] of Object.entries(config.trainingDays)) {
-        if (enabled) {
-          const dayKey = day as DayOfWeek;
-          const hours = config.hours[dayKey];
-          const groupNumber = config.groupNumbers[dayKey];
-          const targetDayNumber = dayOfWeekMap[dayKey];
-
-          // Get the next occurrence of this day
-          let sessionDate = getNextOccurrence(targetDayNumber);
-
-          for (let week = 0; week < weeksToGenerate; week++) {
-            for (const hour of hours) {
-              // Set time based on hour
-              const hourTime = hour === 1 ? 16 : 17;
-              const minuteTime = hour === 1 ? 0 : 30;
-              const sessionDateTime = setMinutes(setHours(sessionDate, hourTime), minuteTime);
-
-              sessions.push({
-                date: sessionDateTime,
-                dayOfWeek: dayKey,
-                hourNumber: hour,
-                groupNumber,
-              });
-            }
-            sessionDate = addWeeks(sessionDate, 1);
-          }
-        }
-      }
-
-      // Create sessions (skipDuplicates to avoid conflicts)
-      if (sessions.length > 0) {
-        await tx.trainingSession.createMany({
-          data: sessions,
-          skipDuplicates: true,
-        });
-      }
-
-      // 5. Create audit log entry
-      await tx.auditLog.create({
-        data: {
-          entityType: 'athlete',
-          entityId: athleteId,
-          action: 'update',
-          changes: {
-            configurationUpdated: true,
-            newConfig: config,
-            sessionsGenerated: sessions.length,
-          },
-          performedBy: trainerId,
-          reason: 'Training configuration updated',
-        },
-      });
+    // Update training configuration
+    const updatedConfig = await prisma.trainingConfig.update({
+      where: { userId: athleteId },
+      data: {
+        trainingDays,
+        trainingHours,
+        group: Number(group),
+        youthCategory,
+        isCompetition: Boolean(isCompetition),
+      },
     });
 
-    // TODO: Send email notification to athlete about config change
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: session.user.id,
+        action: 'UPDATE_TRAINING_CONFIG',
+        entityType: 'TRAINING_CONFIG',
+        entityId: updatedConfig.id,
+        details: {
+          athleteId,
+          athleteName: athlete.name,
+          oldConfig,
+          newConfig: {
+            trainingDays,
+            trainingHours,
+            group,
+            youthCategory,
+            isCompetition,
+          },
+        },
+      },
+    });
+
+    // Check if schedule actually changed
+    const scheduleChanged =
+      JSON.stringify(oldConfig.trainingDays.sort()) !== JSON.stringify(trainingDays.sort()) ||
+      JSON.stringify(oldConfig.trainingHours.sort()) !== JSON.stringify(trainingHours.sort()) ||
+      oldConfig.group !== Number(group);
+
+    // Send schedule change email if schedule changed
+    if (scheduleChanged) {
+      try {
+        await sendScheduleChangeEmail({
+          athleteEmail: athlete.email,
+          guardianEmail: athlete.guardianEmail,
+          athleteName: athlete.name,
+          oldSchedule: oldConfig,
+          newSchedule: {
+            trainingDays,
+            trainingHours,
+            group: Number(group),
+          },
+        });
+        console.log('✅ Schedule change email sent successfully');
+      } catch (emailError) {
+        console.error('❌ Failed to send schedule change email:', emailError);
+      }
+    }
 
     return NextResponse.json({
-      success: true,
-      message: 'Configuration updated successfully',
+      message: 'Training configuration updated successfully',
+      config: updatedConfig,
     });
   } catch (error) {
-    console.error('Update configuration error:', error);
+    console.error('Error updating training configuration:', error);
     return NextResponse.json(
-      { error: 'Failed to update configuration' },
+      { error: 'Failed to update training configuration' },
       { status: 500 }
     );
   }

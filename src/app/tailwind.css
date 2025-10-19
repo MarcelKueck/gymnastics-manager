@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+@theme {
+  /* Custom theme configuration for Tailwind v4 */
+  --color-primary: #509f28;
+}

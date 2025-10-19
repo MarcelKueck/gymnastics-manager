@@ -11,6 +11,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.0",
     "@prisma/client": "^6.17.1",
+    "@react-email/components": "^0.5.7",
     "bcrypt": "^6.0.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.546.0",
@@ -18,7 +19,9 @@
     "next-auth": "^4.24.11",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-email": "^4.3.1",
     "react-hook-form": "^7.65.0",
+    "resend": "^6.2.0",
     "zod": "^4.1.12",
     "zustand": "^5.0.8"
   },

@@ -16,7 +16,7 @@ interface TrainingPlan {
   fileName: string;
   fileSize: number;
   uploadedAt: string;
-  uploadedBy: {
+  uploadedByTrainer: {
     firstName: string;
     lastName: string;
   };
@@ -62,7 +62,7 @@ export default function TrainingPlansPage() {
       const response = await fetch('/api/trainer/training-plans');
       if (!response.ok) throw new Error('Failed to fetch training plans');
       const data = await response.json();
-      setPlans(data.plans);
+      setPlans(data.trainingPlans || []);
     } catch (err) {
       setError('Fehler beim Laden der Trainingspläne');
       console.error(err);
@@ -126,7 +126,7 @@ export default function TrainingPlansPage() {
         throw new Error(data.error || 'Upload fehlgeschlagen');
       }
 
-      setSuccess('Trainingsplan erfolgreich hochgeladen!');
+      setSuccess('Trainingstermine erfolgreich hochgeladen!');
       setShowUploadForm(false);
       setUploadForm({
         category: 'STRENGTH_GOALS',
@@ -145,7 +145,7 @@ export default function TrainingPlansPage() {
   };
 
   const handleDelete = async (planId: string) => {
-    if (!confirm('Möchten Sie diesen Trainingsplan wirklich löschen?')) {
+    if (!confirm('Möchten Sie diesen Trainingstermin wirklich löschen?')) {
       return;
     }
 
@@ -159,7 +159,7 @@ export default function TrainingPlansPage() {
         throw new Error(data.error || 'Löschen fehlgeschlagen');
       }
 
-      setSuccess('Trainingsplan gelöscht');
+      setSuccess('Trainingstermin gelöscht');
       fetchPlans();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
@@ -203,7 +203,7 @@ export default function TrainingPlansPage() {
   };
 
   // Group plans by category
-  const plansByCategory = plans.reduce((acc, plan) => {
+  const plansByCategory = (plans || []).reduce((acc, plan) => {
     if (!acc[plan.category]) {
       acc[plan.category] = [];
     }
@@ -241,7 +241,7 @@ export default function TrainingPlansPage() {
       {showUploadForm && (
         <Card>
           <CardHeader>
-            <CardTitle>Neuen Trainingsplan hochladen</CardTitle>
+            <CardTitle>Neuen Trainingstermin hochladen</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleUpload} className="space-y-4">
@@ -320,9 +320,9 @@ export default function TrainingPlansPage() {
         <div className="text-center py-12">
           <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Keine Trainingspläne vorhanden
+            Keine Trainingstermine vorhanden
           </h3>
-          <p className="text-gray-600">Laden Sie den ersten Trainingsplan hoch.</p>
+          <p className="text-gray-600">Laden Sie den ersten Trainingstermin hoch.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -354,7 +354,7 @@ export default function TrainingPlansPage() {
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
                               Hochgeladen: {formatDate(plan.uploadedAt)} von{' '}
-                              {plan.uploadedBy.firstName} {plan.uploadedBy.lastName}
+                              {plan.uploadedByTrainer.firstName} {plan.uploadedByTrainer.lastName}
                             </p>
                           </div>
                         </div>
