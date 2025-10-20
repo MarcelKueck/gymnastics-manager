@@ -46,6 +46,7 @@ export default function AthleteAttendancePage() {
 
   useEffect(() => {
     fetchAttendanceHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
 
   const fetchAttendanceHistory = async () => {

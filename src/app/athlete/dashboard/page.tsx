@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
-import { PageLoader, SkeletonStats, SkeletonCard } from '@/components/ui/loading';
-import { Calendar, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react';
+import { Calendar, CheckCircle, AlertCircle, XCircle, FileText } from 'lucide-react';
 
 interface DashboardStats {
   upcomingSessions: number;
@@ -18,7 +17,7 @@ interface DashboardStats {
 }
 
 export default function AthleteDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -32,8 +31,8 @@ export default function AthleteDashboard() {
       if (!response.ok) throw new Error('Failed to fetch dashboard');
       
       const data = await response.json();
-      setStats(data);
-    } catch (err) {
+      setDashboardData(data);
+    } catch {
       setError('Fehler beim Laden der Dashboard-Daten');
     } finally {
       setLoading(false);
@@ -47,8 +46,9 @@ export default function AthleteDashboard() {
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-2">Willkommen zurück!</p>
         </div>
-        <SkeletonStats count={4} />
-        <SkeletonCard count={1} />
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+        </div>
       </div>
     );
   }
@@ -57,14 +57,16 @@ export default function AthleteDashboard() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <Alert variant="destructive">{error}</Alert>
+        <Alert variant="error">{error}</Alert>
       </div>
     );
   }
 
-  if (!stats) {
+  if (!dashboardData) {
     return null;
   }
+
+  const stats = dashboardData;
 
   return (
     <div className="space-y-6">
@@ -75,13 +77,12 @@ export default function AthleteDashboard() {
         </p>
       </div>
 
-      {/* Warning for unexcused absences */}
+            {/* Warning for unexcused absences */}
       {(stats.unexcusedAbsences || 0) >= 3 && (
-        <Alert variant="destructive">
+        <Alert variant="error">
           <AlertCircle className="h-4 w-4" />
           <div className="ml-2">
             <strong>Achtung:</strong> Du hast {stats.unexcusedAbsences} unentschuldigte Fehlzeiten.
-            Bitte kontaktiere deinen Trainer.
           </div>
         </Alert>
       )}

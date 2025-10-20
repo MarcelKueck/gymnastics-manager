@@ -460,7 +460,7 @@ export default function AthleteProfile() {
             </div>
           </div>
 
-          <Alert variant="info">
+          <Alert variant="default">
             <p className="text-sm">
               Für Änderungen an deiner Trainingskonfiguration kontaktiere bitte deinen Trainer.
             </p>

@@ -231,7 +231,7 @@ export default function AthleteSchedule() {
 
       {/* Sessions list */}
       {upcomingSessions.length === 0 ? (
-        <Alert variant="info">
+        <Alert variant="default">
           <p>Keine kommenden Trainingstermine gefunden.</p>
         </Alert>
       ) : (

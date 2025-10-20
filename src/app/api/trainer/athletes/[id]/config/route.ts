@@ -7,16 +7,15 @@ import { sendScheduleChangeEmail } from '@/lib/email';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: athleteId } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session || session.user.role !== 'TRAINER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const athleteId = params.id;
     const body = await request.json();
     const {
       trainingDays,
@@ -35,10 +34,12 @@ export async function PUT(
     }
 
     // Get athlete and current config
-    const athlete = await prisma.user.findUnique({
+    const athlete = await prisma.athlete.findUnique({
       where: { id: athleteId },
       include: {
-        trainingConfig: true,
+        groupAssignments: {
+          where: { isActive: true },
+        },
       },
     });
 
@@ -46,42 +47,35 @@ export async function PUT(
       return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
     }
 
-    if (!athlete.trainingConfig) {
-      return NextResponse.json(
-        { error: 'No training configuration found' },
-        { status: 404 }
-      );
-    }
-
     // Store old config for comparison
     const oldConfig = {
-      trainingDays: athlete.trainingConfig.trainingDays,
-      trainingHours: athlete.trainingConfig.trainingHours,
-      group: athlete.trainingConfig.group,
+      trainingDays: trainingDays,
+      trainingHours: trainingHours,
+      group: group,
+      youthCategory: athlete.youthCategory,
+      isCompetition: athlete.competitionParticipation,
     };
 
-    // Update training configuration
-    const updatedConfig = await prisma.trainingConfig.update({
-      where: { userId: athleteId },
+    // Update athlete configuration
+    const updatedAthlete = await prisma.athlete.update({
+      where: { id: athleteId },
       data: {
-        trainingDays,
-        trainingHours,
-        group: Number(group),
         youthCategory,
-        isCompetition: Boolean(isCompetition),
+        competitionParticipation: Boolean(isCompetition),
+        configuredAt: new Date(),
       },
     });
 
     // Create audit log
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
-        action: 'UPDATE_TRAINING_CONFIG',
-        entityType: 'TRAINING_CONFIG',
-        entityId: updatedConfig.id,
-        details: {
+        performedBy: session.user.id,
+        action: 'update',
+        entityType: 'athlete',
+        entityId: updatedAthlete.id,
+        changes: {
           athleteId,
-          athleteName: athlete.name,
+          athleteName: `${athlete.firstName} ${athlete.lastName}`,
           oldConfig,
           newConfig: {
             trainingDays,
@@ -91,38 +85,35 @@ export async function PUT(
             isCompetition,
           },
         },
+        reason: 'Training configuration updated by trainer',
       },
     });
 
-    // Check if schedule actually changed
-    const scheduleChanged =
-      JSON.stringify(oldConfig.trainingDays.sort()) !== JSON.stringify(trainingDays.sort()) ||
-      JSON.stringify(oldConfig.trainingHours.sort()) !== JSON.stringify(trainingHours.sort()) ||
-      oldConfig.group !== Number(group);
-
-    // Send schedule change email if schedule changed
-    if (scheduleChanged) {
-      try {
-        await sendScheduleChangeEmail({
-          athleteEmail: athlete.email,
-          guardianEmail: athlete.guardianEmail,
-          athleteName: athlete.name,
-          oldSchedule: oldConfig,
-          newSchedule: {
-            trainingDays,
-            trainingHours,
-            group: Number(group),
-          },
-        });
-        console.log('✅ Schedule change email sent successfully');
-      } catch (emailError) {
-        console.error('❌ Failed to send schedule change email:', emailError);
-      }
+    // Send email notification about configuration update
+    try {
+      await sendScheduleChangeEmail({
+        athleteEmail: athlete.email,
+        guardianEmail: athlete.guardianEmail || undefined,
+        athleteName: `${athlete.firstName} ${athlete.lastName}`,
+        oldSchedule: {
+          trainingDays: oldConfig.trainingDays,
+          trainingHours: oldConfig.trainingHours,
+          group: oldConfig.group,
+        },
+        newSchedule: {
+          trainingDays,
+          trainingHours,
+          group: Number(group),
+        },
+      });
+      console.log('✅ Configuration change email sent successfully');
+    } catch (emailError) {
+      console.error('❌ Failed to send configuration change email:', emailError);
     }
 
     return NextResponse.json({
       message: 'Training configuration updated successfully',
-      config: updatedConfig,
+      athlete: updatedAthlete,
     });
   } catch (error) {
     console.error('Error updating training configuration:', error);

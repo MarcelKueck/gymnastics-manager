@@ -26,12 +26,12 @@ export default function AthleteLayout({ children }: { children: React.ReactNode 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Header */}
-      <div className="lg:hidden bg-teal-600 text-white">
+      <div className="lg:hidden text-white sv-esting-sidebar">
         <div className="flex items-center justify-between px-4 py-3">
           <h1 className="text-lg font-semibold">Athletenportal</h1>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-md hover:bg-teal-700 transition-colors"
+            className="p-2 rounded-md transition-colors sv-esting-nav-item"
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -40,7 +40,7 @@ export default function AthleteLayout({ children }: { children: React.ReactNode 
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <nav className="px-2 pb-3 space-y-1 border-t border-teal-500">
+          <nav className="px-2 pb-3 space-y-1 border-t" style={{ borderColor: 'rgba(255, 255, 255, 0.3)' }}>
             {navigation.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -49,11 +49,10 @@ export default function AthleteLayout({ children }: { children: React.ReactNode 
                   key={item.name}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium transition-colors ${
-                    isActive
-                      ? 'bg-teal-700 text-white'
-                      : 'text-teal-100 hover:bg-teal-700 hover:text-white'
+                  className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium sv-esting-nav-item ${
+                    isActive ? 'sv-esting-nav-item-active' : ''
                   }`}
+                  style={{ color: 'white' }}
                 >
                   <Icon size={20} />
                   {item.name}
@@ -65,7 +64,8 @@ export default function AthleteLayout({ children }: { children: React.ReactNode 
                 setMobileMenuOpen(false);
                 handleSignOut();
               }}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium text-teal-100 hover:bg-teal-700 hover:text-white transition-colors w-full"
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium sv-esting-nav-item w-full"
+              style={{ color: 'white' }}
             >
               <LogOut size={20} />
               Abmelden
@@ -76,7 +76,7 @@ export default function AthleteLayout({ children }: { children: React.ReactNode 
 
       {/* Desktop Sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-teal-600 pt-5 pb-4 overflow-y-auto">
+        <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto sv-esting-sidebar">
           <div className="flex items-center flex-shrink-0 px-4">
             <h1 className="text-xl font-bold text-white">Athletenportal</h1>
           </div>
@@ -88,11 +88,10 @@ export default function AthleteLayout({ children }: { children: React.ReactNode 
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-teal-700 text-white'
-                      : 'text-teal-100 hover:bg-teal-700 hover:text-white'
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium sv-esting-nav-item ${
+                    isActive ? 'sv-esting-nav-item-active' : ''
                   }`}
+                  style={{ color: 'white' }}
                 >
                   <Icon size={20} />
                   {item.name}
@@ -104,7 +103,11 @@ export default function AthleteLayout({ children }: { children: React.ReactNode 
             <Button
               onClick={handleSignOut}
               variant="outline"
-              className="w-full justify-start gap-3 bg-transparent text-teal-100 border-teal-400 hover:bg-teal-700 hover:text-white hover:border-teal-300"
+              className="w-full justify-start gap-3 bg-transparent border sv-esting-logout-btn"
+              style={{ 
+                color: 'white', 
+                borderColor: 'rgba(255, 255, 255, 0.4)' 
+              }}
             >
               <LogOut size={20} />
               Abmelden

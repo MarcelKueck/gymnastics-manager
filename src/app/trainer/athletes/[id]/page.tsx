@@ -76,6 +76,7 @@ export default function AthleteDetailPage() {
 
   useEffect(() => {
     fetchAthleteDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId]);
 
   const fetchAthleteDetail = async () => {

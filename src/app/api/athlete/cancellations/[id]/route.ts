@@ -6,8 +6,9 @@ import { prisma } from '@/lib/prisma';
 // DELETE - Undo cancellation (before session date)
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: cancellationId } = await params;
   try {
     const session = await getServerSession(authOptions);
 
@@ -16,7 +17,6 @@ export async function DELETE(
     }
 
     const athleteId = session.user.id;
-    const cancellationId = params.id;
 
     // Get cancellation with session info
     const cancellation = await prisma.cancellation.findUnique({

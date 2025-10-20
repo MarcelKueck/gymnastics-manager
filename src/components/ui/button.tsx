@@ -1,3 +1,5 @@
+'use client';
+
 import { ButtonHTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -13,10 +15,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           'inline-flex items-center justify-center rounded-md font-medium transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
-          'disabled:pointer-events-none disabled:opacity-50',
+          'focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50',
           {
-            'bg-teal-600 text-white hover:bg-teal-700': variant === 'primary',
+            'text-white sv-esting-primary': variant === 'primary',
             'bg-gray-200 text-gray-900 hover:bg-gray-300': variant === 'secondary',
             'border border-gray-300 bg-white hover:bg-gray-50': variant === 'outline',
             'hover:bg-gray-100': variant === 'ghost',

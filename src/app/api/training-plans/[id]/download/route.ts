@@ -7,16 +7,15 @@ import { join } from 'path';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: planId } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const planId = params.id;
 
     // Get plan details
     const plan = await prisma.trainingPlan.findUnique({
@@ -28,11 +27,11 @@ export async function GET(
     }
 
     // Read file
-    const fullPath = join(process.cwd(), plan.filePath);
+    const fullPath = join(process.cwd(), 'public', plan.filePath);
     const fileBuffer = await readFile(fullPath);
 
     // Return file
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(fileBuffer as any, {
       headers: {
         'Content-Type': plan.mimeType,
         'Content-Disposition': `attachment; filename="${plan.fileName}"`,

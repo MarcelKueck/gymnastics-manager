@@ -77,10 +77,10 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ sessions });
-  } catch (error) {
-    console.error('Schedule API error:', error);
+  } catch (error: unknown) {
+    console.error('Error fetching schedule:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to fetch schedule' },
       { status: 500 }
     );
   }

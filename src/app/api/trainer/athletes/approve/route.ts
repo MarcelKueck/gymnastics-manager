@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get athlete data
-    const athlete = await prisma.user.findUnique({
+    const athlete = await prisma.athlete.findUnique({
       where: { id: athleteId },
     });
 
@@ -78,42 +78,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
     }
 
-    if (athlete.role !== 'ATHLETE') {
-      return NextResponse.json(
-        { error: 'User is not an athlete' },
-        { status: 400 }
-      );
-    }
-
-    // Update athlete status and create training configuration
-    const updatedAthlete = await prisma.user.update({
+    // Update athlete status and configuration
+    const updatedAthlete = await prisma.athlete.update({
       where: { id: athleteId },
       data: {
         isApproved: true,
-        trainingConfig: {
-          create: {
-            trainingDays,
-            trainingHours,
-            group: Number(group),
-            youthCategory,
-            isCompetition: Boolean(isCompetition),
-          },
-        },
-      },
-      include: {
-        trainingConfig: true,
+        approvedBy: session.user.id,
+        approvedAt: new Date(),
+        configuredAt: new Date(),
+        youthCategory,
+        competitionParticipation: Boolean(isCompetition),
       },
     });
 
     // Create audit log
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
-        action: 'APPROVE_ATHLETE',
-        entityType: 'USER',
+        performedBy: session.user.id,
+        action: 'create',
+        entityType: 'athlete',
         entityId: athleteId,
-        details: {
-          athleteName: athlete.name,
+        changes: {
+          athleteName: `${athlete.firstName} ${athlete.lastName}`,
           athleteEmail: athlete.email,
           trainingDays,
           trainingHours,
@@ -121,6 +107,7 @@ export async function POST(request: NextRequest) {
           youthCategory,
           isCompetition,
         },
+        reason: 'Athlete approved and configured',
       },
     });
 
@@ -128,8 +115,8 @@ export async function POST(request: NextRequest) {
     try {
       await sendAthleteApprovalEmail({
         athleteEmail: athlete.email,
-        guardianEmail: athlete.guardianEmail,
-        athleteName: athlete.name,
+        guardianEmail: athlete.guardianEmail || undefined,
+        athleteName: `${athlete.firstName} ${athlete.lastName}`,
         trainingDays,
         trainingHours,
         group: Number(group),

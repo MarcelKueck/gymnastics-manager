@@ -348,7 +348,7 @@ export async function sendTrainingPlanUploadedEmail(data: {
     
     console.log(`✅ Training plan emails: ${successful} sent, ${failed} failed`);
     return { success: true, sent: successful, failed };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error sending training plan emails:', error);
     return { success: false, error };
   }

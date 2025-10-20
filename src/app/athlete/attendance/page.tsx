@@ -71,9 +71,10 @@ export default function AthleteAttendance() {
       if (!response.ok) throw new Error('Failed to load attendance');
       const data = await response.json();
       setRecords(data.records);
-      setStatistics(data.statistics);
-    } catch (err) {
-      setError('Fehler beim Laden der Anwesenheitsdaten');
+      setStatistics(data.stats);
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || 'Fehler beim Laden der Anwesenheit');
       console.error(err);
     } finally {
       setLoading(false);
@@ -96,7 +97,7 @@ export default function AthleteAttendance() {
   }
 
   if (!statistics) {
-    return <Alert variant="info">Keine Anwesenheitsdaten verfügbar</Alert>;
+    return <Alert variant="default">Keine Anwesenheitsdaten verfügbar</Alert>;
   }
 
   return (
@@ -182,7 +183,7 @@ export default function AthleteAttendance() {
         </CardHeader>
         <CardContent>
           {records.length === 0 ? (
-            <Alert variant="info">Noch keine Anwesenheitsdaten vorhanden</Alert>
+            <Alert variant="default">Noch keine Anwesenheitsdaten vorhanden</Alert>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">

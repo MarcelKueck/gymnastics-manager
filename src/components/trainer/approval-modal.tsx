@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { X } from 'lucide-react';
@@ -175,8 +175,9 @@ export default function ApprovalModal({ athlete, onClose, onSuccess }: ApprovalM
       }
 
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Fehler beim Genehmigen des Athleten');
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || 'Fehler beim Genehmigen des Athleten');
       console.error(err);
     } finally {
       setSaving(false);

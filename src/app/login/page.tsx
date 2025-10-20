@@ -71,7 +71,7 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <Alert variant="destructive" className="mb-4 sm:mb-6">
+          <Alert variant="error" className="mb-4 sm:mb-6">
             {error}
           </Alert>
         )}

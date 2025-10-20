@@ -69,7 +69,7 @@ export default function TestEmailPage() {
           </div>
 
           {result && (
-            <Alert variant={result.type === 'success' ? 'default' : 'destructive'}>
+            <Alert variant={result.type === 'success' ? 'success' : 'error'}>
               {result.message}
             </Alert>
           )}

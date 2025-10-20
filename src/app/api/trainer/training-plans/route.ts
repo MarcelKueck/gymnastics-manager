@@ -72,9 +72,12 @@ export async function POST(request: NextRequest) {
     const trainingPlan = await prisma.trainingPlan.create({
       data: {
         title,
-        category,
+        category: category as any, // TrainingPlanCategory enum
+        fileName: file.name,
+        fileSize: buffer.length,
+        mimeType: file.type || 'application/pdf',
         filePath: `/uploads/training-plans/${filename}`,
-        targetDate: targetDate ? new Date(targetDate) : null,
+        targetDate: targetDate || null,
         uploadedBy: session.user.id,
       },
     });
@@ -82,28 +85,29 @@ export async function POST(request: NextRequest) {
     // Create audit log
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
-        action: 'UPLOAD_TRAINING_PLAN',
-        entityType: 'TRAINING_PLAN',
+        performedBy: session.user.id,
+        action: 'create',
+        entityType: 'training_plan',
         entityId: trainingPlan.id,
-        details: {
+        changes: {
           title,
           category,
           filename,
           targetDate,
         },
+        reason: 'Training plan uploaded',
       },
     });
 
     // Get all approved athletes' emails
-    const approvedAthletes = await prisma.user.findMany({
+    const approvedAthletes = await prisma.athlete.findMany({
       where: {
-        role: 'ATHLETE',
         isApproved: true,
       },
       select: {
         email: true,
-        name: true,
+        firstName: true,
+        lastName: true,
       },
     });
 
@@ -111,10 +115,13 @@ export async function POST(request: NextRequest) {
     if (approvedAthletes.length > 0) {
       try {
         await sendTrainingPlanUploadedEmail({
-          athleteEmails: approvedAthletes,
+          athleteEmails: approvedAthletes.map(a => ({ 
+            email: a.email, 
+            name: `${a.firstName} ${a.lastName}` 
+          })),
           category,
           title,
-          targetDate,
+          targetDate: targetDate || undefined,
         });
         console.log(`✅ Training plan emails sent to ${approvedAthletes.length} athletes`);
       } catch (emailError) {

@@ -49,6 +49,7 @@ export default function AthletesList() {
 
   useEffect(() => {
     filterAthletes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athletes, searchTerm, groupFilter, youthCategoryFilter]);
 
   const fetchAthletes = async () => {

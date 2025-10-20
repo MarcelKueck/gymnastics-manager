@@ -7,16 +7,15 @@ import { join } from 'path';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: planId } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session || session.user.role !== 'TRAINER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const planId = params.id;
 
     // Get plan details
     const plan = await prisma.trainingPlan.findUnique({

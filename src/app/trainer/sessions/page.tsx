@@ -29,6 +29,7 @@ export default function SessionsPage() {
 
   useEffect(() => {
     fetchWeekSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWeek]);
 
   const fetchWeekSessions = async () => {

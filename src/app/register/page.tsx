@@ -85,8 +85,9 @@ export default function RegisterPage() {
 
       // Redirect to login with success message
       router.push('/login?registered=true');
-    } catch (err: any) {
-      setError(err.message || 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
       setLoading(false);
     }
   };
@@ -116,7 +117,7 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <Alert variant="destructive" className="mb-4 sm:mb-6">
+          <Alert variant="error" className="mb-4 sm:mb-6">
             {error}
           </Alert>
         )}

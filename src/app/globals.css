@@ -1,5 +1,36 @@
 @import "tailwindcss";
 
+/* SV Esting Primary Color Styles */
+.sv-esting-primary {
+  background-color: #509f28;
+}
+
+.sv-esting-primary:hover:not(:disabled) {
+  background-color: #3d7a1f;
+}
+
+/* SV Esting Sidebar Styles */
+.sv-esting-sidebar {
+  background-color: #509f28;
+}
+
+.sv-esting-nav-item {
+  transition: background-color 0.2s ease;
+}
+
+.sv-esting-nav-item:hover {
+  background-color: #3d7a1f;
+}
+
+.sv-esting-nav-item-active {
+  background-color: #3d7a1f;
+}
+
+.sv-esting-logout-btn:hover {
+  background-color: #3d7a1f !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}
+
 /* Custom animations for toasts and modals */
 @keyframes slide-in {
   from {
@@ -53,7 +84,7 @@ a {
   transition: all 0.15s ease-in-out;
 }
 
-/* Focus styles for accessibility */
+/* Focus styles for accessibility - using SV Esting primary color */
 :focus-visible {
   outline: 2px solid #509f28;
   outline-offset: 2px;

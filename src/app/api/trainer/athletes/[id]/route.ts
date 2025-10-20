@@ -5,16 +5,15 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: athleteId } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session || session.user.role !== 'TRAINER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const athleteId = params.id;
 
     const athlete = await prisma.athlete.findUnique({
       where: {
