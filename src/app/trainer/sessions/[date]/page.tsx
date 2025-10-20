@@ -94,7 +94,7 @@ export default function SessionDetailPage() {
   const [equipment, setEquipment] = useState<Record<string, { equipment1: string; equipment2: string }>>({});
   const [sessionNotes, setSessionNotes] = useState<Record<string, string>>({});
   const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [trainerAssignments, setTrainerAssignments] = useState<Record<string, string>>({});
+  const [trainerAssignments, setTrainerAssignments] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (date) {
@@ -116,7 +116,7 @@ export default function SessionDetailPage() {
       const attendanceState: Record<string, Record<string, string>> = {};
       const equipmentState: Record<string, { equipment1: string; equipment2: string }> = {};
       const notesState: Record<string, string> = {};
-      const trainerState: Record<string, string> = {};
+      const trainerState: Record<string, string[]> = {};
 
       // Group athletes by their assignments
       data.sessions.forEach((session: SessionData) => {
@@ -161,10 +161,8 @@ export default function SessionDetailPage() {
         // Initialize notes
         notesState[sessionKey] = session.notes || '';
 
-        // Initialize trainer assignment
-        if (session.trainerAssignments?.length > 0) {
-          trainerState[sessionKey] = session.trainerAssignments[0].trainerId;
-        }
+        // Initialize trainer assignments (up to 2 trainers)
+        trainerState[sessionKey] = session.trainerAssignments?.map(ta => ta.trainerId) || [];
       });
 
       setSessions(organizedSessions);
@@ -230,7 +228,7 @@ export default function SessionDetailPage() {
             equipment1: equipment[sessionKey]?.equipment1 || null,
             equipment2: equipment[sessionKey]?.equipment2 || null,
             notes: sessionNotes[sessionKey] || null,
-            trainerId: trainerAssignments[sessionKey] || null,
+            trainerIds: trainerAssignments[sessionKey] || [],
           });
         }
       }
@@ -458,27 +456,82 @@ export default function SessionDetailPage() {
                     {/* Trainer Assignment */}
                     {trainers.length > 0 && (
                       <div className="space-y-2 pt-4 border-t">
-                        <Label htmlFor={`trainer-${sessionKey}`} className="text-sm font-semibold">
-                          Übungsleiter
+                        <Label className="text-sm font-semibold">
+                          Übungsleiter (1-2 Trainer)
                         </Label>
-                        <select
-                          id={`trainer-${sessionKey}`}
-                          value={trainerAssignments[sessionKey] || ''}
-                          onChange={(e) =>
-                            setTrainerAssignments((prev) => ({
-                              ...prev,
-                              [sessionKey]: e.target.value,
-                            }))
-                          }
-                          className="w-full h-8 text-sm border border-gray-300 rounded-md px-2"
-                        >
-                          <option value="">Nicht zugewiesen</option>
-                          {trainers.map((trainer) => (
-                            <option key={trainer.id} value={trainer.id}>
-                              {trainer.firstName} {trainer.lastName}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="space-y-2">
+                          <div>
+                            <Label htmlFor={`trainer1-${sessionKey}`} className="text-xs text-gray-600">
+                              Übungsleiter 1 (Pflicht)
+                            </Label>
+                            <select
+                              id={`trainer1-${sessionKey}`}
+                              value={trainerAssignments[sessionKey]?.[0] || ''}
+                              onChange={(e) => {
+                                const newTrainers = [...(trainerAssignments[sessionKey] || [])];
+                                if (e.target.value) {
+                                  newTrainers[0] = e.target.value;
+                                } else {
+                                  newTrainers.splice(0, 1);
+                                }
+                                setTrainerAssignments((prev) => ({
+                                  ...prev,
+                                  [sessionKey]: newTrainers,
+                                }));
+                              }}
+                              className="w-full h-8 text-sm border border-gray-300 rounded-md px-2"
+                            >
+                              <option value="">Nicht zugewiesen</option>
+                              {trainers.map((trainer) => (
+                                <option 
+                                  key={trainer.id} 
+                                  value={trainer.id}
+                                  disabled={trainerAssignments[sessionKey]?.[1] === trainer.id}
+                                >
+                                  {trainer.firstName} {trainer.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label htmlFor={`trainer2-${sessionKey}`} className="text-xs text-gray-600">
+                              Übungsleiter 2 (Optional)
+                            </Label>
+                            <select
+                              id={`trainer2-${sessionKey}`}
+                              value={trainerAssignments[sessionKey]?.[1] || ''}
+                              onChange={(e) => {
+                                const newTrainers = [...(trainerAssignments[sessionKey] || [])];
+                                if (e.target.value) {
+                                  // Ensure we have at least trainer 1 selected
+                                  if (!newTrainers[0]) {
+                                    return; // Can't select trainer 2 without trainer 1
+                                  }
+                                  newTrainers[1] = e.target.value;
+                                } else {
+                                  newTrainers.splice(1, 1);
+                                }
+                                setTrainerAssignments((prev) => ({
+                                  ...prev,
+                                  [sessionKey]: newTrainers,
+                                }));
+                              }}
+                              className="w-full h-8 text-sm border border-gray-300 rounded-md px-2"
+                              disabled={!trainerAssignments[sessionKey]?.[0]}
+                            >
+                              <option value="">Nicht zugewiesen</option>
+                              {trainers.map((trainer) => (
+                                <option 
+                                  key={trainer.id} 
+                                  value={trainer.id}
+                                  disabled={trainerAssignments[sessionKey]?.[0] === trainer.id}
+                                >
+                                  {trainer.firstName} {trainer.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -620,27 +673,82 @@ export default function SessionDetailPage() {
                     {/* Trainer Assignment */}
                     {trainers.length > 0 && (
                       <div className="space-y-2 pt-4 border-t">
-                        <Label htmlFor={`trainer-${sessionKey}`} className="text-sm font-semibold">
-                          Übungsleiter
+                        <Label className="text-sm font-semibold">
+                          Übungsleiter (1-2 Trainer)
                         </Label>
-                        <select
-                          id={`trainer-${sessionKey}`}
-                          value={trainerAssignments[sessionKey] || ''}
-                          onChange={(e) =>
-                            setTrainerAssignments((prev) => ({
-                              ...prev,
-                              [sessionKey]: e.target.value,
-                            }))
-                          }
-                          className="w-full h-8 text-sm border border-gray-300 rounded-md px-2"
-                        >
-                          <option value="">Nicht zugewiesen</option>
-                          {trainers.map((trainer) => (
-                            <option key={trainer.id} value={trainer.id}>
-                              {trainer.firstName} {trainer.lastName}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="space-y-2">
+                          <div>
+                            <Label htmlFor={`trainer1-${sessionKey}`} className="text-xs text-gray-600">
+                              Übungsleiter 1 (Pflicht)
+                            </Label>
+                            <select
+                              id={`trainer1-${sessionKey}`}
+                              value={trainerAssignments[sessionKey]?.[0] || ''}
+                              onChange={(e) => {
+                                const newTrainers = [...(trainerAssignments[sessionKey] || [])];
+                                if (e.target.value) {
+                                  newTrainers[0] = e.target.value;
+                                } else {
+                                  newTrainers.splice(0, 1);
+                                }
+                                setTrainerAssignments((prev) => ({
+                                  ...prev,
+                                  [sessionKey]: newTrainers,
+                                }));
+                              }}
+                              className="w-full h-8 text-sm border border-gray-300 rounded-md px-2"
+                            >
+                              <option value="">Nicht zugewiesen</option>
+                              {trainers.map((trainer) => (
+                                <option 
+                                  key={trainer.id} 
+                                  value={trainer.id}
+                                  disabled={trainerAssignments[sessionKey]?.[1] === trainer.id}
+                                >
+                                  {trainer.firstName} {trainer.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label htmlFor={`trainer2-${sessionKey}`} className="text-xs text-gray-600">
+                              Übungsleiter 2 (Optional)
+                            </Label>
+                            <select
+                              id={`trainer2-${sessionKey}`}
+                              value={trainerAssignments[sessionKey]?.[1] || ''}
+                              onChange={(e) => {
+                                const newTrainers = [...(trainerAssignments[sessionKey] || [])];
+                                if (e.target.value) {
+                                  // Ensure we have at least trainer 1 selected
+                                  if (!newTrainers[0]) {
+                                    return; // Can't select trainer 2 without trainer 1
+                                  }
+                                  newTrainers[1] = e.target.value;
+                                } else {
+                                  newTrainers.splice(1, 1);
+                                }
+                                setTrainerAssignments((prev) => ({
+                                  ...prev,
+                                  [sessionKey]: newTrainers,
+                                }));
+                              }}
+                              className="w-full h-8 text-sm border border-gray-300 rounded-md px-2"
+                              disabled={!trainerAssignments[sessionKey]?.[0]}
+                            >
+                              <option value="">Nicht zugewiesen</option>
+                              {trainers.map((trainer) => (
+                                <option 
+                                  key={trainer.id} 
+                                  value={trainer.id}
+                                  disabled={trainerAssignments[sessionKey]?.[0] === trainer.id}
+                                >
+                                  {trainer.firstName} {trainer.lastName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </CardContent>

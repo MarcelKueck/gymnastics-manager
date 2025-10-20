@@ -44,6 +44,24 @@ async function main() {
   console.log("✅ Created admin:", admin.email);
   console.log("   Password: admin123");
 
+  // Create second trainer for testing 2-trainer feature
+  const trainer2Password = await bcrypt.hash("trainer2", 12);
+  const trainer2 = await prisma.trainer.upsert({
+    where: { email: "trainer2@gym.com" },
+    update: {},
+    create: {
+      email: "trainer2@gym.com",
+      passwordHash: trainer2Password,
+      firstName: "Lisa",
+      lastName: "Becker",
+      phone: "+49 123 456799",
+      role: "TRAINER",
+      isActive: true,
+    },
+  });
+  console.log("✅ Created second trainer:", trainer2.email);
+  console.log("   Password: trainer2");
+
   // Create approved test athlete
   const athletePassword = await bcrypt.hash("athlete123", 12);
   const athlete = await prisma.athlete.upsert({
@@ -168,6 +186,7 @@ async function main() {
   console.log("\n🎉 Database seeded successfully!");
   console.log("\n📝 Test Accounts:");
   console.log("   Trainer: trainer@gym.com / trainer123");
+  console.log("   Trainer 2: trainer2@gym.com / trainer2");
   console.log("   Admin: admin@gym.com / admin123");
   console.log("   Athlete (approved): athlete@test.com / athlete123");
   console.log("   Athlete (pending): pending@test.com / pending123");

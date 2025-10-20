@@ -201,7 +201,7 @@ export async function PUT(
 
     // Process each session update
     for (const update of updates) {
-      const { sessionId, attendance, equipment1, equipment2, notes, trainerId } = update;
+      const { sessionId, attendance, equipment1, equipment2, notes, trainerIds } = update;
 
       // Update session details
       await prisma.trainingSession.update({
@@ -213,20 +213,30 @@ export async function PUT(
         },
       });
 
-      // Update trainer assignment
-      if (trainerId) {
+      // Update trainer assignments (support up to 2 trainers)
+      if (trainerIds && Array.isArray(trainerIds)) {
         // Remove existing assignments
         await prisma.trainerSessionAssignment.deleteMany({
           where: { sessionId },
         });
 
-        // Create new assignment
-        await prisma.trainerSessionAssignment.create({
-          data: {
-            sessionId,
-            trainerId,
-          },
-        });
+        // Validate that we have at least 1 and at most 2 trainers
+        const validTrainerIds = trainerIds.filter(id => id && id.trim() !== '').slice(0, 2);
+        
+        if (validTrainerIds.length < 1) {
+          // If no valid trainers, we'll skip creating assignments
+          // The session can exist without trainer assignments
+        } else {
+          // Create new assignments for each trainer
+          for (const trainerId of validTrainerIds) {
+            await prisma.trainerSessionAssignment.create({
+              data: {
+                sessionId,
+                trainerId,
+              },
+            });
+          }
+        }
       }
 
       // Update attendance records
