@@ -8,9 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { Upload, FileText, Trash2, Download } from 'lucide-react';
 
-interface TrainingPlan {
+interface UploadFile {
   id: string;
-  category: string;
+  categoryId: string;
+  category: {
+    id: string;
+    name: string;
+    sortOrder: number;
+  };
   title: string;
   targetDate: string | null;
   fileName: string;
@@ -22,22 +27,15 @@ interface TrainingPlan {
   };
 }
 
-const categoryTranslations: Record<string, string> = {
-  STRENGTH_GOALS: 'Kraftziele',
-  STRENGTH_EXERCISES: 'Kraftübungen',
-  STRETCHING_GOALS: 'Dehnziele',
-  STRETCHING_EXERCISES: 'Dehnübungen',
-};
+interface UploadCategory {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
 
-const categories = [
-  { value: 'STRENGTH_GOALS', label: 'Kraftziele' },
-  { value: 'STRENGTH_EXERCISES', label: 'Kraftübungen' },
-  { value: 'STRETCHING_GOALS', label: 'Dehnziele' },
-  { value: 'STRETCHING_EXERCISES', label: 'Dehnübungen' },
-];
-
-export default function TrainingPlansPage() {
-  const [plans, setPlans] = useState<TrainingPlan[]>([]);
+export default function FilesPage() {
+  const [uploads, setUploads] = useState<UploadFile[]>([]);
+  const [categories, setCategories] = useState<UploadCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,25 +44,43 @@ export default function TrainingPlansPage() {
   // Upload form state
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadForm, setUploadForm] = useState({
-    category: 'STRENGTH_GOALS',
+    categoryId: '',
     title: '',
     targetDate: '',
     file: null as File | null,
   });
 
   useEffect(() => {
-    fetchPlans();
+    fetchCategories();
+    fetchUploads();
   }, []);
 
-  const fetchPlans = async () => {
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/admin/upload-categories');
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      const data = await response.json();
+      const cats = data.categories || [];
+      setCategories(cats);
+      
+      // Set default category
+      if (cats.length > 0 && !uploadForm.categoryId) {
+        setUploadForm((prev) => ({ ...prev, categoryId: cats[0].id }));
+      }
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
+
+  const fetchUploads = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/trainer/training-plans');
-      if (!response.ok) throw new Error('Failed to fetch training plans');
+      const response = await fetch('/api/trainer/files');
+      if (!response.ok) throw new Error('Failed to fetch files');
       const data = await response.json();
-      setPlans(data.trainingPlans || []);
+      setUploads(data.uploads || []);
     } catch (err) {
-      setError('Fehler beim Laden der Trainingspläne');
+      setError('Fehler beim Laden der Dateien');
       console.error(err);
     } finally {
       setLoading(false);
@@ -104,19 +120,24 @@ export default function TrainingPlansPage() {
       return;
     }
 
+    if (!uploadForm.categoryId) {
+      setError('Bitte wählen Sie eine Kategorie aus');
+      return;
+    }
+
     try {
       setUploading(true);
 
       // Create FormData
       const formData = new FormData();
       formData.append('file', uploadForm.file);
-      formData.append('category', uploadForm.category);
+      formData.append('categoryId', uploadForm.categoryId);
       formData.append('title', uploadForm.title);
       if (uploadForm.targetDate) {
         formData.append('targetDate', uploadForm.targetDate);
       }
 
-      const response = await fetch('/api/trainer/training-plans', {
+      const response = await fetch('/api/trainer/files', {
         method: 'POST',
         body: formData,
       });
@@ -126,31 +147,32 @@ export default function TrainingPlansPage() {
         throw new Error(data.error || 'Upload fehlgeschlagen');
       }
 
-      setSuccess('Trainingstermine erfolgreich hochgeladen!');
+      setSuccess('Datei erfolgreich hochgeladen!');
       setShowUploadForm(false);
       setUploadForm({
-        category: 'STRENGTH_GOALS',
+        categoryId: categories[0]?.id || '',
         title: '',
         targetDate: '',
         file: null,
       });
-      fetchPlans();
+      fetchUploads();
       setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Fehler beim Hochladen');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Fehler beim Hochladen';
+      setError(errorMessage);
       console.error(err);
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDelete = async (planId: string) => {
-    if (!confirm('Möchten Sie diesen Trainingstermin wirklich löschen?')) {
+  const handleDelete = async (uploadId: string) => {
+    if (!confirm('Möchten Sie diese Datei wirklich löschen?')) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/trainer/training-plans/${planId}`, {
+      const response = await fetch(`/api/trainer/files/${uploadId}`, {
         method: 'DELETE',
       });
 
@@ -159,18 +181,19 @@ export default function TrainingPlansPage() {
         throw new Error(data.error || 'Löschen fehlgeschlagen');
       }
 
-      setSuccess('Trainingstermin gelöscht');
-      fetchPlans();
+      setSuccess('Datei gelöscht');
+      fetchUploads();
       setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Fehler beim Löschen');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Fehler beim Löschen';
+      setError(errorMessage);
       console.error(err);
     }
   };
 
-  const handleDownload = async (planId: string, fileName: string) => {
+  const handleDownload = async (uploadId: string, fileName: string) => {
     try {
-      const response = await fetch(`/api/training-plans/${planId}/download`);
+      const response = await fetch(`/api/files/${uploadId}/download`);
       if (!response.ok) throw new Error('Download fehlgeschlagen');
 
       const blob = await response.blob();
@@ -202,14 +225,15 @@ export default function TrainingPlansPage() {
     });
   };
 
-  // Group plans by category
-  const plansByCategory = (plans || []).reduce((acc, plan) => {
-    if (!acc[plan.category]) {
-      acc[plan.category] = [];
+  // Group uploads by category
+  const uploadsByCategory = (uploads || []).reduce((acc, upload) => {
+    const catId = upload.categoryId;
+    if (!acc[catId]) {
+      acc[catId] = [];
     }
-    acc[plan.category].push(plan);
+    acc[catId].push(upload);
     return acc;
-  }, {} as Record<string, TrainingPlan[]>);
+  }, {} as Record<string, UploadFile[]>);
 
   if (loading) {
     return (
@@ -224,12 +248,12 @@ export default function TrainingPlansPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Trainingspläne</h1>
-          <p className="text-gray-600 mt-1">Trainingspläne verwalten und hochladen</p>
+          <h1 className="text-2xl font-bold text-gray-900">Dateien</h1>
+          <p className="text-gray-600 mt-1">Dateien verwalten und hochladen</p>
         </div>
         <Button onClick={() => setShowUploadForm(!showUploadForm)} variant="primary">
           <Upload className="h-4 w-4 mr-2" />
-          {showUploadForm ? 'Abbrechen' : 'Plan hochladen'}
+          {showUploadForm ? 'Abbrechen' : 'Datei hochladen'}
         </Button>
       </div>
 
@@ -241,23 +265,23 @@ export default function TrainingPlansPage() {
       {showUploadForm && (
         <Card>
           <CardHeader>
-            <CardTitle>Neuen Trainingstermin hochladen</CardTitle>
+            <CardTitle>Neue Datei hochladen</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleUpload} className="space-y-4">
               <div>
                 <Label>Kategorie *</Label>
                 <select
-                  value={uploadForm.category}
+                  value={uploadForm.categoryId}
                   onChange={(e) =>
-                    setUploadForm((prev) => ({ ...prev, category: e.target.value }))
+                    setUploadForm((prev) => ({ ...prev, categoryId: e.target.value }))
                   }
                   className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   required
                 >
                   {categories.map((cat) => (
-                    <option key={cat.value} value={cat.value}>
-                      {cat.label}
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
                     </option>
                   ))}
                 </select>
@@ -315,46 +339,46 @@ export default function TrainingPlansPage() {
         </Card>
       )}
 
-      {/* Plans by Category */}
-      {Object.keys(plansByCategory).length === 0 ? (
+      {/* Files by Category */}
+      {Object.keys(uploadsByCategory).length === 0 ? (
         <div className="text-center py-12">
           <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Keine Trainingstermine vorhanden
+            Keine Dateien vorhanden
           </h3>
-          <p className="text-gray-600">Laden Sie den ersten Trainingstermin hoch.</p>
+          <p className="text-gray-600">Laden Sie die erste Datei hoch.</p>
         </div>
       ) : (
         <div className="space-y-6">
           {categories.map((category) => {
-            const categoryPlans = plansByCategory[category.value];
-            if (!categoryPlans || categoryPlans.length === 0) return null;
+            const categoryUploads = uploadsByCategory[category.id];
+            if (!categoryUploads || categoryUploads.length === 0) return null;
 
             return (
-              <Card key={category.value}>
+              <Card key={category.id}>
                 <CardHeader>
-                  <CardTitle>{category.label}</CardTitle>
-                  <p className="text-sm text-gray-600">{categoryPlans.length} Pläne</p>
+                  <CardTitle>{category.name}</CardTitle>
+                  <p className="text-sm text-gray-600">{categoryUploads.length} Dateien</p>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {categoryPlans.map((plan) => (
+                    {categoryUploads.map((upload) => (
                       <div
-                        key={plan.id}
+                        key={upload.id}
                         className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
                       >
                         <div className="flex items-start gap-3 flex-1">
                           <FileText className="h-5 w-5 text-orange-600 flex-shrink-0 mt-1" />
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-gray-900">{plan.title}</h4>
+                            <h4 className="font-semibold text-gray-900">{upload.title}</h4>
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-gray-600">
-                              <span>{plan.fileName}</span>
-                              <span>{formatFileSize(plan.fileSize)}</span>
-                              {plan.targetDate && <span>Ziel: {plan.targetDate}</span>}
+                              <span>{upload.fileName}</span>
+                              <span>{formatFileSize(upload.fileSize)}</span>
+                              {upload.targetDate && <span>Ziel: {upload.targetDate}</span>}
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
-                              Hochgeladen: {formatDate(plan.uploadedAt)} von{' '}
-                              {plan.uploadedByTrainer.firstName} {plan.uploadedByTrainer.lastName}
+                              Hochgeladen: {formatDate(upload.uploadedAt)} von{' '}
+                              {upload.uploadedByTrainer.firstName} {upload.uploadedByTrainer.lastName}
                             </p>
                           </div>
                         </div>
@@ -362,14 +386,14 @@ export default function TrainingPlansPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleDownload(plan.id, plan.fileName)}
+                            onClick={() => handleDownload(upload.id, upload.fileName)}
                           >
                             <Download className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
                             variant="danger"
-                            onClick={() => handleDelete(plan.id)}
+                            onClick={() => handleDelete(upload.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

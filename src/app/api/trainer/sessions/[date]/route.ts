@@ -12,7 +12,7 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'TRAINER') {
+    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -40,89 +40,46 @@ export async function GET(
       });
     }
 
-    // Get or create all sessions for this date (all combinations of hours and groups)
-    const sessions = [];
-    for (const hour of [1, 2]) {
-      for (const group of [1, 2, 3]) {
-        let trainingSession = await prisma.trainingSession.findFirst({
-          where: {
-            date: {
-              gte: startOfDay,
-              lt: endOfDay,
-            },
-            dayOfWeek,
-            hourNumber: hour,
-            groupNumber: group,
-          },
+    // Get all sessions for this date from the database (generated from recurring trainings)
+    const sessions = await prisma.trainingSession.findMany({
+      where: {
+        date: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+        isCancelled: false, // Only show non-cancelled sessions
+      },
+      include: {
+        attendanceRecords: {
           include: {
-            attendanceRecords: {
+            athlete: true,
+          },
+        },
+        trainerAssignments: {
+          include: {
+            trainer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+        recurringTraining: {
+          include: {
+            athleteAssignments: {
               include: {
                 athlete: true,
               },
             },
-            trainerAssignments: {
-              include: {
-                trainer: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-
-        if (!trainingSession) {
-          trainingSession = await prisma.trainingSession.create({
-            data: {
-              date: startOfDay,
-              dayOfWeek,
-              hourNumber: hour,
-              groupNumber: group,
-            },
-            include: {
-              attendanceRecords: {
-                include: {
-                  athlete: true,
-                },
-              },
-              trainerAssignments: {
-                include: {
-                  trainer: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                    },
-                  },
-                },
-              },
-            },
-          });
-        }
-
-        sessions.push(trainingSession);
-      }
-    }
-
-    // Get all approved athletes
-    const athletes = await prisma.athlete.findMany({
-      where: {
-        isApproved: true,
-      },
-      include: {
-        groupAssignments: {
-          where: {
-            isActive: true,
-            trainingDay: dayOfWeek,
           },
         },
       },
-      orderBy: {
-        lastName: 'asc',
-      },
+      orderBy: [
+        { startTime: 'asc' },
+        { groupNumber: 'asc' },
+      ],
     });
 
     // Get cancellations for this date
@@ -165,9 +122,22 @@ export async function GET(
       },
     });
 
+    // Organize athletes by their recurring training assignments
+    const athletesBySession: Record<string, any[]> = {};
+    
+    sessions.forEach((session) => {
+      if (session.recurringTraining) {
+        athletesBySession[session.id] = session.recurringTraining.athleteAssignments
+          .map((assignment) => assignment.athlete)
+          .sort((a, b) => a.lastName.localeCompare(b.lastName));
+      } else {
+        athletesBySession[session.id] = [];
+      }
+    });
+
     return NextResponse.json({
       sessions,
-      scheduledAthletes: athletes,
+      athletesBySession,
       cancellations,
       trainers,
     });
@@ -187,7 +157,7 @@ export async function PUT(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'TRAINER') {
+    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

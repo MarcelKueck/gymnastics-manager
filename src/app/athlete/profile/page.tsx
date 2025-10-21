@@ -28,6 +28,7 @@ interface AthleteProfile {
   autoConfirmFutureSessions: boolean;
   isApproved: boolean;
   approvedAt: string | null;
+  createdAt: string;
   groupAssignments: Array<{
     trainingDay: string;
     hourNumber: number;
@@ -149,8 +150,8 @@ export default function AthleteProfile() {
       
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Fehler beim Aktualisieren des Profils');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fehler beim Aktualisieren des Profils');
       console.error(err);
     } finally {
       setSaving(false);
@@ -193,8 +194,8 @@ export default function AthleteProfile() {
       setShowPasswordForm(false);
       setSuccess('Passwort erfolgreich geändert');
       setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setPasswordError(err.message || 'Fehler beim Ändern des Passworts');
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Fehler beim Ändern des Passworts');
       console.error(err);
     } finally {
       setChangingPassword(false);
@@ -544,6 +545,43 @@ export default function AthleteProfile() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Account Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-gray-600">Freigabestatus</Label>
+              <span
+                className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  profile.isApproved
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}
+              >
+                {profile.isApproved ? 'Freigegeben' : 'Ausstehend'}
+              </span>
+            </div>
+            {profile.approvedAt && (
+              <div className="flex items-center justify-between">
+                <Label className="text-gray-600">Freigegeben am</Label>
+                <p className="font-medium">
+                  {format(new Date(profile.approvedAt), 'dd.MM.yyyy', { locale: de })}
+                </p>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <Label className="text-gray-600">Mitglied seit</Label>
+              <p className="font-medium">
+                {format(new Date(profile.createdAt), 'dd.MM.yyyy', { locale: de })}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

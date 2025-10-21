@@ -114,7 +114,8 @@ export async function GET() {
           select: {
             date: true,
             dayOfWeek: true,
-            hourNumber: true,
+            startTime: true,
+            endTime: true,
             groupNumber: true,
           },
         },

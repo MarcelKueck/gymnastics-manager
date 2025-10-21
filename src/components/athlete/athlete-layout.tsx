@@ -4,15 +4,15 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { Menu, X, LayoutDashboard, Calendar, ClipboardList, User, LogOut, FileText } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar, ClipboardList, UserCircle, LogOut, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
   { name: 'Dashboard', href: '/athlete/dashboard', icon: LayoutDashboard },
   { name: 'Trainingstermine', href: '/athlete/schedule', icon: Calendar },
-  { name: 'Trainingspläne', href: '/athlete/training-plans', icon: FileText },
+  { name: 'Dateien', href: '/athlete/files', icon: FileText },
   { name: 'Anwesenheit', href: '/athlete/attendance', icon: ClipboardList },
-  { name: 'Profil', href: '/athlete/profile', icon: User },
+  { name: 'Profil', href: '/athlete/profile', icon: UserCircle },
 ];
 
 export default function AthleteLayout({ children }: { children: React.ReactNode }) {

@@ -152,7 +152,8 @@ export async function GET() {
             id: nextSession.id,
             date: nextSession.date,
             dayOfWeek: nextSession.dayOfWeek,
-            hourNumber: nextSession.hourNumber,
+            startTime: nextSession.startTime,
+            endTime: nextSession.endTime,
             groupNumber: nextSession.groupNumber,
             isCancelled: nextSession.cancellations.length > 0,
           }

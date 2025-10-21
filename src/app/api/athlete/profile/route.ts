@@ -32,6 +32,7 @@ export async function GET() {
         autoConfirmFutureSessions: true,
         isApproved: true,
         approvedAt: true,
+        createdAt: true,
         groupAssignments: {
           where: { isActive: true },
           select: {

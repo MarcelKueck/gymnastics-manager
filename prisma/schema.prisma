@@ -35,58 +35,74 @@ enum DayOfWeek {
   FRIDAY
 }
 
+enum RecurrenceInterval {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
 enum AttendanceStatus {
   PRESENT
   ABSENT_UNEXCUSED
   ABSENT_EXCUSED
 }
 
-enum TrainingPlanCategory {
-  STRENGTH_GOALS
-  STRENGTH_EXERCISES
-  STRETCHING_GOALS
-  STRETCHING_EXERCISES
+// Upload Category - ADMIN MANAGED
+model UploadCategory {
+  id          String  @id @default(cuid())
+  name        String  @unique // e.g., "Kraftziele", "Dehnübungen"
+  description String?
+  sortOrder   Int     @default(0) // For ordering categories
+  isActive    Boolean @default(true)
+
+  uploads Upload[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
 }
 
 // Main Athlete model (unified account)
 model Athlete {
-  id                        String   @id @default(cuid())
-  email                     String   @unique
-  passwordHash              String
-  firstName                 String
-  lastName                  String
-  birthDate                 DateTime
-  gender                    Gender
-  phone                     String
-  
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  birthDate    DateTime
+  gender       Gender
+  phone        String
+
   // Optional guardian information
-  guardianName              String?
-  guardianEmail             String?
-  guardianPhone             String?
-  emergencyContactName      String?
-  emergencyContactPhone     String?
-  
+  guardianName          String?
+  guardianEmail         String?
+  guardianPhone         String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+
   // Coach-managed training configuration
-  youthCategory             YouthCategory @default(F)
-  competitionParticipation  Boolean       @default(false)
-  
+  youthCategory            YouthCategory @default(F)
+  competitionParticipation Boolean       @default(false)
+
   // Account status
-  isApproved                Boolean   @default(false)
-  approvedBy                String?
-  approvedByTrainer         Trainer?  @relation("AthleteApprovals", fields: [approvedBy], references: [id])
-  approvedAt                DateTime?
-  configuredAt              DateTime?
-  
+  isApproved        Boolean   @default(false)
+  approvedBy        String?
+  approvedByTrainer Trainer?  @relation("AthleteApprovals", fields: [approvedBy], references: [id])
+  approvedAt        DateTime?
+  configuredAt      DateTime?
+
   // Athlete preferences
-  autoConfirmFutureSessions Boolean   @default(false)
-  
+  autoConfirmFutureSessions Boolean @default(false)
+
   // Relationships
-  groupAssignments          AthleteGroupAssignment[]
-  cancellations             Cancellation[]
-  attendanceRecords         AttendanceRecord[]
-  
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  groupAssignments             AthleteGroupAssignment[]
+  recurringTrainingAssignments RecurringTrainingAthleteAssignment[]
+  cancellations                Cancellation[]
+  attendanceRecords            AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([email])
   @@index([isApproved])
@@ -95,91 +111,181 @@ model Athlete {
 
 // Trainer account
 model Trainer {
-  id                String      @id @default(cuid())
-  email             String      @unique
-  passwordHash      String
-  firstName         String
-  lastName          String
-  phone             String
-  role              UserRole    @default(TRAINER)
-  isActive          Boolean     @default(true)
-  
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String
+  role         UserRole @default(TRAINER)
+  isActive     Boolean  @default(true)
+
   // Relationships
-  approvedAthletes  Athlete[]   @relation("AthleteApprovals")
+  approvedAthletes   Athlete[]                  @relation("AthleteApprovals")
   sessionAssignments TrainerSessionAssignment[]
-  trainingPlans     TrainingPlan[]
-  attendanceMarked  AttendanceRecord[]
-  auditLogs         AuditLog[]
-  createdAssignments AthleteGroupAssignment[]
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  uploads            Upload[]
+  attendanceMarked   AttendanceRecord[]
+  auditLogs          AuditLog[]
+
+  // Legacy group assignments
+  legacyGroupAssignments AthleteGroupAssignment[] @relation("LegacyGroupAssignments")
+
+  // New recurring training relationships
+  createdRecurringTrainings    RecurringTraining[]                  @relation("RecurringTrainingCreator")
+  recurringTrainingAssignments RecurringTrainingTrainerAssignment[] @relation("RecurringTrainingAssignments")
+  recurringAthleteAssignments  RecurringTrainingAthleteAssignment[]
+  trainerAssignmentsCreated    RecurringTrainingTrainerAssignment[] @relation("TrainerAssignmentCreator")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([email])
   @@index([role])
 }
 
-// Group Assignment (many-to-many) - COACH-MANAGED ONLY
+// Recurring Training Template - ADMIN ONLY
+model RecurringTraining {
+  id          String    @id @default(cuid())
+  name        String // e.g., "Montag - 1. Stunde - Gruppe 1"
+  dayOfWeek   DayOfWeek
+  startTime   String // e.g., "17:00"
+  endTime     String // e.g., "18:30"
+  groupNumber Int // 1, 2, or 3
+
+  recurrenceInterval RecurrenceInterval @default(WEEKLY)
+  startDate          DateTime // When this template starts generating sessions
+  endDate            DateTime? // Optional: when to stop generating
+
+  isActive Boolean @default(true)
+
+  // Relationships
+  athleteAssignments RecurringTrainingAthleteAssignment[]
+  trainerAssignments RecurringTrainingTrainerAssignment[]
+  sessions           TrainingSession[]
+
+  createdBy        String
+  createdByTrainer Trainer  @relation("RecurringTrainingCreator", fields: [createdBy], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([dayOfWeek])
+  @@index([isActive])
+  @@index([startDate])
+}
+
+// Athlete assignment to recurring training group - ADMIN/TRAINER MANAGED
+model RecurringTrainingAthleteAssignment {
+  id                  String            @id @default(cuid())
+  recurringTrainingId String
+  recurringTraining   RecurringTraining @relation(fields: [recurringTrainingId], references: [id], onDelete: Cascade)
+  athleteId           String
+  athlete             Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  assignedBy        String
+  assignedByTrainer Trainer  @relation(fields: [assignedBy], references: [id])
+  assignedAt        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@unique([recurringTrainingId, athleteId])
+  @@index([recurringTrainingId])
+  @@index([athleteId])
+}
+
+// Trainer assignment to recurring training - ADMIN ONLY
+model RecurringTrainingTrainerAssignment {
+  id                  String            @id @default(cuid())
+  recurringTrainingId String
+  recurringTraining   RecurringTraining @relation(fields: [recurringTrainingId], references: [id], onDelete: Cascade)
+  trainerId           String
+  trainer             Trainer           @relation("RecurringTrainingAssignments", fields: [trainerId], references: [id], onDelete: Cascade)
+  isPrimary           Boolean           @default(false) // Primary or secondary trainer
+
+  // Optional: Override for specific sessions
+  effectiveFrom  DateTime? // If set, applies from this date forward
+  effectiveUntil DateTime? // If set, applies until this date
+
+  assignedBy        String
+  assignedByTrainer Trainer  @relation("TrainerAssignmentCreator", fields: [assignedBy], references: [id])
+  assignedAt        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@unique([recurringTrainingId, trainerId])
+  @@index([recurringTrainingId])
+  @@index([trainerId])
+}
+
+// Legacy: Group Assignment (being phased out)
 model AthleteGroupAssignment {
-  id            String      @id @default(cuid())
-  athleteId     String
-  athlete       Athlete     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  groupNumber   Int         // 1, 2, or 3
-  hourNumber    Int         // 1 or 2
-  trainingDay   DayOfWeek
-  isActive      Boolean     @default(true)
-  
-  assignedBy    String
-  assignedByTrainer Trainer @relation(fields: [assignedBy], references: [id])
-  assignedAt    DateTime    @default(now())
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id          String    @id @default(cuid())
+  athleteId   String
+  athlete     Athlete   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  groupNumber Int // 1, 2, or 3
+  hourNumber  Int // 1 or 2
+  trainingDay DayOfWeek
+  isActive    Boolean   @default(true)
+
+  assignedBy        String
+  assignedByTrainer Trainer  @relation("LegacyGroupAssignments", fields: [assignedBy], references: [id])
+  assignedAt        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([athleteId])
   @@index([groupNumber])
   @@index([trainingDay, hourNumber, groupNumber])
 }
 
-// Training Session
+// Training Session - Generated from RecurringTraining or created manually
 model TrainingSession {
-  id            String      @id @default(cuid())
-  date          DateTime
-  dayOfWeek     DayOfWeek
-  hourNumber    Int         // 1 or 2
-  groupNumber   Int         // 1, 2, or 3
-  
+  id          String    @id @default(cuid())
+  date        DateTime
+  dayOfWeek   DayOfWeek
+  startTime   String? // e.g., "17:00"
+  endTime     String? // e.g., "18:30"
+  groupNumber Int // 1, 2, or 3
+
+  // Link to recurring template (if generated from one)
+  recurringTrainingId String?
+  recurringTraining   RecurringTraining? @relation(fields: [recurringTrainingId], references: [id])
+
   // Equipment tracking (per group)
-  equipment1    String?
-  equipment2    String?
-  
+  equipment1 String?
+  equipment2 String?
+
   // Session details
-  notes         String?
-  isCompleted   Boolean     @default(false)
-  isCancelled   Boolean     @default(false)
-  
+  notes              String?
+  isCompleted        Boolean   @default(false)
+  isCancelled        Boolean   @default(false)
+  cancelledBy        String? // Admin who cancelled
+  cancelledAt        DateTime?
+  cancellationReason String?
+
   // Relationships
   trainerAssignments TrainerSessionAssignment[]
-  cancellations Cancellation[]
-  attendanceRecords AttendanceRecord[]
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  cancellations      Cancellation[] // Athlete cancellations
+  attendanceRecords  AttendanceRecord[]
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, recurringTrainingId])
   @@index([date])
-  @@index([dayOfWeek, hourNumber, groupNumber])
-  @@unique([date, dayOfWeek, hourNumber, groupNumber])
+  @@index([dayOfWeek, groupNumber])
+  @@index([recurringTrainingId])
 }
 
 // Trainer-Session Assignment (many-to-many)
 model TrainerSessionAssignment {
-  id              String          @id @default(cuid())
-  trainerId       String
-  trainer         Trainer         @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  sessionId       String
-  session         TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime        @default(now())
+  id        String          @id @default(cuid())
+  trainerId String
+  trainer   Trainer         @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 
   @@unique([trainerId, sessionId])
   @@index([sessionId])
@@ -193,14 +299,14 @@ model Cancellation {
   athlete           Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainingSessionId String
   trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
-  reason            String          // MANDATORY, minimum 10 characters
+  reason            String // MANDATORY, minimum 10 characters
   cancelledAt       DateTime        @default(now())
-  
+
   // Optional: can be undone before session
-  isActive          Boolean         @default(true)
-  undoneAt          DateTime?
-  
-  createdAt         DateTime        @default(now())
+  isActive Boolean   @default(true)
+  undoneAt DateTime?
+
+  createdAt DateTime @default(now())
 
   @@index([athleteId])
   @@index([trainingSessionId])
@@ -209,25 +315,25 @@ model Cancellation {
 
 // Attendance Record - COACH/ADMIN ONLY CAN MODIFY
 model AttendanceRecord {
-  id                  String            @id @default(cuid())
-  athleteId           String
-  athlete             Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  trainingSessionId   String
-  trainingSession     TrainingSession   @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
-  status              AttendanceStatus
-  
+  id                String           @id @default(cuid())
+  athleteId         String
+  athlete           Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  trainingSessionId String
+  trainingSession   TrainingSession  @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  status            AttendanceStatus
+
   // Audit trail
-  markedBy            String
-  markedByTrainer     Trainer           @relation(fields: [markedBy], references: [id])
-  markedAt            DateTime          @default(now())
-  lastModifiedBy      String?
-  lastModifiedAt      DateTime?
-  modificationReason  String?
-  
-  notes               String?
-  
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  markedBy           String
+  markedByTrainer    Trainer   @relation(fields: [markedBy], references: [id])
+  markedAt           DateTime  @default(now())
+  lastModifiedBy     String?
+  lastModifiedAt     DateTime?
+  modificationReason String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([athleteId, trainingSessionId])
   @@index([athleteId])
@@ -235,46 +341,47 @@ model AttendanceRecord {
   @@index([status])
 }
 
-// Training Plan
-model TrainingPlan {
-  id            String                @id @default(cuid())
-  category      TrainingPlanCategory
-  title         String
-  targetDate    String?               // "April 2026"
-  filePath      String                // storage path
-  fileName      String
-  fileSize      Int
-  mimeType      String                // should always be 'application/pdf'
-  
-  // Upload info
-  uploadedBy    String
-  uploadedByTrainer Trainer           @relation(fields: [uploadedBy], references: [id])
-  uploadedAt    DateTime              @default(now())
-  version       Int                   @default(1)
-  
-  // Optional: maintain history
-  replacedBy    String?               // id of newer version
-  isActive      Boolean               @default(true)
-  
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+// Upload/File - Renamed from TrainingPlan
+model Upload {
+  id         String         @id @default(cuid())
+  categoryId String
+  category   UploadCategory @relation(fields: [categoryId], references: [id])
+  title      String
+  targetDate String? // "April 2026"
+  filePath   String // storage path
+  fileName   String
+  fileSize   Int
+  mimeType   String // should always be 'application/pdf'
 
-  @@index([category])
+  // Upload info
+  uploadedBy        String
+  uploadedByTrainer Trainer  @relation(fields: [uploadedBy], references: [id])
+  uploadedAt        DateTime @default(now())
+  version           Int      @default(1)
+
+  // Optional: maintain history
+  replacedBy String? // id of newer version
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
   @@index([isActive])
 }
 
 // Audit Log (for attendance changes)
 model AuditLog {
-  id            String      @id @default(cuid())
-  entityType    String      // 'attendance', 'athlete', 'session'
-  entityId      String
-  action        String      // 'create', 'update', 'delete'
-  changes       Json        // JSON of what changed
-  performedBy   String
-  performedByUser Trainer   @relation(fields: [performedBy], references: [id])
-  performedAt   DateTime    @default(now())
-  reason        String?
-  
+  id              String   @id @default(cuid())
+  entityType      String // 'attendance', 'athlete', 'session'
+  entityId        String
+  action          String // 'create', 'update', 'delete'
+  changes         Json // JSON of what changed
+  performedBy     String
+  performedByUser Trainer  @relation(fields: [performedBy], references: [id])
+  performedAt     DateTime @default(now())
+  reason          String?
+
   @@index([entityType, entityId])
   @@index([performedAt])
   @@index([performedBy])

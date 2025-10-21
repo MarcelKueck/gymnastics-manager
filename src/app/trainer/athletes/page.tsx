@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert } from '@/components/ui/alert';
-import { Users, Search, Eye, AlertCircle, UserCheck } from 'lucide-react';
+import { Users, Search, Eye, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
 interface Athlete {
@@ -42,11 +42,9 @@ export default function AthletesList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const [youthCategoryFilter, setYouthCategoryFilter] = useState<string>('all');
-  const [pendingCount, setPendingCount] = useState<number>(0);
 
   useEffect(() => {
     fetchAthletes();
-    fetchPendingCount();
   }, []);
 
   useEffect(() => {
@@ -66,18 +64,6 @@ export default function AthletesList() {
       console.error(err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchPendingCount = async () => {
-    try {
-      const response = await fetch('/api/trainer/athletes/pending');
-      if (response.ok) {
-        const data = await response.json();
-        setPendingCount(data.athletes?.length || 0);
-      }
-    } catch (err) {
-      console.error('Failed to fetch pending count:', err);
     }
   };
 
@@ -154,22 +140,9 @@ export default function AthletesList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Athleten</h1>
-          <p className="text-gray-600 mt-1">{athletes.length} aktive Athleten</p>
-        </div>
-        <Link href="/trainer/athletes/pending">
-          <Button className="bg-orange-600 hover:bg-orange-700">
-            <UserCheck className="h-4 w-4 mr-2" />
-            Ausstehende Genehmigungen
-            {pendingCount > 0 && (
-              <span className="ml-2 bg-white text-orange-600 px-2 py-0.5 rounded-full text-xs font-semibold">
-                {pendingCount}
-              </span>
-            )}
-          </Button>
-        </Link>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Athleten</h1>
+        <p className="text-gray-600 mt-1">{athletes.length} aktive Athleten</p>
       </div>
 
       {/* Filters */}

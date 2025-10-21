@@ -7,9 +7,9 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    // Only trainers and admins can reject athletes
-    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Only admins can reject athletes
+    if (!session || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized - Only admins can reject athletes' }, { status: 401 });
     }
 
     const body = await request.json();

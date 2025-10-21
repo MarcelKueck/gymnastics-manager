@@ -7,9 +7,9 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    // Both trainers and admins can view pending athletes
-    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Only admins can view pending athletes
+    if (!session || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized - Only admins can view pending athletes' }, { status: 401 });
     }
 
     const athletes = await prisma.athlete.findMany({

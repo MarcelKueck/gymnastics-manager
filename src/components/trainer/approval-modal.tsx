@@ -190,7 +190,7 @@ export default function ApprovalModal({ athlete, onClose, onSuccess }: ApprovalM
         }
       });
 
-      const response = await fetch('/api/trainer/athletes/approve', {
+      const response = await fetch('/api/admin/athletes/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

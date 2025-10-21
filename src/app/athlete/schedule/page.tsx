@@ -15,8 +15,17 @@ interface TrainingSession {
   id: string;
   date: string;
   dayOfWeek: string;
-  hourNumber: number;
+  startTime: string | null;
+  endTime: string | null;
   groupNumber: number;
+  isCancelled: boolean;
+  cancellationReason: string | null;
+  recurringTraining: {
+    name: string;
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+  } | null;
   cancellations: Array<{
     id: string;
     reason: string;
@@ -237,7 +246,9 @@ export default function AthleteSchedule() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {upcomingSessions.map((session) => {
-            const isCancelled = session.cancellations.length > 0;
+            const isCancelledByAthlete = session.cancellations.length > 0;
+            const isCancelledByAdmin = session.isCancelled;
+            const isCancelled = isCancelledByAthlete || isCancelledByAdmin;
             const isPast = new Date(session.date) < now;
 
             return (
@@ -261,19 +272,32 @@ export default function AthleteSchedule() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="h-4 w-4" />
-                      <span>{session.hourNumber}. Stunde</span>
-                    </div>
+                    {session.startTime && session.endTime && (
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="h-4 w-4" />
+                        <span>{session.startTime} - {session.endTime}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1.5">
                       <Users className="h-4 w-4" />
                       <span>Gruppe {session.groupNumber}</span>
                     </div>
                   </div>
 
-                  {isCancelled && (
+                  {isCancelledByAdmin && (
                     <div className="bg-white rounded-md p-3 border border-red-200">
-                      <p className="text-sm font-medium text-red-900 mb-1">Absagegrund:</p>
+                      <p className="text-sm font-medium text-red-900 mb-1">
+                        Training wurde vom Admin abgesagt
+                      </p>
+                      {session.cancellationReason && (
+                        <p className="text-sm text-gray-700">{session.cancellationReason}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {isCancelledByAthlete && !isCancelledByAdmin && (
+                    <div className="bg-white rounded-md p-3 border border-red-200">
+                      <p className="text-sm font-medium text-red-900 mb-1">Deine Absage:</p>
                       <p className="text-sm text-gray-700">{session.cancellations[0].reason}</p>
                       {!isPast && (
                         <button
@@ -286,7 +310,7 @@ export default function AthleteSchedule() {
                     </div>
                   )}
 
-                  {!isCancelled && !isPast && (
+                  {!isCancelled && !isPast && !isCancelledByAdmin && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -326,7 +350,10 @@ export default function AthleteSchedule() {
                   {format(new Date(selectedSession.date), 'dd.MM.yyyy', { locale: de })}
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
-                  {selectedSession.hourNumber}. Stunde • Gruppe {selectedSession.groupNumber}
+                  {selectedSession.startTime && selectedSession.endTime && (
+                    <span>{selectedSession.startTime} - {selectedSession.endTime} • </span>
+                  )}
+                  Gruppe {selectedSession.groupNumber}
                 </p>
               </div>
 

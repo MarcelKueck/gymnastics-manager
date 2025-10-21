@@ -4,19 +4,22 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { Menu, X, LayoutDashboard, Users, Calendar, FileText, BarChart3, LogOut, Shield } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Users, Calendar, FileText, BarChart3, LogOut, Shield, UserCircle, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
   { name: 'Dashboard', href: '/trainer/dashboard', icon: LayoutDashboard },
   { name: 'Athleten', href: '/trainer/athletes', icon: Users },
   { name: 'Trainingstermine', href: '/trainer/sessions', icon: Calendar },
-  { name: 'Trainingspläne', href: '/trainer/training-plans', icon: FileText },
+  { name: 'Dateien', href: '/trainer/files', icon: FileText },
   { name: 'Statistiken', href: '/trainer/statistics', icon: BarChart3 },
+  { name: 'Profil', href: '/trainer/profile', icon: UserCircle },
 ];
 
 const adminNavigation = [
-  { name: 'Trainer-Freigaben', href: '/trainer/admin/pending-trainers', icon: Shield },
+  { name: 'Wiederkehrende Trainings', href: '/trainer/admin/recurring-trainings', icon: Calendar },
+  { name: 'Freigaben', href: '/trainer/admin/approvals', icon: Shield },
+  { name: 'Datei-Kategorien', href: '/trainer/admin/upload-categories', icon: FolderOpen },
 ];
 
 export default function TrainerLayout({ children }: { children: React.ReactNode }) {

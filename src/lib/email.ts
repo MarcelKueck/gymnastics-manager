@@ -281,27 +281,20 @@ export async function sendTrainingPlanUploadedEmail(data: {
   title: string;
   targetDate?: string | null;
 }) {
-  const categoryMap: Record<string, string> = {
-    strength_goals: 'Kraftziele',
-    strength_exercises: 'Kraftübungen',
-    flexibility_goals: 'Dehnziele',
-    flexibility_exercises: 'Dehnübungen'
-  };
-
   const content = `
     <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 22px; font-weight: 600;">
-      Neue Trainingstermine verfügbar! 📋
+      Neue Datei verfügbar! 📋
     </h2>
     
     <p style="margin: 0 0 24px 0; color: #374151; font-size: 16px; line-height: 1.6;">
-      Neue Trainingstermine wurden hochgeladen und stehen jetzt zum Download bereit.
+      Eine neue Datei wurde hochgeladen und steht jetzt zum Download bereit.
     </p>
     
     <div style="background-color: #f0fdf4; border-left: 4px solid ${BRAND_COLOR}; padding: 20px; margin: 0 0 24px 0; border-radius: 4px;">
       <table style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Kategorie:</td>
-          <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${categoryMap[data.category] || data.category}</td>
+          <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${data.category}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Titel:</td>
@@ -310,21 +303,21 @@ export async function sendTrainingPlanUploadedEmail(data: {
         ${data.targetDate ? `
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Zieldatum:</td>
-          <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${new Date(data.targetDate).toLocaleDateString('de-DE')}</td>
+          <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${data.targetDate}</td>
         </tr>
         ` : ''}
       </table>
     </div>
     
     <p style="margin: 0 0 24px 0; color: #374151; font-size: 16px; line-height: 1.6;">
-      Du kannst den Plan jetzt im Portal herunterladen und durcharbeiten.
+      Du kannst die Datei jetzt im Portal herunterladen.
     </p>
     
     <table role="presentation" style="margin: 0;">
       <tr>
         <td>
-          <a href="${BASE_URL}/athlete/training-plans" style="display: inline-block; background-color: ${BRAND_COLOR}; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: 600; font-size: 16px;">
-            Trainingstermine herunterladen
+          <a href="${BASE_URL}/athlete/files" style="display: inline-block; background-color: ${BRAND_COLOR}; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Datei herunterladen
           </a>
         </td>
       </tr>
@@ -336,7 +329,7 @@ export async function sendTrainingPlanUploadedEmail(data: {
     resend.emails.send({
       from: FROM_EMAIL,
       to: athlete.email,
-      subject: 'Neue Trainingstermine verfügbar',
+      subject: 'Neue Datei verfügbar',
       html: emailTemplate(content),
     })
   );
@@ -346,10 +339,10 @@ export async function sendTrainingPlanUploadedEmail(data: {
     const successful = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
     
-    console.log(`✅ Training plan emails: ${successful} sent, ${failed} failed`);
+    console.log(`✅ File upload emails: ${successful} sent, ${failed} failed`);
     return { success: true, sent: successful, failed };
   } catch (error: unknown) {
-    console.error('❌ Error sending training plan emails:', error);
+    console.error('❌ Error sending file upload emails:', error);
     return { success: false, error };
   }
 }

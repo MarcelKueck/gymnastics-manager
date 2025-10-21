@@ -13,17 +13,20 @@ export async function GET(request: Request) {
 
     const athleteId = session.user.id;
 
-    // Get athlete with group assignments
+    // Get athlete with recurring training assignments
     const athlete = await prisma.athlete.findUnique({
       where: { id: athleteId },
-      select: {
-        isApproved: true,
-        groupAssignments: {
-          where: { isActive: true },
-          select: {
-            trainingDay: true,
-            hourNumber: true,
-            groupNumber: true,
+      include: {
+        recurringTrainingAssignments: {
+          include: {
+            recurringTraining: {
+              select: {
+                id: true,
+                isActive: true,
+                dayOfWeek: true,
+                groupNumber: true,
+              },
+            },
           },
         },
       },
@@ -39,22 +42,28 @@ export async function GET(request: Request) {
 
     // Get URL parameters for filtering
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = parseInt(searchParams.get('limit') || '30');
     const includeAll = searchParams.get('includeAll') === 'true';
 
     const now = new Date();
-    const whereCondition: any = {
-      OR: athlete.groupAssignments.map((assignment) => ({
-        dayOfWeek: assignment.trainingDay,
-        hourNumber: assignment.hourNumber,
-        groupNumber: assignment.groupNumber,
-      })),
-    };
+    
+    // Get all recurring training IDs the athlete is assigned to
+    const recurringTrainingIds = athlete.recurringTrainingAssignments
+      .filter(assignment => assignment.recurringTraining?.isActive)
+      .map(assignment => assignment.recurringTraining?.id)
+      .filter((id): id is string => id !== undefined);
 
-    // If not including all, only show future sessions
-    if (!includeAll) {
-      whereCondition.date = { gte: now };
+    if (recurringTrainingIds.length === 0) {
+      return NextResponse.json({ sessions: [] });
     }
+
+    const whereCondition = {
+      recurringTrainingId: {
+        in: recurringTrainingIds,
+      },
+      isCancelled: false, // Don't show cancelled sessions
+      ...(includeAll ? {} : { date: { gte: now } }),
+    };
 
     // Get training sessions
     const sessions = await prisma.trainingSession.findMany({
@@ -62,6 +71,14 @@ export async function GET(request: Request) {
       orderBy: { date: 'asc' },
       take: limit,
       include: {
+        recurringTraining: {
+          select: {
+            name: true,
+            dayOfWeek: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
         cancellations: {
           where: {
             athleteId,

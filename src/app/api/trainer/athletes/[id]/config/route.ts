@@ -13,7 +13,7 @@ export async function PUT(
     const { id: athleteId } = await params;
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'TRAINER') {
+    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const body = await request.json();

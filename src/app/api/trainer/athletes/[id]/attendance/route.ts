@@ -11,7 +11,7 @@ export async function GET(
     const { id: athleteId } = await params;
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'TRAINER') {
+    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -37,7 +37,8 @@ export async function GET(
             id: true,
             date: true,
             dayOfWeek: true,
-            hourNumber: true,
+            startTime: true,
+            endTime: true,
             groupNumber: true,
             cancellations: {
               where: {
@@ -68,7 +69,8 @@ export async function GET(
       id: record.id,
       date: record.trainingSession.date,
       dayOfWeek: record.trainingSession.dayOfWeek,
-      hourNumber: record.trainingSession.hourNumber,
+      startTime: record.trainingSession.startTime,
+      endTime: record.trainingSession.endTime,
       groupNumber: record.trainingSession.groupNumber,
       status: record.status,
       cancellationReason: record.trainingSession.cancellations[0]?.reason,
