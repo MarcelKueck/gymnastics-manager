@@ -18,8 +18,8 @@ export default function Home() {
           <div className="text-center mb-8 sm:mb-12">
             <div className="inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 mb-4 sm:mb-6 rounded-2xl shadow-lg overflow-hidden bg-white">
               <Image
-                src="/svesting.jpg"
-                alt="SV Esting Logo"
+                src="/sve_logo_Turnen.jpg"
+                alt="SV Esting Turnen Logo"
                 width={96}
                 height={96}
                 className="w-full h-full object-cover"
