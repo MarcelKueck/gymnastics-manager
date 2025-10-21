@@ -37,6 +37,7 @@ export default function PendingApprovals() {
   const [error, setError] = useState<string | null>(null);
   const [selectedAthlete, setSelectedAthlete] = useState<PendingAthlete | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPendingAthletes();
@@ -60,6 +61,32 @@ export default function PendingApprovals() {
   const handleApprove = (athlete: PendingAthlete) => {
     setSelectedAthlete(athlete);
     setShowModal(true);
+  };
+
+  const handleReject = async (athleteId: string, athleteName: string) => {
+    if (!confirm(`Möchten Sie die Anmeldung von ${athleteName} wirklich ablehnen? Dies kann nicht rückgängig gemacht werden.`)) {
+      return;
+    }
+
+    try {
+      setProcessingId(athleteId);
+      const response = await fetch('/api/trainer/athletes/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ athleteId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reject athlete');
+      }
+
+      await fetchPendingAthletes(); // Refresh the list
+    } catch (err) {
+      alert('Fehler beim Ablehnen der Anmeldung');
+      console.error(err);
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const handleApprovalSuccess = () => {
@@ -204,11 +231,21 @@ export default function PendingApprovals() {
                 <div className="flex gap-3 pt-4 border-t">
                   <Button
                     onClick={() => handleApprove(athlete)}
-                    className="flex-1"
+                    className="flex-1 bg-green-600 hover:bg-green-700"
                     variant="primary"
+                    disabled={processingId === athlete.id}
                   >
                     <UserCheck className="h-4 w-4 mr-2" />
                     Genehmigen & Konfigurieren
+                  </Button>
+                  <Button
+                    onClick={() => handleReject(athlete.id, `${athlete.firstName} ${athlete.lastName}`)}
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    variant="primary"
+                    disabled={processingId === athlete.id}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Ablehnen
                   </Button>
                 </div>
               </CardContent>

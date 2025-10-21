@@ -31,7 +31,14 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError('Ungültige E-Mail oder Passwort');
+        // Show specific error messages for better user experience
+        if (result.error === 'Account pending approval') {
+          setError('Dein Account muss noch von einem Trainer freigeschaltet werden. Bitte habe etwas Geduld.');
+        } else if (result.error === 'Account is inactive') {
+          setError('Dein Account ist inaktiv. Bitte kontaktiere einen Trainer.');
+        } else {
+          setError('Ungültige E-Mail oder Passwort');
+        }
         setLoading(false);
         return;
       }
@@ -52,7 +59,8 @@ export default function LoginPage() {
       }
       
       router.refresh();
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error('Login error:', err);
       setError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
       setLoading(false);
     }

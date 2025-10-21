@@ -7,14 +7,14 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    // Both trainers and admins can view pending athletes
-    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
+    // Only admins can view pending trainers
+    if (!session || session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const athletes = await prisma.athlete.findMany({
+    const trainers = await prisma.trainer.findMany({
       where: {
-        isApproved: false,
+        isActive: false,
       },
       orderBy: {
         createdAt: 'asc',
@@ -24,23 +24,17 @@ export async function GET() {
         email: true,
         firstName: true,
         lastName: true,
-        birthDate: true,
-        gender: true,
         phone: true,
-        guardianName: true,
-        guardianEmail: true,
-        guardianPhone: true,
-        emergencyContactName: true,
-        emergencyContactPhone: true,
+        role: true,
         createdAt: true,
       },
     });
 
-    return NextResponse.json({ athletes });
+    return NextResponse.json({ trainers });
   } catch (error) {
-    console.error('Get pending athletes error:', error);
+    console.error('Get pending trainers error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch pending athletes' },
+      { error: 'Failed to fetch pending trainers' },
       { status: 500 }
     );
   }

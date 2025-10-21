@@ -47,13 +47,21 @@ export async function PUT(
       return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
     }
 
-    // Store old config for comparison
+    // Store old config for comparison (from current group assignments)
+    const currentAssignments = athlete.groupAssignments || [];
+    const oldTrainingDays = [...new Set(currentAssignments.map(a => a.trainingDay))];
+    
+    // Convert hourNumber to training hours format (first/second)
+    const hourNumberToHour = (num: number) => num === 1 ? 'first' : 'second';
+    const oldTrainingHours = [...new Set(currentAssignments.map(a => hourNumberToHour(a.hourNumber)))];
+    const oldGroup = currentAssignments.length > 0 ? currentAssignments[0].groupNumber : group;
+    
     const oldConfig = {
-      trainingDays: trainingDays,
-      trainingHours: trainingHours,
-      group: group,
-      youthCategory: athlete.youthCategory,
-      isCompetition: athlete.competitionParticipation,
+      trainingDays: oldTrainingDays,
+      trainingHours: oldTrainingHours,
+      group: oldGroup,
+      youthCategory: athlete.youthCategory || youthCategory,
+      isCompetition: athlete.competitionParticipation || false,
     };
 
     // Update athlete configuration

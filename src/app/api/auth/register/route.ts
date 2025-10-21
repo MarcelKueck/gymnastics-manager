@@ -74,7 +74,19 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // TODO: Send email notification to trainers about new registration
+    // Send registration confirmation email
+    const { sendAthleteRegistrationEmail } = await import('@/lib/email');
+    try {
+      await sendAthleteRegistrationEmail({
+        athleteEmail: athlete.email,
+        guardianEmail: athlete.guardianEmail,
+        athleteName: `${athlete.firstName} ${athlete.lastName}`,
+      });
+      console.log('✅ Registration confirmation email sent');
+    } catch (emailError) {
+      console.error('❌ Failed to send registration confirmation email:', emailError);
+      // Don't fail the registration if email fails
+    }
 
     return NextResponse.json(
       {

@@ -1,6 +1,6 @@
 // src/lib/absenceAlert.ts
 import { prisma } from './prisma';
-// import { sendUnexcusedAbsenceAlert } from './email';
+import { sendUnexcusedAbsenceAlert } from './email';
 
 /**
  * Check if an athlete has 3+ unexcused absences and send alert if needed
@@ -94,18 +94,23 @@ export async function checkAndSendAbsenceAlert(athleteId: string): Promise<void>
       return;
     }
 
-    // TODO: Send the alert email
-    // await sendUnexcusedAbsenceAlert({
-    //   athleteEmail: athlete.email,
-    //   guardianEmail: athlete.guardianEmail,
-    //   athleteName: `${athlete.firstName} ${athlete.lastName}`,
-    //   unexcusedCount,
-    //   absenceDates,
-    //   sendToAthlete: true,
-    //   trainerEmail: trainer.email,
-    // });
+    // Send the alert email
+    try {
+      await sendUnexcusedAbsenceAlert({
+        athleteEmail: athlete.email,
+        guardianEmail: athlete.guardianEmail,
+        athleteName: `${athlete.firstName} ${athlete.lastName}`,
+        unexcusedCount,
+        absenceDates,
+        sendToAthlete: true,
+        trainerEmail: trainer.email,
+      });
+      console.log(`✅ Absence alert sent to ${athlete.firstName} ${athlete.lastName} (${unexcusedCount} absences)`);
+    } catch (emailError) {
+      console.error('❌ Failed to send absence alert email:', emailError);
+    }
 
-    // Log that we would send the alert
+    // Log the alert
     await prisma.auditLog.create({
       data: {
         performedBy: trainer.id,
@@ -120,8 +125,6 @@ export async function checkAndSendAbsenceAlert(athleteId: string): Promise<void>
         },
       },
     });
-
-    console.log(`✅ Absence alert logged for ${athlete.firstName} ${athlete.lastName} (${unexcusedCount} absences)`);
   } catch (error) {
     console.error('Error checking/sending absence alert:', error);
     // Don't throw error - we don't want absence check to break attendance marking

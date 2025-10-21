@@ -488,3 +488,129 @@ export async function sendUnexcusedAbsenceAlert(data: {
     return { success: false, error };
   }
 }
+
+// Email Type 5: Athlete Registration Confirmation
+export async function sendAthleteRegistrationEmail(data: {
+  athleteEmail: string;
+  guardianEmail?: string | null;
+  athleteName: string;
+}) {
+  const content = `
+    <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 22px; font-weight: 600;">
+      Registrierung erhalten! 📝
+    </h2>
+    
+    <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; line-height: 1.6;">
+      Hallo ${data.athleteName},
+    </p>
+    
+    <p style="margin: 0 0 24px 0; color: #374151; font-size: 16px; line-height: 1.6;">
+      vielen Dank für deine Registrierung beim Turnverein! Wir haben deine Anmeldung erhalten und werden sie in Kürze bearbeiten.
+    </p>
+    
+    <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 0 0 24px 0; border-radius: 4px;">
+      <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">
+        Nächste Schritte
+      </h3>
+      <ol style="margin: 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
+        <li>Ein Trainer wird deine Anmeldung prüfen</li>
+        <li>Du erhältst eine weitere E-Mail, sobald dein Account freigeschaltet wurde</li>
+        <li>Nach der Freischaltung kannst du dich im Portal anmelden</li>
+      </ol>
+    </div>
+    
+    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 0 0 24px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+        <strong>Wichtig:</strong> Du kannst dich erst nach der Freischaltung durch einen Trainer im Portal anmelden. Dies kann 1-2 Werktage dauern.
+      </p>
+    </div>
+    
+    <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; line-height: 1.6;">
+      Falls du Fragen hast, kannst du dich gerne an uns wenden.
+    </p>
+    
+    <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+      Wir freuen uns darauf, dich bald im Training begrüßen zu dürfen!
+    </p>
+  `;
+
+  const recipients = [data.athleteEmail];
+  if (data.guardianEmail) {
+    recipients.push(data.guardianEmail);
+  }
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: recipients,
+      subject: 'Registrierung erhalten - Turnverein',
+      html: emailTemplate(content),
+    });
+    
+    console.log('✅ Registration confirmation email sent:', result);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('❌ Error sending registration confirmation email:', error);
+    return { success: false, error };
+  }
+}
+
+// Email Type 6: Trainer Registration Confirmation
+export async function sendTrainerRegistrationEmail(data: {
+  trainerEmail: string;
+  trainerName: string;
+}) {
+  const content = `
+    <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 22px; font-weight: 600;">
+      Trainer-Registrierung erhalten! 📝
+    </h2>
+    
+    <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; line-height: 1.6;">
+      Hallo ${data.trainerName},
+    </p>
+    
+    <p style="margin: 0 0 24px 0; color: #374151; font-size: 16px; line-height: 1.6;">
+      vielen Dank für deine Registrierung als Trainer! Wir haben deine Anmeldung erhalten und werden sie in Kürze bearbeiten.
+    </p>
+    
+    <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 0 0 24px 0; border-radius: 4px;">
+      <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">
+        Nächste Schritte
+      </h3>
+      <ol style="margin: 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
+        <li>Ein Administrator wird deine Anmeldung prüfen</li>
+        <li>Du erhältst eine weitere E-Mail, sobald dein Account freigeschaltet wurde</li>
+        <li>Nach der Freischaltung erhältst du Zugang zum Trainerportal</li>
+      </ol>
+    </div>
+    
+    <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 0 0 24px 0; border-radius: 4px;">
+      <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+        <strong>Wichtig:</strong> Du kannst dich erst nach der Freischaltung durch einen Administrator im Portal anmelden. Dies kann 1-2 Werktage dauern.
+      </p>
+    </div>
+    
+    <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; line-height: 1.6;">
+      Falls du Fragen hast, kannst du dich gerne an die Vereinsleitung wenden.
+    </p>
+    
+    <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+      Wir freuen uns auf die Zusammenarbeit!
+    </p>
+  `;
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.trainerEmail,
+      subject: 'Trainer-Registrierung erhalten - Turnverein',
+      html: emailTemplate(content),
+    });
+    
+    console.log('✅ Trainer registration confirmation email sent:', result);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('❌ Error sending trainer registration confirmation email:', error);
+    return { success: false, error };
+  }
+}

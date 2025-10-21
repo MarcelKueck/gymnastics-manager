@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { X } from 'lucide-react';
@@ -160,12 +159,47 @@ export default function ApprovalModal({ athlete, onClose, onSuccess }: ApprovalM
     try {
       setSaving(true);
 
+      // Transform config into the format expected by the API
+      const trainingDays: string[] = [];
+      const trainingHours: string[] = [];
+      let group = 1;
+
+      // Collect training days and hours
+      Object.entries(config.trainingDays).forEach(([day, enabled]) => {
+        if (enabled) {
+          const dayKey = day as keyof typeof config.hours;
+          const dayName = day.toLowerCase();
+          
+          // Add the day
+          trainingDays.push(dayName);
+          
+          // Add hours for this day
+          const hours = config.hours[dayKey];
+          if (hours.includes(1) && hours.includes(2)) {
+            trainingHours.push('both');
+          } else if (hours.includes(1)) {
+            trainingHours.push('first');
+          } else if (hours.includes(2)) {
+            trainingHours.push('second');
+          }
+          
+          // Use the group number from the first selected day
+          if (trainingDays.length === 1) {
+            group = config.groupNumbers[dayKey];
+          }
+        }
+      });
+
       const response = await fetch('/api/trainer/athletes/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           athleteId: athlete.id,
-          config,
+          trainingDays,
+          trainingHours,
+          group,
+          youthCategory: config.youthCategory,
+          isCompetition: config.competitionParticipation,
         }),
       });
 

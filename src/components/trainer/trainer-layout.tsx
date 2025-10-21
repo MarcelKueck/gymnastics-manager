@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { signOut } from 'next-auth/react';
-import { Menu, X, LayoutDashboard, Users, Calendar, FileText, BarChart3, LogOut, Mail } from 'lucide-react';
+import { signOut, useSession } from 'next-auth/react';
+import { Menu, X, LayoutDashboard, Users, Calendar, FileText, BarChart3, LogOut, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
@@ -13,12 +13,18 @@ const navigation = [
   { name: 'Trainingstermine', href: '/trainer/sessions', icon: Calendar },
   { name: 'Trainingspläne', href: '/trainer/training-plans', icon: FileText },
   { name: 'Statistiken', href: '/trainer/statistics', icon: BarChart3 },
-  { name: 'E-Mail Tester', href: '/trainer/test-email', icon: Mail },
+];
+
+const adminNavigation = [
+  { name: 'Trainer-Freigaben', href: '/trainer/admin/pending-trainers', icon: Shield },
 ];
 
 export default function TrainerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { data: session } = useSession();
+  
+  const isAdmin = session?.user?.role === 'ADMIN';
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/login' });
@@ -60,6 +66,33 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                 </Link>
               );
             })}
+            {isAdmin && (
+              <>
+                <div className="pt-2 pb-1">
+                  <div className="px-3 text-xs font-semibold uppercase tracking-wider opacity-70">
+                    Administration
+                  </div>
+                </div>
+                {adminNavigation.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium sv-esting-nav-item ${
+                        isActive ? 'sv-esting-nav-item-active' : ''
+                      }`}
+                      style={{ color: 'white' }}
+                    >
+                      <Icon size={20} />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </>
+            )}
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -99,6 +132,32 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                 </Link>
               );
             })}
+            {isAdmin && (
+              <>
+                <div className="pt-4 pb-2">
+                  <div className="px-3 text-xs font-semibold uppercase tracking-wider opacity-70">
+                    Administration
+                  </div>
+                </div>
+                {adminNavigation.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium sv-esting-nav-item ${
+                        isActive ? 'sv-esting-nav-item-active' : ''
+                      }`}
+                      style={{ color: 'white' }}
+                    >
+                      <Icon size={20} />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </>
+            )}
           </nav>
           <div className="px-2">
             <Button
