@@ -158,7 +158,7 @@ export default function LoginPage() {
             </div>
             <div className="p-3 bg-gray-50 rounded-md">
               <p className="font-medium text-gray-900">Athlet</p>
-              <p className="text-gray-600">athlete@test.com / password123</p>
+              <p className="text-gray-600">athlete@test.com / athlete123</p>
             </div>
           </div>
         </div>

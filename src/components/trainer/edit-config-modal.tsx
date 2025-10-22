@@ -13,6 +13,7 @@ interface EditConfigModalProps {
     lastName: string;
     youthCategory: string;
     competitionParticipation: boolean;
+    hasDtbId: boolean;
     groupAssignments: Array<{
       id: string;
       groupNumber: number;
@@ -42,6 +43,7 @@ interface TrainingConfig {
     FRIDAY: number;
   };
   competitionParticipation: boolean;
+  hasDtbId: boolean;
 }
 
 const dayNames = {
@@ -69,6 +71,7 @@ export default function EditConfigModal({ athlete, onClose, onSuccess }: EditCon
       FRIDAY: 1,
     },
     competitionParticipation: athlete.competitionParticipation,
+    hasDtbId: athlete.hasDtbId,
   });
 
   const [saving, setSaving] = useState(false);
@@ -293,21 +296,37 @@ export default function EditConfigModal({ athlete, onClose, onSuccess }: EditCon
 
           {/* Competition Participation */}
           <div>
-            <Label className="text-base font-semibold mb-3 block">Wettkampfteilnahme</Label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={config.competitionParticipation}
-                onChange={(e) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    competitionParticipation: e.target.checked,
-                  }))
-                }
-                className="w-5 h-5 text-orange-600 rounded"
-              />
-              <span>Athletin nimmt an Wettkämpfen teil</span>
-            </label>
+            <Label className="text-base font-semibold mb-3 block">Wettkampfteilnahme & DTB-ID</Label>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.competitionParticipation}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      competitionParticipation: e.target.checked,
+                    }))
+                  }
+                  className="w-5 h-5 text-orange-600 rounded"
+                />
+                <span>Athletin nimmt an Wettkämpfen teil</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.hasDtbId}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      hasDtbId: e.target.checked,
+                    }))
+                  }
+                  className="w-5 h-5 text-orange-600 rounded"
+                />
+                <span>DTB-ID ist vorhanden</span>
+              </label>
+            </div>
           </div>
 
           {/* Warning */}

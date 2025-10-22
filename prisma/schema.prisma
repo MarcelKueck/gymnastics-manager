@@ -84,6 +84,7 @@ model Athlete {
   // Coach-managed training configuration
   youthCategory            YouthCategory @default(F)
   competitionParticipation Boolean       @default(false)
+  hasDtbId                 Boolean       @default(false)
 
   // Account status
   isApproved        Boolean   @default(false)
@@ -100,6 +101,7 @@ model Athlete {
   recurringTrainingAssignments RecurringTrainingAthleteAssignment[]
   cancellations                Cancellation[]
   attendanceRecords            AttendanceRecord[]
+  sessionAthleteAssignments    SessionAthleteAssignment[] // For one-time session-specific assignments
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -107,6 +109,7 @@ model Athlete {
   @@index([email])
   @@index([isApproved])
   @@index([lastName])
+  @@index([birthDate]) // For age group calculations
 }
 
 // Trainer account
@@ -121,11 +124,10 @@ model Trainer {
   isActive     Boolean  @default(true)
 
   // Relationships
-  approvedAthletes   Athlete[]                  @relation("AthleteApprovals")
-  sessionAssignments TrainerSessionAssignment[]
-  uploads            Upload[]
-  attendanceMarked   AttendanceRecord[]
-  auditLogs          AuditLog[]
+  approvedAthletes Athlete[]          @relation("AthleteApprovals")
+  uploads          Upload[]
+  attendanceMarked AttendanceRecord[]
+  auditLogs        AuditLog[]
 
   // Legacy group assignments
   legacyGroupAssignments AthleteGroupAssignment[] @relation("LegacyGroupAssignments")
@@ -136,6 +138,14 @@ model Trainer {
   recurringAthleteAssignments  RecurringTrainingAthleteAssignment[]
   trainerAssignmentsCreated    RecurringTrainingTrainerAssignment[] @relation("TrainerAssignmentCreator")
 
+  // Session-specific assignments
+  sessionGroupAssignments     SessionGroupTrainerAssignment[]
+  sessionAthleteReassignments SessionAthleteAssignment[]      @relation("SessionAthleteReassignments")
+
+  // Monthly hours summaries
+  monthlyHoursSummaries         MonthlyTrainerSummary[] @relation("TrainerMonthlySummaries")
+  modifiedMonthlyHoursSummaries MonthlyTrainerSummary[] @relation("TrainerSummaryModifier")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -145,12 +155,11 @@ model Trainer {
 
 // Recurring Training Template - ADMIN ONLY
 model RecurringTraining {
-  id          String    @id @default(cuid())
-  name        String // e.g., "Montag - 1. Stunde - Gruppe 1"
-  dayOfWeek   DayOfWeek
-  startTime   String // e.g., "17:00"
-  endTime     String // e.g., "18:30"
-  groupNumber Int // 1, 2, or 3
+  id        String    @id @default(cuid())
+  name      String // e.g., "Montag - 1. Stunde"
+  dayOfWeek DayOfWeek
+  startTime String // e.g., "17:00"
+  endTime   String // e.g., "18:30"
 
   recurrenceInterval RecurrenceInterval @default(WEEKLY)
   startDate          DateTime // When this template starts generating sessions
@@ -159,9 +168,8 @@ model RecurringTraining {
   isActive Boolean @default(true)
 
   // Relationships
-  athleteAssignments RecurringTrainingAthleteAssignment[]
-  trainerAssignments RecurringTrainingTrainerAssignment[]
-  sessions           TrainingSession[]
+  groups   TrainingGroup[] // A recurring training can have multiple named groups
+  sessions TrainingSession[]
 
   createdBy        String
   createdByTrainer Trainer  @relation("RecurringTrainingCreator", fields: [createdBy], references: [id])
@@ -173,13 +181,35 @@ model RecurringTraining {
   @@index([startDate])
 }
 
-// Athlete assignment to recurring training group - ADMIN/TRAINER MANAGED
-model RecurringTrainingAthleteAssignment {
+// Training Group - Named groups within a recurring training
+model TrainingGroup {
   id                  String            @id @default(cuid())
   recurringTrainingId String
   recurringTraining   RecurringTraining @relation(fields: [recurringTrainingId], references: [id], onDelete: Cascade)
-  athleteId           String
-  athlete             Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  name        String // e.g., "Anfänger", "Fortgeschrittene", "Wettkampf"
+  description String? // Optional description
+  sortOrder   Int     @default(0) // For ordering groups within a session
+
+  // Relationships
+  athleteAssignments RecurringTrainingAthleteAssignment[]
+  trainerAssignments RecurringTrainingTrainerAssignment[]
+  sessionGroups      SessionGroup[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([recurringTrainingId, name])
+  @@index([recurringTrainingId])
+}
+
+// Athlete assignment to recurring training group - ADMIN/TRAINER MANAGED
+model RecurringTrainingAthleteAssignment {
+  id              String        @id @default(cuid())
+  trainingGroupId String
+  trainingGroup   TrainingGroup @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
+  athleteId       String
+  athlete         Athlete       @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   assignedBy        String
   assignedByTrainer Trainer  @relation(fields: [assignedBy], references: [id])
@@ -187,19 +217,19 @@ model RecurringTrainingAthleteAssignment {
 
   createdAt DateTime @default(now())
 
-  @@unique([recurringTrainingId, athleteId])
-  @@index([recurringTrainingId])
+  @@unique([trainingGroupId, athleteId])
+  @@index([trainingGroupId])
   @@index([athleteId])
 }
 
-// Trainer assignment to recurring training - ADMIN ONLY
+// Trainer assignment to recurring training group - ADMIN ONLY
 model RecurringTrainingTrainerAssignment {
-  id                  String            @id @default(cuid())
-  recurringTrainingId String
-  recurringTraining   RecurringTraining @relation(fields: [recurringTrainingId], references: [id], onDelete: Cascade)
-  trainerId           String
-  trainer             Trainer           @relation("RecurringTrainingAssignments", fields: [trainerId], references: [id], onDelete: Cascade)
-  isPrimary           Boolean           @default(false) // Primary or secondary trainer
+  id              String        @id @default(cuid())
+  trainingGroupId String
+  trainingGroup   TrainingGroup @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
+  trainerId       String
+  trainer         Trainer       @relation("RecurringTrainingAssignments", fields: [trainerId], references: [id], onDelete: Cascade)
+  isPrimary       Boolean       @default(false) // Primary or secondary trainer
 
   // Optional: Override for specific sessions
   effectiveFrom  DateTime? // If set, applies from this date forward
@@ -211,8 +241,8 @@ model RecurringTrainingTrainerAssignment {
 
   createdAt DateTime @default(now())
 
-  @@unique([recurringTrainingId, trainerId])
-  @@index([recurringTrainingId])
+  @@unique([trainingGroupId, trainerId])
+  @@index([trainingGroupId])
   @@index([trainerId])
 }
 
@@ -240,20 +270,15 @@ model AthleteGroupAssignment {
 
 // Training Session - Generated from RecurringTraining or created manually
 model TrainingSession {
-  id          String    @id @default(cuid())
-  date        DateTime
-  dayOfWeek   DayOfWeek
-  startTime   String? // e.g., "17:00"
-  endTime     String? // e.g., "18:30"
-  groupNumber Int // 1, 2, or 3
+  id        String    @id @default(cuid())
+  date      DateTime
+  dayOfWeek DayOfWeek
+  startTime String? // e.g., "17:00"
+  endTime   String? // e.g., "18:30"
 
   // Link to recurring template (if generated from one)
   recurringTrainingId String?
   recurringTraining   RecurringTraining? @relation(fields: [recurringTrainingId], references: [id])
-
-  // Equipment tracking (per group)
-  equipment1 String?
-  equipment2 String?
 
   // Session details
   notes              String?
@@ -264,27 +289,87 @@ model TrainingSession {
   cancellationReason String?
 
   // Relationships
-  trainerAssignments TrainerSessionAssignment[]
-  cancellations      Cancellation[] // Athlete cancellations
-  attendanceRecords  AttendanceRecord[]
+  groups                    SessionGroup[] // Groups within this session
+  cancellations             Cancellation[] // Athlete cancellations
+  attendanceRecords         AttendanceRecord[]
+  sessionAthleteAssignments SessionAthleteAssignment[] // One-time athlete reassignments
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([date, recurringTrainingId])
   @@index([date])
-  @@index([dayOfWeek, groupNumber])
+  @@index([dayOfWeek])
   @@index([recurringTrainingId])
 }
 
-// Trainer-Session Assignment (many-to-many)
-model TrainerSessionAssignment {
-  id        String          @id @default(cuid())
-  trainerId String
-  trainer   Trainer         @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  sessionId String
-  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+// Session Group - Instantiation of a TrainingGroup for a specific session
+model SessionGroup {
+  id                String          @id @default(cuid())
+  trainingSessionId String
+  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  trainingGroupId   String
+  trainingGroup     TrainingGroup   @relation(fields: [trainingGroupId], references: [id], onDelete: Restrict)
 
+  // Session-specific data
+  exercises String? // Text field for exercises, can reference previous week
+  notes     String? // Additional notes for this group in this session
+
+  // Relationships
+  trainerAssignments        SessionGroupTrainerAssignment[]
+  sessionAthleteAssignments SessionAthleteAssignment[] // For drag-and-drop reassignments
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([trainingSessionId, trainingGroupId])
+  @@index([trainingSessionId])
+  @@index([trainingGroupId])
+}
+
+// Session-specific trainer assignment (can override recurring assignment)
+model SessionGroupTrainerAssignment {
+  id             String       @id @default(cuid())
+  sessionGroupId String
+  sessionGroup   SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  trainerId      String? // Nullable to allow "no trainer" in rare cases
+  trainer        Trainer?     @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionGroupId])
+  @@index([trainerId])
+}
+
+// Session-specific athlete assignment (for drag-and-drop one-time changes)
+model SessionAthleteAssignment {
+  id                String          @id @default(cuid())
+  trainingSessionId String
+  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  sessionGroupId    String
+  sessionGroup      SessionGroup    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  athleteId         String
+  athlete           Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  // Audit trail
+  movedBy        String
+  movedByTrainer Trainer  @relation("SessionAthleteReassignments", fields: [movedBy], references: [id])
+  movedAt        DateTime @default(now())
+  reason         String? // Optional reason for the move
+
+  createdAt DateTime @default(now())
+
+  @@unique([trainingSessionId, athleteId])
+  @@index([trainingSessionId])
+  @@index([sessionGroupId])
+  @@index([athleteId])
+}
+
+// DEPRECATED: Legacy trainer-session assignment - kept for migration compatibility
+model TrainerSessionAssignment {
+  id        String   @id @default(cuid())
+  trainerId String
+  sessionId String
   createdAt DateTime @default(now())
 
   @@unique([trainerId, sessionId])
@@ -385,4 +470,37 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([performedAt])
   @@index([performedBy])
+}
+
+// Monthly Trainer Hours Summary - ADMIN ONLY
+model MonthlyTrainerSummary {
+  id        String  @id @default(cuid())
+  month     Int // 1-12
+  year      Int
+  trainerId String
+  trainer   Trainer @relation("TrainerMonthlySummaries", fields: [trainerId], references: [id], onDelete: Cascade)
+
+  // Calculated hours from sessions
+  calculatedHours Decimal @default(0) @db.Decimal(10, 2)
+
+  // Admin can manually adjust the hours
+  adjustedHours Decimal? @db.Decimal(10, 2)
+
+  // Final hours (adjusted or calculated)
+  finalHours Decimal @default(0) @db.Decimal(10, 2)
+
+  // Notes for adjustments
+  notes String?
+
+  // Admin who made adjustments
+  lastModifiedBy     String?
+  lastModifiedByUser Trainer?  @relation("TrainerSummaryModifier", fields: [lastModifiedBy], references: [id])
+  lastModifiedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([trainerId, month, year])
+  @@index([month, year])
+  @@index([trainerId])
 }

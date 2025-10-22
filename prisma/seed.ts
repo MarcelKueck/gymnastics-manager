@@ -77,6 +77,7 @@ async function main() {
       phone: "+49 123 456791",
       youthCategory: "E",
       competitionParticipation: true,
+      hasDtbId: true,
       isApproved: true,
       approvedBy: trainer.id,
       approvedAt: new Date(),
@@ -110,88 +111,174 @@ async function main() {
   console.log("✅ Created pending athlete:", pendingAthlete.email);
   console.log("   Password: pending123 (cannot log in yet - not approved)");
 
-  // Create recurring training templates
-  const mondayG1 = await prisma.recurringTraining.create({
+  // Create more test athletes with different ages for age groups
+  const athletes = [
+    { email: "anna@test.com", firstName: "Anna", lastName: "Klein", birthDate: new Date("2017-03-15"), category: "E" }, // E-Jugend
+    { email: "ben@test.com", firstName: "Ben", lastName: "Fischer", birthDate: new Date("2016-07-22"), category: "E" }, // E-Jugend
+    { email: "clara@test.com", firstName: "Clara", lastName: "Hoffmann", birthDate: new Date("2015-05-10"), category: "D" }, // D-Jugend
+    { email: "david@test.com", firstName: "David", lastName: "Richter", birthDate: new Date("2014-09-03"), category: "D" }, // D-Jugend
+    { email: "emma@test.com", firstName: "Emma", lastName: "Koch", birthDate: new Date("2013-11-28"), category: "E" }, // C-Jugend
+  ];
+
+  for (const a of athletes) {
+    const pwd = await bcrypt.hash("test123", 12);
+    await prisma.athlete.upsert({
+      where: { email: a.email },
+      update: {},
+      create: {
+        email: a.email,
+        passwordHash: pwd,
+        firstName: a.firstName,
+        lastName: a.lastName,
+        birthDate: a.birthDate,
+        gender: "FEMALE",
+        phone: `+49 123 ${Math.random().toString().slice(2, 11)}`,
+        youthCategory: a.category as any,
+        isApproved: true,
+        approvedBy: admin.id,
+        approvedAt: new Date(),
+        configuredAt: new Date(),
+      },
+    });
+    console.log(`✅ Created test athlete: ${a.email} (born ${a.birthDate.getFullYear()})`);
+  }
+
+  // Create recurring training templates with NAMED GROUPS
+  console.log("\n📅 Creating recurring trainings with named groups...");
+  
+  // Monday morning training
+  const mondayMorning = await prisma.recurringTraining.create({
     data: {
-      name: "Montag 17:00 - Gruppe 1",
+      name: "Montag 17:00 - Nachmittagstraining",
       dayOfWeek: "MONDAY",
       startTime: "17:00",
       endTime: "18:30",
-      groupNumber: 1,
       recurrenceInterval: "WEEKLY",
       startDate: new Date(),
       isActive: true,
       createdBy: admin.id,
+      groups: {
+        create: [
+          { name: "Anfänger", description: "Einsteiger und Grundlagen", sortOrder: 1 },
+          { name: "Fortgeschrittene", description: "Mittleres Niveau", sortOrder: 2 },
+          { name: "Wettkampf", description: "Wettkampfvorbereitung", sortOrder: 3 },
+        ],
+      },
     },
+    include: { groups: true },
   });
-  console.log("✅ Created recurring training: Montag 17:00 - Gruppe 1");
+  console.log(`✅ Created: ${mondayMorning.name}`);
+  console.log(`   Groups: ${mondayMorning.groups.map(g => g.name).join(", ")}`);
 
-  const mondayG2 = await prisma.recurringTraining.create({
+  // Thursday evening training
+  const thursdayEvening = await prisma.recurringTraining.create({
     data: {
-      name: "Montag 18:30 - Gruppe 2",
-      dayOfWeek: "MONDAY",
-      startTime: "18:30",
-      endTime: "20:00",
-      groupNumber: 2,
-      recurrenceInterval: "WEEKLY",
-      startDate: new Date(),
-      isActive: true,
-      createdBy: admin.id,
-    },
-  });
-  console.log("✅ Created recurring training: Montag 18:30 - Gruppe 2");
-
-  const thursdayG1 = await prisma.recurringTraining.create({
-    data: {
-      name: "Donnerstag 17:00 - Gruppe 1",
+      name: "Donnerstag 18:00 - Abendtraining",
       dayOfWeek: "THURSDAY",
-      startTime: "17:00",
-      endTime: "18:30",
-      groupNumber: 1,
+      startTime: "18:00",
+      endTime: "19:30",
       recurrenceInterval: "WEEKLY",
       startDate: new Date(),
       isActive: true,
       createdBy: admin.id,
+      groups: {
+        create: [
+          { name: "Anfänger", description: "Neue Turnerinnen", sortOrder: 1 },
+          { name: "Fortgeschrittene", description: "Erfahrene Turnerinnen", sortOrder: 2 },
+        ],
+      },
     },
+    include: { groups: true },
   });
-  console.log("✅ Created recurring training: Donnerstag 17:00 - Gruppe 1");
+  console.log(`✅ Created: ${thursdayEvening.name}`);
+  console.log(`   Groups: ${thursdayEvening.groups.map(g => g.name).join(", ")}`);
 
-  const fridayG3 = await prisma.recurringTraining.create({
+  // Friday afternoon training
+  const fridayAfternoon = await prisma.recurringTraining.create({
     data: {
-      name: "Freitag 16:00 - Gruppe 3",
+      name: "Freitag 16:00 - Freitagstraining",
       dayOfWeek: "FRIDAY",
       startTime: "16:00",
       endTime: "17:30",
-      groupNumber: 3,
       recurrenceInterval: "WEEKLY",
       startDate: new Date(),
       isActive: true,
       createdBy: admin.id,
+      groups: {
+        create: [
+          { name: "Mini-Turner", description: "Die Kleinsten", sortOrder: 1 },
+          { name: "Wettkampf", description: "Intensivtraining", sortOrder: 2 },
+        ],
+      },
     },
+    include: { groups: true },
   });
-  console.log("✅ Created recurring training: Freitag 16:00 - Gruppe 3");
+  console.log(`✅ Created: ${fridayAfternoon.name}`);
+  console.log(`   Groups: ${fridayAfternoon.groups.map(g => g.name).join(", ")}`);
 
-  // Assign approved athlete to recurring trainings
+  // Get all created athletes
+  const allAthletes = await prisma.athlete.findMany({
+    where: { isApproved: true },
+  });
+
+  // Assign athletes to training groups
+  console.log("\n👥 Assigning athletes to groups...");
+  
+  // Monday: Assign different athletes to different groups
   await prisma.recurringTrainingAthleteAssignment.create({
     data: {
-      recurringTrainingId: mondayG1.id,
-      athleteId: athlete.id,
+      trainingGroupId: mondayMorning.groups[0].id, // Anfänger
+      athleteId: allAthletes[1].id, // Anna
       assignedBy: admin.id,
     },
   });
   await prisma.recurringTrainingAthleteAssignment.create({
     data: {
-      recurringTrainingId: thursdayG1.id,
-      athleteId: athlete.id,
+      trainingGroupId: mondayMorning.groups[0].id, // Anfänger
+      athleteId: allAthletes[2].id, // Ben
       assignedBy: admin.id,
     },
   });
-  console.log("✅ Assigned athlete to 2 recurring trainings");
+  await prisma.recurringTrainingAthleteAssignment.create({
+    data: {
+      trainingGroupId: mondayMorning.groups[1].id, // Fortgeschrittene
+      athleteId: allAthletes[3].id, // Clara
+      assignedBy: admin.id,
+    },
+  });
+  await prisma.recurringTrainingAthleteAssignment.create({
+    data: {
+      trainingGroupId: mondayMorning.groups[2].id, // Wettkampf
+      athleteId: allAthletes[4].id, // David
+      assignedBy: admin.id,
+    },
+  });
+  console.log(`✅ Assigned 4 athletes to Monday training groups`);
 
-  // Assign trainers to recurring trainings
+  // Thursday: Assign athletes to groups (can be different from Monday!)
+  await prisma.recurringTrainingAthleteAssignment.create({
+    data: {
+      trainingGroupId: thursdayEvening.groups[0].id, // Anfänger
+      athleteId: allAthletes[1].id, // Anna (also in Monday Anfänger)
+      assignedBy: admin.id,
+    },
+  });
+  await prisma.recurringTrainingAthleteAssignment.create({
+    data: {
+      trainingGroupId: thursdayEvening.groups[1].id, // Fortgeschrittene
+      athleteId: allAthletes[3].id, // Clara (was in Monday Fortgeschrittene)
+      assignedBy: admin.id,
+    },
+  });
+  console.log(`✅ Assigned 2 athletes to Thursday training groups`);
+
+  // Assign trainers to training groups
+  console.log("\n👨‍🏫 Assigning trainers to groups...");
+  
+  // Monday trainers
   await prisma.recurringTrainingTrainerAssignment.create({
     data: {
-      recurringTrainingId: mondayG1.id,
+      trainingGroupId: mondayMorning.groups[0].id, // Anfänger
       trainerId: trainer.id,
       isPrimary: true,
       assignedBy: admin.id,
@@ -199,51 +286,60 @@ async function main() {
   });
   await prisma.recurringTrainingTrainerAssignment.create({
     data: {
-      recurringTrainingId: mondayG1.id,
+      trainingGroupId: mondayMorning.groups[1].id, // Fortgeschrittene
+      trainerId: trainer2.id,
+      isPrimary: true,
+      assignedBy: admin.id,
+    },
+  });
+  await prisma.recurringTrainingTrainerAssignment.create({
+    data: {
+      trainingGroupId: mondayMorning.groups[2].id, // Wettkampf
+      trainerId: trainer.id,
+      isPrimary: true,
+      assignedBy: admin.id,
+    },
+  });
+  await prisma.recurringTrainingTrainerAssignment.create({
+    data: {
+      trainingGroupId: mondayMorning.groups[2].id, // Wettkampf (2nd trainer)
       trainerId: trainer2.id,
       isPrimary: false,
       assignedBy: admin.id,
     },
   });
-  console.log("✅ Assigned 2 trainers to Montag Gruppe 1");
+  console.log(`✅ Assigned trainers to Monday groups`);
 
+  // Thursday trainers
   await prisma.recurringTrainingTrainerAssignment.create({
     data: {
-      recurringTrainingId: mondayG2.id,
+      trainingGroupId: thursdayEvening.groups[0].id,
       trainerId: trainer.id,
       isPrimary: true,
       assignedBy: admin.id,
     },
   });
-  console.log("✅ Assigned trainer to Montag Gruppe 2");
-
   await prisma.recurringTrainingTrainerAssignment.create({
     data: {
-      recurringTrainingId: thursdayG1.id,
+      trainingGroupId: thursdayEvening.groups[1].id,
       trainerId: trainer2.id,
       isPrimary: true,
       assignedBy: admin.id,
     },
   });
-  console.log("✅ Assigned trainer to Donnerstag Gruppe 1");
-
-  await prisma.recurringTrainingTrainerAssignment.create({
-    data: {
-      recurringTrainingId: fridayG3.id,
-      trainerId: trainer.id,
-      isPrimary: true,
-      assignedBy: admin.id,
-    },
-  });
-  console.log("✅ Assigned trainer to Freitag Gruppe 3");
+  console.log(`✅ Assigned trainers to Thursday groups`);
 
   // Generate training sessions from recurring templates (next 8 weeks)
+  console.log("\n📅 Generating training sessions...");
   const today = new Date();
   let totalSessions = 0;
+  let totalSessionGroups = 0;
 
-  const recurringTrainings = [mondayG1, mondayG2, thursdayG1, fridayG3];
+  const allRecurringTrainings = await prisma.recurringTraining.findMany({
+    include: { groups: true },
+  });
   
-  for (const rt of recurringTrainings) {
+  for (const rt of allRecurringTrainings) {
     const dayOfWeekMap: Record<string, number> = {
       MONDAY: 1,
       TUESDAY: 2,
@@ -268,36 +364,48 @@ async function main() {
       sessionDate.setDate(currentDate.getDate() + (week * 7));
       sessionDate.setHours(0, 0, 0, 0);
 
+      // Create the training session
       const session = await prisma.trainingSession.create({
         data: {
           date: sessionDate,
           dayOfWeek: rt.dayOfWeek,
           startTime: rt.startTime,
           endTime: rt.endTime,
-          groupNumber: rt.groupNumber,
           recurringTrainingId: rt.id,
         },
       });
+      totalSessions++;
 
-      // Copy trainer assignments to session
-      const trainerAssignments = await prisma.recurringTrainingTrainerAssignment.findMany({
-        where: { recurringTrainingId: rt.id },
-      });
-
-      for (const ta of trainerAssignments) {
-        await prisma.trainerSessionAssignment.create({
+      // Create SessionGroups for each TrainingGroup
+      for (const group of rt.groups) {
+        const sessionGroup = await prisma.sessionGroup.create({
           data: {
-            sessionId: session.id,
-            trainerId: ta.trainerId,
+            trainingSessionId: session.id,
+            trainingGroupId: group.id,
+            exercises: week === 0 ? `Beispiel Übungen für ${group.name}:\n- Aufwärmen\n- Grundübungen\n- Cool down` : null,
           },
         });
-      }
+        totalSessionGroups++;
 
-      totalSessions++;
+        // Copy trainer assignments from recurring to session
+        const trainerAssignments = await prisma.recurringTrainingTrainerAssignment.findMany({
+          where: { trainingGroupId: group.id },
+        });
+
+        for (const ta of trainerAssignments) {
+          await prisma.sessionGroupTrainerAssignment.create({
+            data: {
+              sessionGroupId: sessionGroup.id,
+              trainerId: ta.trainerId,
+            },
+          });
+        }
+      }
     }
   }
 
-  console.log(`✅ Generated ${totalSessions} training sessions for the next 8 weeks`);
+  console.log(`✅ Generated ${totalSessions} training sessions`);
+  console.log(`✅ Generated ${totalSessionGroups} session groups with trainer assignments`);
 
   // Create default upload categories
   const defaultCategories = [
@@ -324,15 +432,18 @@ async function main() {
   console.log("   Trainer 2: trainer2@gym.com / trainer2");
   console.log("   Athlete (approved): athlete@test.com / athlete123");
   console.log("   Athlete (pending): pending@test.com / pending123");
+  console.log("   + 5 more test athletes (anna@test.com, ben@test.com, etc.) / test123");
   console.log("\n📅 Recurring Trainings Created:");
-  console.log("   - Montag 17:00 - Gruppe 1 (2 trainers assigned)");
-  console.log("   - Montag 18:30 - Gruppe 2");
-  console.log("   - Donnerstag 17:00 - Gruppe 1");
-  console.log("   - Freitag 16:00 - Gruppe 3");
+  console.log("   - Montag 17:00 (3 groups: Anfänger, Fortgeschrittene, Wettkampf)");
+  console.log("   - Donnerstag 18:00 (2 groups: Anfänger, Fortgeschrittene)");
+  console.log("   - Freitag 16:00 (2 groups: Mini-Turner, Wettkampf)");
+  console.log("\n👥 Athletes assigned to groups across different sessions");
+  console.log("   (Demonstrating: athlete can be in different groups on different days)");
   console.log("\n💡 Next Steps:");
   console.log("   1. Login as admin@gym.com");
   console.log("   2. Go to 'Wiederkehrende Trainings'");
-  console.log("   3. Manage athletes, trainers, and generate more sessions as needed");
+  console.log("   3. View named groups and manage athletes/trainers");
+  console.log("   4. Login as trainer to see sessions with exercises per group");
 }
 
 main()

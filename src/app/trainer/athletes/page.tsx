@@ -16,9 +16,12 @@ interface Athlete {
   youthCategory: string;
   competitionParticipation: boolean;
   groupAssignments: Array<{
-    groupNumber: number;
+    trainingId: string;
+    trainingName: string;
+    groupId: string;
+    groupName: string;
     trainingDay: string;
-    hourNumber: number;
+    startTime: string;
   }>;
   attendanceStats: {
     totalSessions: number;
@@ -82,9 +85,8 @@ export default function AthletesList() {
 
     // Group filter
     if (groupFilter !== 'all') {
-      const groupNum = parseInt(groupFilter);
       filtered = filtered.filter((a) =>
-        a.groupAssignments.some((g) => g.groupNumber === groupNum)
+        a.groupAssignments.some((g) => g.groupId === groupFilter)
       );
     }
 
@@ -94,6 +96,19 @@ export default function AthletesList() {
     }
 
     setFilteredAthletes(filtered);
+  };
+
+  // Get unique groups for filter dropdown
+  const getUniqueGroups = () => {
+    const groupsMap = new Map<string, string>();
+    athletes.forEach((athlete) => {
+      athlete.groupAssignments.forEach((assignment) => {
+        const key = assignment.groupId;
+        const label = `${assignment.trainingName} - ${assignment.groupName}`;
+        groupsMap.set(key, label);
+      });
+    });
+    return Array.from(groupsMap.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   };
 
   const getAge = (birthDate: string) => {
@@ -114,14 +129,17 @@ export default function AthletesList() {
   };
 
   const getGroupsDisplay = (assignments: Athlete['groupAssignments']) => {
-    const groups = [...new Set(assignments.map((a) => a.groupNumber))];
-    return groups.sort().join(', ');
+    // Create unique list of groups by combining training and group names
+    const groups = assignments.map((a) => `${a.trainingName} - ${a.groupName}`);
+    return [...new Set(groups)].join(', ');
   };
 
   const getScheduleDisplay = (assignments: Athlete['groupAssignments']) => {
-    const schedule = assignments.map(
-      (a) => `${dayTranslations[a.trainingDay]} ${a.hourNumber}.St G${a.groupNumber}`
-    );
+    const schedule = assignments.map((a) => {
+      // Format start time (HH:mm:ss to HH:mm)
+      const time = a.startTime.substring(0, 5);
+      return `${dayTranslations[a.trainingDay]} ${time} (${a.groupName})`;
+    });
     return schedule.join(' | ');
   };
 
@@ -171,9 +189,11 @@ export default function AthletesList() {
                 className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="all">Alle Gruppen</option>
-                <option value="1">Gruppe 1</option>
-                <option value="2">Gruppe 2</option>
-                <option value="3">Gruppe 3</option>
+                {getUniqueGroups().map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -231,10 +251,8 @@ export default function AthletesList() {
               <CardContent className="space-y-4">
                 {/* Groups */}
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Gruppen</p>
-                  <p className="text-sm font-medium">
-                    Gruppe {getGroupsDisplay(athlete.groupAssignments)}
-                  </p>
+                  <p className="text-xs text-gray-500 mb-1">Trainingsgruppen</p>
+                  <p className="text-sm font-medium">{getGroupsDisplay(athlete.groupAssignments)}</p>
                 </div>
 
                 {/* Schedule */}

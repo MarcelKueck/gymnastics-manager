@@ -36,17 +36,27 @@ export async function GET(
         emergencyContactPhone: true,
         youthCategory: true,
         competitionParticipation: true,
+        hasDtbId: true,
         approvedAt: true,
         configuredAt: true,
-        groupAssignments: {
-          where: {
-            isActive: true,
-          },
+        recurringTrainingAssignments: {
           select: {
             id: true,
-            groupNumber: true,
-            trainingDay: true,
-            hourNumber: true,
+            trainingGroup: {
+              select: {
+                id: true,
+                name: true,
+                recurringTraining: {
+                  select: {
+                    id: true,
+                    name: true,
+                    dayOfWeek: true,
+                    startTime: true,
+                    endTime: true,
+                  },
+                },
+              },
+            },
           },
         },
         attendanceRecords: {
@@ -74,8 +84,37 @@ export async function GET(
     const attendancePercentage =
       totalSessions > 0 ? Math.round((attended / totalSessions) * 100) : 0;
 
+    // Transform group assignments to include training and group information
+    const groupAssignments = athlete.recurringTrainingAssignments.map((assignment) => ({
+      id: assignment.id,
+      trainingId: assignment.trainingGroup.recurringTraining.id,
+      trainingName: assignment.trainingGroup.recurringTraining.name,
+      groupId: assignment.trainingGroup.id,
+      groupName: assignment.trainingGroup.name,
+      trainingDay: assignment.trainingGroup.recurringTraining.dayOfWeek,
+      startTime: assignment.trainingGroup.recurringTraining.startTime,
+      endTime: assignment.trainingGroup.recurringTraining.endTime,
+    }));
+
     const athleteWithStats = {
-      ...athlete,
+      id: athlete.id,
+      email: athlete.email,
+      firstName: athlete.firstName,
+      lastName: athlete.lastName,
+      birthDate: athlete.birthDate,
+      gender: athlete.gender,
+      phone: athlete.phone,
+      guardianName: athlete.guardianName,
+      guardianEmail: athlete.guardianEmail,
+      guardianPhone: athlete.guardianPhone,
+      emergencyContactName: athlete.emergencyContactName,
+      emergencyContactPhone: athlete.emergencyContactPhone,
+      youthCategory: athlete.youthCategory,
+      competitionParticipation: athlete.competitionParticipation,
+      hasDtbId: athlete.hasDtbId,
+      approvedAt: athlete.approvedAt,
+      configuredAt: athlete.configuredAt,
+      groupAssignments,
       attendanceStats: {
         totalSessions,
         attended,
@@ -85,10 +124,7 @@ export async function GET(
       },
     };
 
-    // Remove the raw attendanceRecords array since we've calculated stats
-    const { attendanceRecords, ...athleteData } = athleteWithStats;
-
-    return NextResponse.json({ athlete: athleteData });
+    return NextResponse.json({ athlete: athleteWithStats });
   } catch (error) {
     console.error('Get athlete detail error:', error);
     return NextResponse.json(

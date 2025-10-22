@@ -25,7 +25,8 @@ interface AthleteStatistics {
     startTime: string;
     endTime: string;
     dayOfWeek: string;
-    groupNumber: number;
+    groupName: string | null;
+    trainingName: string | null;
   } | null;
   uploadsCount: number;
   recentAttendance: Array<{
@@ -34,16 +35,6 @@ interface AthleteStatistics {
     sessionInfo: string;
   }>;
 }
-
-const dayTranslations: Record<string, string> = {
-  MONDAY: 'Montag',
-  TUESDAY: 'Dienstag',
-  WEDNESDAY: 'Mittwoch',
-  THURSDAY: 'Donnerstag',
-  FRIDAY: 'Freitag',
-  SATURDAY: 'Samstag',
-  SUNDAY: 'Sonntag',
-};
 
 const statusTranslations: Record<string, string> = {
   PRESENT: 'Anwesend',
@@ -192,12 +183,16 @@ export default function AthleteStatisticsPage() {
                     <p className="font-medium">
                       Uhrzeit: {statistics.nextSession.startTime} - {statistics.nextSession.endTime} Uhr
                     </p>
-                    <p>
-                      Tag: {dayTranslations[statistics.nextSession.dayOfWeek]}
-                    </p>
-                    <p>
-                      Gruppe: {statistics.nextSession.groupNumber}
-                    </p>
+                    {statistics.nextSession.trainingName && (
+                      <p>
+                        Training: {statistics.nextSession.trainingName}
+                      </p>
+                    )}
+                    {statistics.nextSession.groupName && (
+                      <p>
+                        Gruppe: {statistics.nextSession.groupName}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

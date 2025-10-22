@@ -6,11 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Plus,
   Calendar,
-  Users,
   Edit,
   Trash2,
   X,
@@ -19,7 +17,17 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
+
+interface TrainingGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  _count: {
+    athleteAssignments: number;
+    trainerAssignments: number;
+  };
+}
 
 interface RecurringTraining {
   id: string;
@@ -27,29 +35,13 @@ interface RecurringTraining {
   dayOfWeek: string;
   startTime: string;
   endTime: string;
-  groupNumber: number;
   recurrenceInterval: string;
   startDate: string;
   endDate: string | null;
   isActive: boolean;
-  athleteAssignments: Array<{
-    athlete: {
-      id: string;
-      firstName: string;
-      lastName: string;
-    };
-  }>;
-  trainerAssignments: Array<{
-    trainer: {
-      id: string;
-      firstName: string;
-      lastName: string;
-    };
-    isPrimary: boolean;
-  }>;
+  groups: TrainingGroup[];
   _count: {
-    athleteAssignments: number;
-    trainerAssignments: number;
+    groups: number;
     sessions: number;
   };
 }
@@ -84,7 +76,6 @@ export default function AdminRecurringTrainingsPage() {
     dayOfWeek: 'MONDAY',
     startTime: '17:00',
     endTime: '18:30',
-    groupNumber: 1,
     recurrenceInterval: 'WEEKLY',
     startDate: format(new Date(), 'yyyy-MM-dd'),
     endDate: '',
@@ -192,7 +183,6 @@ export default function AdminRecurringTrainingsPage() {
       dayOfWeek: 'MONDAY',
       startTime: '17:00',
       endTime: '18:30',
-      groupNumber: 1,
       recurrenceInterval: 'WEEKLY',
       startDate: format(new Date(), 'yyyy-MM-dd'),
       endDate: '',
@@ -276,28 +266,38 @@ export default function AdminRecurringTrainingsPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-700">
-                    <Users className="h-4 w-4" />
-                    <span>Gruppe {training.groupNumber}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-700">
                     <RefreshCw className="h-4 w-4" />
                     <span>{intervalTranslations[training.recurrenceInterval]}</span>
                   </div>
                 </div>
 
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-2 pt-3 border-t">
-                  <div className="text-center">
-                    <p className="text-xl font-bold text-gray-900">
-                      {training._count.athleteAssignments}
-                    </p>
-                    <p className="text-xs text-gray-600">Athleten</p>
+                {/* Groups */}
+                {training.groups.length > 0 && (
+                  <div className="pt-2">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Gruppen:</p>
+                    <div className="space-y-1">
+                      {training.groups.map((group) => (
+                        <div
+                          key={group.id}
+                          className="flex items-center justify-between text-xs bg-gray-50 px-2 py-1 rounded"
+                        >
+                          <span className="font-medium">{group.name}</span>
+                          <span className="text-gray-600">
+                            {group._count.athleteAssignments} Athleten
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-2 pt-3 border-t">
                   <div className="text-center">
                     <p className="text-xl font-bold text-gray-900">
-                      {training._count.trainerAssignments}
+                      {training._count.groups}
                     </p>
-                    <p className="text-xs text-gray-600">Trainer</p>
+                    <p className="text-xs text-gray-600">Gruppen</p>
                   </div>
                   <div className="text-center">
                     <p className="text-xl font-bold text-gray-900">
@@ -428,23 +428,6 @@ export default function AdminRecurringTrainingsPage() {
                 </div>
               </div>
 
-              {/* Group Number */}
-              <div>
-                <Label htmlFor="groupNumber">Gruppe *</Label>
-                <select
-                  id="groupNumber"
-                  value={formData.groupNumber}
-                  onChange={(e) =>
-                    setFormData({ ...formData, groupNumber: parseInt(e.target.value) })
-                  }
-                  className="w-full h-10 border border-gray-300 rounded-md px-3"
-                >
-                  <option value={1}>Gruppe 1</option>
-                  <option value={2}>Gruppe 2</option>
-                  <option value={3}>Gruppe 3</option>
-                </select>
-              </div>
-
               {/* Recurrence Interval */}
               <div>
                 <Label htmlFor="recurrenceInterval">Wiederholung *</Label>
@@ -492,7 +475,7 @@ export default function AdminRecurringTrainingsPage() {
 
               <Alert variant="default">
                 <p className="text-sm">
-                  Nach dem Erstellen kannst du Athleten und Trainer zuweisen und
+                  Nach dem Erstellen kannst du Gruppen hinzufügen, Athleten und Trainer zuweisen und
                   Sessions generieren.
                 </p>
               </Alert>

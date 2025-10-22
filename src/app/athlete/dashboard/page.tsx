@@ -18,10 +18,11 @@ interface DashboardStats {
   nextSession?: {
     id: string;
     date: string;
+    trainingName: string;
     dayOfWeek: string;
     startTime: string;
     endTime: string;
-    groupNumber: number;
+    groupName: string | null;
     isCancelled: boolean;
   } | null;
 }
@@ -178,10 +179,15 @@ export default function AthleteDashboard() {
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
                   {stats.nextSession.startTime} - {stats.nextSession.endTime} Uhr
+                  {stats.nextSession.groupName && (
+                    <span className="ml-2">• {stats.nextSession.groupName}</span>
+                  )}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Gruppe {stats.nextSession.groupNumber}
-                </p>
+                {stats.nextSession.trainingName && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {stats.nextSession.trainingName}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
-import { CheckCircle, XCircle, AlertCircle, TrendingUp } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -16,8 +16,10 @@ interface AttendanceRecord {
   trainingSession: {
     date: string;
     dayOfWeek: string;
-    hourNumber: number;
-    groupNumber: number;
+    startTime: string | null;
+    endTime: string | null;
+    groupName: string | null;
+    trainingName: string | null;
   };
 }
 
@@ -42,7 +44,7 @@ const statusTranslations: Record<string, string> = {
   ABSENT_UNEXCUSED: 'Unentschuldigt',
 };
 
-const statusIcons: Record<string, any> = {
+const statusIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   PRESENT: CheckCircle,
   ABSENT_EXCUSED: AlertCircle,
   ABSENT_UNEXCUSED: XCircle,
@@ -191,7 +193,7 @@ export default function AthleteAttendance() {
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Datum</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Tag</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Stunde</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600">Training</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Gruppe</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Details</th>
@@ -211,10 +213,10 @@ export default function AthleteAttendance() {
                           {dayTranslations[record.trainingSession.dayOfWeek]}
                         </td>
                         <td className="py-3 px-4 text-sm">
-                          {record.trainingSession.hourNumber}. Stunde
+                          {record.trainingSession.trainingName || '-'}
                         </td>
                         <td className="py-3 px-4 text-sm">
-                          Gruppe {record.trainingSession.groupNumber}
+                          {record.trainingSession.groupName || '-'}
                         </td>
                         <td className="py-3 px-4">
                           <span

@@ -25,6 +25,7 @@ interface AthleteProfile {
   emergencyContactPhone: string | null;
   youthCategory: string;
   competitionParticipation: boolean;
+  hasDtbId: boolean;
   autoConfirmFutureSessions: boolean;
   isApproved: boolean;
   approvedAt: string | null;
@@ -424,6 +425,22 @@ export default function AthleteProfile() {
                 <Label className="text-gray-600">Wettkampffreigabe</Label>
                 <div className="flex items-center gap-2 mt-1">
                   {profile.competitionParticipation ? (
+                    <>
+                      <Check className="h-5 w-5 text-green-600" />
+                      <span className="font-medium text-green-600">Ja</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="h-5 w-5 text-red-600" />
+                      <span className="font-medium text-red-600">Nein</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div>
+                <Label className="text-gray-600">DTB-ID vorhanden</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  {profile.hasDtbId ? (
                     <>
                       <Check className="h-5 w-5 text-green-600" />
                       <span className="font-medium text-green-600">Ja</span>

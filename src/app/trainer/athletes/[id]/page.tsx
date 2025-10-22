@@ -18,7 +18,7 @@ import {
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import EditConfigModal from '@/components/trainer/edit-config-modal';
+import EditConfigModal from '@/components/trainer/edit-config-modal-new';
 
 interface AthleteDetail {
   id: string;
@@ -35,13 +35,18 @@ interface AthleteDetail {
   emergencyContactPhone: string | null;
   youthCategory: string;
   competitionParticipation: boolean;
+  hasDtbId: boolean;
   approvedAt: string;
   configuredAt: string;
   groupAssignments: Array<{
     id: string;
-    groupNumber: number;
+    trainingId: string;
+    trainingName: string;
+    groupId: string;
+    groupName: string;
     trainingDay: string;
-    hourNumber: number;
+    startTime: string;
+    endTime: string;
   }>;
   attendanceStats: {
     totalSessions: number;
@@ -290,21 +295,35 @@ export default function AthleteDetailPage() {
 
               {/* Training Schedule */}
               <div>
-                <p className="text-sm text-gray-500 mb-2">Trainingstermine</p>
+                <p className="text-sm text-gray-500 mb-2">Trainingsgruppen</p>
                 <div className="space-y-2">
-                  {athlete.groupAssignments.map((assignment) => (
-                    <div
-                      key={assignment.id}
-                      className="flex items-center justify-between bg-gray-50 rounded p-2"
-                    >
-                      <span className="text-sm font-medium">
-                        {dayTranslations[assignment.trainingDay]}
-                      </span>
-                      <span className="text-sm text-gray-600">
-                        {assignment.hourNumber}. Stunde • Gruppe {assignment.groupNumber}
-                      </span>
-                    </div>
-                  ))}
+                  {athlete.groupAssignments.length > 0 ? (
+                    athlete.groupAssignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className="bg-gray-50 rounded p-3 space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-gray-900">
+                            {assignment.trainingName}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {dayTranslations[assignment.trainingDay]}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-teal-600 font-medium">
+                            {assignment.groupName}
+                          </span>
+                          <span className="text-xs text-gray-600">
+                            {assignment.startTime.substring(0, 5)} - {assignment.endTime.substring(0, 5)}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Keine Gruppen zugewiesen</p>
+                  )}
                 </div>
               </div>
 

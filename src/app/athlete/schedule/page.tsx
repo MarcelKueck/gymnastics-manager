@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Calendar, Clock, Users, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Clock, Users, X, CheckCircle, AlertCircle, ArrowRightLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -17,7 +16,6 @@ interface TrainingSession {
   dayOfWeek: string;
   startTime: string | null;
   endTime: string | null;
-  groupNumber: number;
   isCancelled: boolean;
   cancellationReason: string | null;
   recurringTraining: {
@@ -26,6 +24,14 @@ interface TrainingSession {
     startTime: string;
     endTime: string;
   } | null;
+  athleteGroups: Array<{
+    trainingGroupId: string;
+    trainingGroupName: string;
+    exercises: string | null;
+    notes: string | null;
+    isTemporarilyReassigned: boolean;
+    reassignmentReason: string | null;
+  }>;
   cancellations: Array<{
     id: string;
     reason: string;
@@ -149,8 +155,8 @@ export default function AthleteSchedule() {
       // Refresh schedule
       await fetchSchedule();
       closeCancelModal();
-    } catch (err: any) {
-      setCancelError(err.message || 'Fehler beim Absagen des Trainings');
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : 'Fehler beim Absagen des Trainings');
       console.error(err);
     } finally {
       setCancelling(false);
@@ -278,11 +284,38 @@ export default function AthleteSchedule() {
                         <span>{session.startTime} - {session.endTime}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-1.5">
-                      <Users className="h-4 w-4" />
-                      <span>Gruppe {session.groupNumber}</span>
-                    </div>
+                    {session.athleteGroups.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <Users className="h-4 w-4" />
+                        <span>{session.athleteGroups[0].trainingGroupName}</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Group info with exercises */}
+                  {session.athleteGroups.length > 0 && session.athleteGroups[0].exercises && (
+                    <div className="bg-teal-50 rounded-md p-3 border border-teal-200">
+                      <p className="text-sm font-medium text-teal-900 mb-1">Übungen:</p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                        {session.athleteGroups[0].exercises}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Temporary reassignment indicator */}
+                  {session.athleteGroups.length > 0 && session.athleteGroups[0].isTemporarilyReassigned && (
+                    <div className="bg-blue-50 rounded-md p-3 border border-blue-200">
+                      <p className="text-sm font-medium text-blue-900 mb-1 flex items-center gap-1.5">
+                        <ArrowRightLeft className="h-4 w-4" />
+                        Temporär in anderer Gruppe
+                      </p>
+                      {session.athleteGroups[0].reassignmentReason && (
+                        <p className="text-sm text-gray-700">
+                          Grund: {session.athleteGroups[0].reassignmentReason}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {isCancelledByAdmin && (
                     <div className="bg-white rounded-md p-3 border border-red-200">
@@ -351,9 +384,11 @@ export default function AthleteSchedule() {
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
                   {selectedSession.startTime && selectedSession.endTime && (
-                    <span>{selectedSession.startTime} - {selectedSession.endTime} • </span>
+                    <span>{selectedSession.startTime} - {selectedSession.endTime}</span>
                   )}
-                  Gruppe {selectedSession.groupNumber}
+                  {selectedSession.athleteGroups.length > 0 && (
+                    <span> • {selectedSession.athleteGroups[0].trainingGroupName}</span>
+                  )}
                 </p>
               </div>
 

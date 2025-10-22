@@ -17,7 +17,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { athleteIds } = body;
+    const { athleteIds, trainingGroupId } = body;
 
     if (!athleteIds || !Array.isArray(athleteIds)) {
       return NextResponse.json(
@@ -26,15 +26,76 @@ export async function POST(
       );
     }
 
-    // Check if recurring training exists
-    const recurringTraining = await prisma.recurringTraining.findUnique({
-      where: { id },
+    if (!trainingGroupId) {
+      return NextResponse.json(
+        { error: 'trainingGroupId is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if training group exists and belongs to this recurring training
+    const trainingGroup = await prisma.trainingGroup.findFirst({
+      where: {
+        id: trainingGroupId,
+        recurringTrainingId: id,
+      },
+      include: {
+        recurringTraining: {
+          include: {
+            groups: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    if (!recurringTraining) {
+    if (!trainingGroup) {
       return NextResponse.json(
-        { error: 'Recurring training not found' },
+        { error: 'Training group not found' },
         { status: 404 }
+      );
+    }
+
+    // Validate: Athletes cannot be in multiple groups of the same recurring training
+    const allGroupIds = trainingGroup.recurringTraining.groups.map(g => g.id);
+    const conflicts = await prisma.recurringTrainingAthleteAssignment.findMany({
+      where: {
+        athleteId: {
+          in: athleteIds,
+        },
+        trainingGroupId: {
+          in: allGroupIds,
+          not: trainingGroupId, // Exclude the target group
+        },
+      },
+      include: {
+        athlete: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+        trainingGroup: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (conflicts.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Some athletes are already assigned to other groups in this training',
+          conflicts: conflicts.map(c => ({
+            athleteName: `${c.athlete.firstName} ${c.athlete.lastName}`,
+            existingGroup: c.trainingGroup.name,
+          })),
+        },
+        { status: 400 }
       );
     }
 
@@ -43,17 +104,27 @@ export async function POST(
       athleteIds.map((athleteId: string) =>
         prisma.recurringTrainingAthleteAssignment.upsert({
           where: {
-            recurringTrainingId_athleteId: {
-              recurringTrainingId: id,
+            trainingGroupId_athleteId: {
+              trainingGroupId,
               athleteId,
             },
           },
           create: {
-            recurringTrainingId: id,
+            trainingGroupId,
             athleteId,
             assignedBy: session.user.id,
           },
           update: {}, // Already exists, no update needed
+          include: {
+            athlete: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                birthDate: true,
+              },
+            },
+          },
         })
       )
     );
@@ -86,6 +157,7 @@ export async function DELETE(
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const athleteId = searchParams.get('athleteId');
+    const trainingGroupId = searchParams.get('trainingGroupId');
 
     if (!athleteId) {
       return NextResponse.json(
@@ -94,12 +166,34 @@ export async function DELETE(
       );
     }
 
+    if (!trainingGroupId) {
+      return NextResponse.json(
+        { error: 'trainingGroupId is required' },
+        { status: 400 }
+      );
+    }
+
+    // Verify the assignment exists and belongs to this recurring training
+    const assignment = await prisma.recurringTrainingAthleteAssignment.findFirst({
+      where: {
+        trainingGroupId,
+        athleteId,
+        trainingGroup: {
+          recurringTrainingId: id,
+        },
+      },
+    });
+
+    if (!assignment) {
+      return NextResponse.json(
+        { error: 'Assignment not found' },
+        { status: 404 }
+      );
+    }
+
     await prisma.recurringTrainingAthleteAssignment.delete({
       where: {
-        recurringTrainingId_athleteId: {
-          recurringTrainingId: id,
-          athleteId,
-        },
+        id: assignment.id,
       },
     });
 

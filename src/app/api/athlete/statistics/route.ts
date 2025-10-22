@@ -62,27 +62,83 @@ export async function GET() {
       }),
     ]);
 
-    // Get next upcoming session
-    const nextSession = await prisma.trainingSession.findFirst({
-      where: {
-        date: { gte: new Date() },
-        isCancelled: false,
-        recurringTraining: {
-          athleteAssignments: {
-            some: { athleteId: session.user.id },
+    // Get athlete with their training group assignments
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: session.user.id },
+      include: {
+        recurringTrainingAssignments: {
+          include: {
+            trainingGroup: {
+              include: {
+                recurringTraining: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
-      orderBy: { date: 'asc' },
-      select: {
-        id: true,
-        date: true,
-        startTime: true,
-        endTime: true,
-        dayOfWeek: true,
-        groupNumber: true,
-      },
     });
+
+    if (!athlete) {
+      return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
+    }
+
+    // Get recurring training IDs the athlete is assigned to
+    const recurringTrainingIds = athlete.recurringTrainingAssignments
+      .map(assignment => assignment.trainingGroup.recurringTraining.id);
+
+    // Create a map of recurringTrainingId -> groupName
+    const groupMap = new Map(
+      athlete.recurringTrainingAssignments.map((assignment) => [
+        assignment.trainingGroup.recurringTraining.id,
+        {
+          groupName: assignment.trainingGroup.name,
+          trainingName: assignment.trainingGroup.recurringTraining.name,
+        },
+      ])
+    );
+
+    // Get next upcoming session
+    const nextSession = recurringTrainingIds.length > 0
+      ? await prisma.trainingSession.findFirst({
+          where: {
+            date: { gte: new Date() },
+            isCancelled: false,
+            recurringTrainingId: {
+              in: recurringTrainingIds,
+            },
+          },
+          orderBy: { date: 'asc' },
+          select: {
+            id: true,
+            date: true,
+            startTime: true,
+            endTime: true,
+            dayOfWeek: true,
+            recurringTrainingId: true,
+            recurringTraining: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        })
+      : null;
+
+    // Format next session with group info
+    const nextSessionFormatted = nextSession
+      ? {
+          ...nextSession,
+          groupName: nextSession.recurringTrainingId
+            ? groupMap.get(nextSession.recurringTrainingId)?.groupName || null
+            : null,
+          trainingName: nextSession.recurringTraining?.name || null,
+        }
+      : null;
 
     // Get total active uploads count
     const uploadsCount = await prisma.upload.count({
@@ -101,19 +157,30 @@ export async function GET() {
           select: {
             date: true,
             dayOfWeek: true,
-            groupNumber: true,
             startTime: true,
             endTime: true,
+            recurringTrainingId: true,
+            recurringTraining: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
     });
 
-    const recentAttendanceFormatted = recentAttendance.map((record) => ({
-      date: record.trainingSession.date,
-      status: record.status,
-      sessionInfo: `${record.trainingSession.dayOfWeek} - Gruppe ${record.trainingSession.groupNumber} (${record.trainingSession.startTime} - ${record.trainingSession.endTime})`,
-    }));
+    const recentAttendanceFormatted = recentAttendance.map((record) => {
+      const groupInfo = record.trainingSession.recurringTrainingId
+        ? groupMap.get(record.trainingSession.recurringTrainingId)
+        : null;
+      
+      return {
+        date: record.trainingSession.date,
+        status: record.status,
+        sessionInfo: `${record.trainingSession.recurringTraining?.name || record.trainingSession.dayOfWeek} - ${groupInfo?.groupName || 'N/A'} (${record.trainingSession.startTime} - ${record.trainingSession.endTime})`,
+      };
+    });
 
     return NextResponse.json({
       currentYear: {
@@ -126,7 +193,7 @@ export async function GET() {
         totalSessions: allTimeSessions,
         totalCancellations: allTimeCancellations,
       },
-      nextSession,
+      nextSession: nextSessionFormatted,
       uploadsCount,
       recentAttendance: recentAttendanceFormatted,
     });

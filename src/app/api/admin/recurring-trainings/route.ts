@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // GET all recurring trainings
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -14,33 +14,45 @@ export async function GET(request: NextRequest) {
 
     const recurringTrainings = await prisma.recurringTraining.findMany({
       include: {
-        athleteAssignments: {
+        groups: {
           include: {
-            athlete: {
+            athleteAssignments: {
+              include: {
+                athlete: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    birthDate: true,
+                  },
+                },
+              },
+            },
+            trainerAssignments: {
+              include: {
+                trainer: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+            _count: {
               select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                birthDate: true,
+                athleteAssignments: true,
+                trainerAssignments: true,
               },
             },
           },
-        },
-        trainerAssignments: {
-          include: {
-            trainer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
+          orderBy: {
+            sortOrder: 'asc',
           },
         },
         _count: {
           select: {
-            athleteAssignments: true,
-            trainerAssignments: true,
+            groups: true,
             sessions: true,
           },
         },
@@ -48,7 +60,6 @@ export async function GET(request: NextRequest) {
       orderBy: [
         { dayOfWeek: 'asc' },
         { startTime: 'asc' },
-        { groupNumber: 'asc' },
       ],
     });
 
@@ -77,14 +88,13 @@ export async function POST(request: NextRequest) {
       dayOfWeek,
       startTime,
       endTime,
-      groupNumber,
       recurrenceInterval,
       startDate,
       endDate,
     } = body;
 
     // Validation
-    if (!name || !dayOfWeek || !startTime || !endTime || !groupNumber || !startDate) {
+    if (!name || !dayOfWeek || !startTime || !endTime || !startDate) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -97,15 +107,22 @@ export async function POST(request: NextRequest) {
         dayOfWeek,
         startTime,
         endTime,
-        groupNumber: parseInt(groupNumber),
         recurrenceInterval: recurrenceInterval || 'WEEKLY',
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : null,
         createdBy: session.user.id,
       },
       include: {
-        athleteAssignments: true,
-        trainerAssignments: true,
+        groups: {
+          include: {
+            _count: {
+              select: {
+                athleteAssignments: true,
+                trainerAssignments: true,
+              },
+            },
+          },
+        },
       },
     });
 

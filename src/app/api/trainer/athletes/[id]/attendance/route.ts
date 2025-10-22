@@ -39,7 +39,6 @@ export async function GET(
             dayOfWeek: true,
             startTime: true,
             endTime: true,
-            groupNumber: true,
             cancellations: {
               where: {
                 athleteId,
@@ -71,7 +70,6 @@ export async function GET(
       dayOfWeek: record.trainingSession.dayOfWeek,
       startTime: record.trainingSession.startTime,
       endTime: record.trainingSession.endTime,
-      groupNumber: record.trainingSession.groupNumber,
       status: record.status,
       cancellationReason: record.trainingSession.cancellations[0]?.reason,
       markedBy: `${record.markedByTrainer.firstName} ${record.markedByTrainer.lastName}`,

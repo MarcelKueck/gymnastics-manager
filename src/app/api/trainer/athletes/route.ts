@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -26,14 +26,23 @@ export async function GET(request: NextRequest) {
         birthDate: true,
         youthCategory: true,
         competitionParticipation: true,
-        groupAssignments: {
-          where: {
-            isActive: true,
-          },
+        hasDtbId: true,
+        recurringTrainingAssignments: {
           select: {
-            groupNumber: true,
-            trainingDay: true,
-            hourNumber: true,
+            trainingGroup: {
+              select: {
+                id: true,
+                name: true,
+                recurringTraining: {
+                  select: {
+                    id: true,
+                    name: true,
+                    dayOfWeek: true,
+                    startTime: true,
+                  },
+                },
+              },
+            },
           },
         },
         attendanceRecords: {
@@ -44,7 +53,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Calculate attendance stats for each athlete
+    // Calculate attendance stats for each athlete and format group assignments
     const athletesWithStats = athletes.map((athlete) => {
       const totalSessions = athlete.attendanceRecords.length;
       const attended = athlete.attendanceRecords.filter(
@@ -57,6 +66,16 @@ export async function GET(request: NextRequest) {
       const attendancePercentage =
         totalSessions > 0 ? Math.round((attended / totalSessions) * 100) : 0;
 
+      // Transform group assignments to include training and group information
+      const groupAssignments = athlete.recurringTrainingAssignments.map((assignment) => ({
+        trainingId: assignment.trainingGroup.recurringTraining.id,
+        trainingName: assignment.trainingGroup.recurringTraining.name,
+        groupId: assignment.trainingGroup.id,
+        groupName: assignment.trainingGroup.name,
+        trainingDay: assignment.trainingGroup.recurringTraining.dayOfWeek,
+        startTime: assignment.trainingGroup.recurringTraining.startTime,
+      }));
+
       return {
         id: athlete.id,
         firstName: athlete.firstName,
@@ -64,7 +83,7 @@ export async function GET(request: NextRequest) {
         birthDate: athlete.birthDate,
         youthCategory: athlete.youthCategory,
         competitionParticipation: athlete.competitionParticipation,
-        groupAssignments: athlete.groupAssignments,
+        groupAssignments,
         attendanceStats: {
           totalSessions,
           attended,

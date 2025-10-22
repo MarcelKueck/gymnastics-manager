@@ -20,29 +20,45 @@ export async function GET(
     const recurringTraining = await prisma.recurringTraining.findUnique({
       where: { id },
       include: {
-        athleteAssignments: {
+        groups: {
           include: {
-            athlete: {
+            athleteAssignments: {
+              include: {
+                athlete: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    birthDate: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            trainerAssignments: {
+              include: {
+                trainer: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            _count: {
               select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                birthDate: true,
-                email: true,
+                athleteAssignments: true,
+                trainerAssignments: true,
               },
             },
           },
         },
-        trainerAssignments: {
-          include: {
-            trainer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
+        _count: {
+          select: {
+            groups: true,
+            sessions: true,
           },
         },
       },
@@ -105,8 +121,22 @@ export async function PUT(
         ...(isActive !== undefined && { isActive }),
       },
       include: {
-        athleteAssignments: true,
-        trainerAssignments: true,
+        groups: {
+          include: {
+            _count: {
+              select: {
+                athleteAssignments: true,
+                trainerAssignments: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            groups: true,
+            sessions: true,
+          },
+        },
       },
     });
 

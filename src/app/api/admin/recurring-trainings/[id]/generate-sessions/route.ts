@@ -23,7 +23,11 @@ export async function POST(
     const recurringTraining = await prisma.recurringTraining.findUnique({
       where: { id },
       include: {
-        trainerAssignments: true,
+        groups: {
+          include: {
+            trainerAssignments: true,
+          },
+        },
       },
     });
 
@@ -74,7 +78,6 @@ export async function POST(
           dayOfWeek: recurringTraining.dayOfWeek,
           startTime: recurringTraining.startTime,
           endTime: recurringTraining.endTime,
-          groupNumber: recurringTraining.groupNumber,
           recurringTrainingId: id,
         });
       }
@@ -90,25 +93,35 @@ export async function POST(
       }
     }
 
-    // Create all sessions
+    // Create all sessions with their session groups
     const createdSessions = await Promise.all(
       sessionsToCreate.map(async (sessionData) => {
         const session = await prisma.trainingSession.create({
           data: sessionData,
         });
 
-        // Copy trainer assignments to the session
-        if (recurringTraining.trainerAssignments.length > 0) {
-          await Promise.all(
-            recurringTraining.trainerAssignments.map((assignment) =>
-              prisma.trainerSessionAssignment.create({
-                data: {
-                  sessionId: session.id,
-                  trainerId: assignment.trainerId,
-                },
-              })
-            )
-          );
+        // Create a SessionGroup for each TrainingGroup
+        for (const trainingGroup of recurringTraining.groups) {
+          const sessionGroup = await prisma.sessionGroup.create({
+            data: {
+              trainingSessionId: session.id,
+              trainingGroupId: trainingGroup.id,
+            },
+          });
+
+          // Copy trainer assignments from RecurringTrainingTrainerAssignment to SessionGroupTrainerAssignment
+          if (trainingGroup.trainerAssignments.length > 0) {
+            await Promise.all(
+              trainingGroup.trainerAssignments.map((assignment) =>
+                prisma.sessionGroupTrainerAssignment.create({
+                  data: {
+                    sessionGroupId: sessionGroup.id,
+                    trainerId: assignment.trainerId,
+                  },
+                })
+              )
+            );
+          }
         }
 
         return session;

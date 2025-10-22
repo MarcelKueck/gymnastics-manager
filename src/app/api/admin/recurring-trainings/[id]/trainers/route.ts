@@ -17,7 +17,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { trainerIds, effectiveFrom, effectiveUntil } = body;
+    const { trainerIds, trainingGroupId, effectiveFrom, effectiveUntil } = body;
 
     if (!trainerIds || !Array.isArray(trainerIds) || trainerIds.length === 0) {
       return NextResponse.json(
@@ -26,28 +26,31 @@ export async function POST(
       );
     }
 
-    if (trainerIds.length > 2) {
+    if (!trainingGroupId) {
       return NextResponse.json(
-        { error: 'Maximum of 2 trainers allowed' },
+        { error: 'trainingGroupId is required' },
         { status: 400 }
       );
     }
 
-    // Check if recurring training exists
-    const recurringTraining = await prisma.recurringTraining.findUnique({
-      where: { id },
+    // Check if training group exists and belongs to this recurring training
+    const trainingGroup = await prisma.trainingGroup.findFirst({
+      where: {
+        id: trainingGroupId,
+        recurringTrainingId: id,
+      },
     });
 
-    if (!recurringTraining) {
+    if (!trainingGroup) {
       return NextResponse.json(
-        { error: 'Recurring training not found' },
+        { error: 'Training group not found' },
         { status: 404 }
       );
     }
 
-    // Remove existing assignments (we'll replace them)
+    // Remove existing assignments for this group (we'll replace them)
     await prisma.recurringTrainingTrainerAssignment.deleteMany({
-      where: { recurringTrainingId: id },
+      where: { trainingGroupId },
     });
 
     // Create new assignments
@@ -55,12 +58,22 @@ export async function POST(
       trainerIds.map((trainerId: string, index: number) =>
         prisma.recurringTrainingTrainerAssignment.create({
           data: {
-            recurringTrainingId: id,
+            trainingGroupId,
             trainerId,
             isPrimary: index === 0, // First trainer is primary
             effectiveFrom: effectiveFrom ? new Date(effectiveFrom) : null,
             effectiveUntil: effectiveUntil ? new Date(effectiveUntil) : null,
             assignedBy: session.user.id,
+          },
+          include: {
+            trainer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
           },
         })
       )
@@ -94,6 +107,7 @@ export async function DELETE(
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const trainerId = searchParams.get('trainerId');
+    const trainingGroupId = searchParams.get('trainingGroupId');
 
     if (!trainerId) {
       return NextResponse.json(
@@ -102,12 +116,34 @@ export async function DELETE(
       );
     }
 
+    if (!trainingGroupId) {
+      return NextResponse.json(
+        { error: 'trainingGroupId is required' },
+        { status: 400 }
+      );
+    }
+
+    // Verify the assignment exists and belongs to this recurring training
+    const assignment = await prisma.recurringTrainingTrainerAssignment.findFirst({
+      where: {
+        trainingGroupId,
+        trainerId,
+        trainingGroup: {
+          recurringTrainingId: id,
+        },
+      },
+    });
+
+    if (!assignment) {
+      return NextResponse.json(
+        { error: 'Assignment not found' },
+        { status: 404 }
+      );
+    }
+
     await prisma.recurringTrainingTrainerAssignment.delete({
       where: {
-        recurringTrainingId_trainerId: {
-          recurringTrainingId: id,
-          trainerId,
-        },
+        id: assignment.id,
       },
     });
 

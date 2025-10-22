@@ -29,6 +29,7 @@ export async function GET() {
         emergencyContactPhone: true,
         youthCategory: true,
         competitionParticipation: true,
+        hasDtbId: true,
         autoConfirmFutureSessions: true,
         isApproved: true,
         approvedAt: true,

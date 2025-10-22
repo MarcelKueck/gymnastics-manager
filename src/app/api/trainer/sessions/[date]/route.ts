@@ -1,12 +1,10 @@
-// src/app/api/trainer/sessions/[date]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { checkAndSendAbsenceAlert } from '@/lib/absenceAlert';
 
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ date: string }> }
 ) {
   try {
@@ -40,24 +38,67 @@ export async function GET(
       });
     }
 
-    // Get all sessions for this date from the database (generated from recurring trainings)
+    // Get all sessions for this date with their session groups
     const sessions = await prisma.trainingSession.findMany({
       where: {
         date: {
           gte: startOfDay,
           lt: endOfDay,
         },
-        isCancelled: false, // Only show non-cancelled sessions
+        isCancelled: false,
       },
       include: {
-        attendanceRecords: {
+        groups: {
           include: {
-            athlete: true,
+            trainingGroup: {
+              include: {
+                athleteAssignments: {
+                  include: {
+                    athlete: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        birthDate: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            trainerAssignments: {
+              include: {
+                trainer: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+            sessionAthleteAssignments: {
+              include: {
+                athlete: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    birthDate: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            trainingGroup: {
+              sortOrder: 'asc',
+            },
           },
         },
-        trainerAssignments: {
+        attendanceRecords: {
           include: {
-            trainer: {
+            athlete: {
               select: {
                 id: true,
                 firstName: true,
@@ -66,20 +107,11 @@ export async function GET(
             },
           },
         },
-        recurringTraining: {
-          include: {
-            athleteAssignments: {
-              include: {
-                athlete: true,
-              },
-            },
-          },
-        },
+        recurringTraining: true,
       },
-      orderBy: [
-        { startTime: 'asc' },
-        { groupNumber: 'asc' },
-      ],
+      orderBy: {
+        startTime: 'asc',
+      },
     });
 
     // Get cancellations for this date
@@ -122,22 +154,51 @@ export async function GET(
       },
     });
 
-    // Organize athletes by their recurring training assignments
-    const athletesBySession: Record<string, any[]> = {};
-    
-    sessions.forEach((session) => {
-      if (session.recurringTraining) {
-        athletesBySession[session.id] = session.recurringTraining.athleteAssignments
-          .map((assignment) => assignment.athlete)
+    // Process each session group to organize athletes
+    // For each session group, we need to determine:
+    // 1. Default athletes (from recurring training group assignments)
+    // 2. Temporarily reassigned athletes (from session-specific assignments)
+    const processedSessions = sessions.map((session) => ({
+      ...session,
+      groups: session.groups.map((sessionGroup) => {
+        // Get default athletes from recurring training group
+        const defaultAthletes = sessionGroup.trainingGroup.athleteAssignments
+          .map((assignment) => ({
+            ...assignment.athlete,
+            isTemporarilyReassigned: false,
+          }))
           .sort((a, b) => a.lastName.localeCompare(b.lastName));
-      } else {
-        athletesBySession[session.id] = [];
-      }
-    });
+
+        // Get temporarily reassigned athletes for THIS session group
+        const tempAthletes = sessionGroup.sessionAthleteAssignments.map((assignment) => ({
+          ...assignment.athlete,
+          isTemporarilyReassigned: true,
+          reassignmentReason: assignment.reason,
+          movedAt: assignment.movedAt,
+        }));
+
+        // Combine: remove default athletes that were moved elsewhere,
+        // add temp athletes that were moved here
+        const allAthleteIds = new Set([
+          ...defaultAthletes.map((a) => a.id),
+          ...tempAthletes.map((a) => a.id),
+        ]);
+
+        const athletes = Array.from(allAthleteIds).map((athleteId) => {
+          const tempAthlete = tempAthletes.find((a) => a.id === athleteId);
+          if (tempAthlete) return tempAthlete;
+          return defaultAthletes.find((a) => a.id === athleteId)!;
+        });
+
+        return {
+          ...sessionGroup,
+          athletes: athletes.sort((a, b) => a.lastName.localeCompare(b.lastName)),
+        };
+      }),
+    }));
 
     return NextResponse.json({
-      sessions,
-      athletesBySession,
+      sessions: processedSessions,
       cancellations,
       trainers,
     });
@@ -150,154 +211,38 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ date: string }> }
-) {
+export async function PUT(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-
-    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
+    
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { date: dateParam } = await params;
     const body = await request.json();
-    const { updates } = body;
+    const { sessionGroupId, exercises, notes } = body;
 
-    if (!updates || !Array.isArray(updates)) {
-      return NextResponse.json({ error: 'Invalid request format' }, { status: 400 });
+    if (!sessionGroupId) {
+      return NextResponse.json(
+        { error: 'Session group ID is required' },
+        { status: 400 }
+      );
     }
 
-    // Process each session update
-    for (const update of updates) {
-      const { sessionId, attendance, equipment1, equipment2, notes, trainerIds } = update;
-
-      // Update session details
-      await prisma.trainingSession.update({
-        where: { id: sessionId },
-        data: {
-          equipment1,
-          equipment2,
-          notes,
-        },
-      });
-
-      // Update trainer assignments (support up to 2 trainers)
-      if (trainerIds && Array.isArray(trainerIds)) {
-        // Remove existing assignments
-        await prisma.trainerSessionAssignment.deleteMany({
-          where: { sessionId },
-        });
-
-        // Validate that we have at least 1 and at most 2 trainers
-        const validTrainerIds = trainerIds.filter(id => id && id.trim() !== '').slice(0, 2);
-        
-        if (validTrainerIds.length < 1) {
-          // If no valid trainers, we'll skip creating assignments
-          // The session can exist without trainer assignments
-        } else {
-          // Create new assignments for each trainer
-          for (const trainerId of validTrainerIds) {
-            await prisma.trainerSessionAssignment.create({
-              data: {
-                sessionId,
-                trainerId,
-              },
-            });
-          }
-        }
-      }
-
-      // Update attendance records
-      if (attendance && Array.isArray(attendance)) {
-        for (const record of attendance) {
-          const { athleteId, status } = record;
-
-          const existingAttendance = await prisma.attendanceRecord.findFirst({
-            where: {
-              trainingSessionId: sessionId,
-              athleteId,
-            },
-          });
-
-          if (existingAttendance) {
-            // Check if status changed for audit
-            const oldStatus = existingAttendance.status;
-            
-            await prisma.attendanceRecord.update({
-              where: { id: existingAttendance.id },
-              data: {
-                status,
-                markedBy: session.user.id,
-                markedAt: new Date(),
-                lastModifiedBy: oldStatus !== status ? session.user.id : existingAttendance.lastModifiedBy,
-                lastModifiedAt: oldStatus !== status ? new Date() : existingAttendance.lastModifiedAt,
-              },
-            });
-
-            // Create audit log if status changed
-            if (oldStatus !== status) {
-              await prisma.auditLog.create({
-                data: {
-                  performedBy: session.user.id,
-                  action: 'update',
-                  entityType: 'attendance',
-                  entityId: existingAttendance.id,
-                  changes: {
-                    sessionId,
-                    athleteId,
-                    oldStatus,
-                    newStatus: status,
-                    date: dateParam,
-                  },
-                },
-              });
-            }
-          } else {
-            const newRecord = await prisma.attendanceRecord.create({
-              data: {
-                trainingSessionId: sessionId,
-                athleteId,
-                status,
-                markedBy: session.user.id,
-              },
-            });
-
-            // Create audit log
-            await prisma.auditLog.create({
-              data: {
-                performedBy: session.user.id,
-                action: 'create',
-                entityType: 'attendance',
-                entityId: newRecord.id,
-                changes: {
-                  sessionId,
-                  athleteId,
-                  status,
-                  date: dateParam,
-                },
-              },
-            });
-          }
-
-          // Check for unexcused absence alerts
-          if (status === 'ABSENT_UNEXCUSED') {
-            checkAndSendAbsenceAlert(athleteId).catch((error: unknown) => {
-              console.error('Error in absence alert check:', error);
-            });
-          }
-        }
-      }
-    }
-
-    return NextResponse.json({
-      message: 'Sessions updated successfully',
+    // Update the session group with exercises and notes
+    const updatedSessionGroup = await prisma.sessionGroup.update({
+      where: { id: sessionGroupId },
+      data: {
+        exercises: exercises || null,
+        notes: notes || null,
+      },
     });
+
+    return NextResponse.json(updatedSessionGroup);
   } catch (error) {
-    console.error('Error updating session:', error);
+    console.error('Error updating session group:', error);
     return NextResponse.json(
-      { error: 'Failed to update session' },
+      { error: 'Failed to update session group' },
       { status: 500 }
     );
   }

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { Menu, X, LayoutDashboard, Users, Calendar, FileText, BarChart3, LogOut, Shield, UserCircle, FolderOpen } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Users, Calendar, FileText, BarChart3, LogOut, Shield, UserCircle, FolderOpen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
@@ -20,6 +20,7 @@ const adminNavigation = [
   { name: 'Wiederkehrende Trainings', href: '/trainer/admin/recurring-trainings', icon: Calendar },
   { name: 'Freigaben', href: '/trainer/admin/approvals', icon: Shield },
   { name: 'Datei-Kategorien', href: '/trainer/admin/upload-categories', icon: FolderOpen },
+  { name: 'Trainerstunden', href: '/trainer/admin/trainer-hours', icon: Clock },
 ];
 
 export default function TrainerLayout({ children }: { children: React.ReactNode }) {

@@ -13,19 +13,26 @@ export async function GET() {
 
     const athleteId = session.user.id;
 
-    // Get athlete info
+    // Get athlete info with recurring training group assignments
     const athlete = await prisma.athlete.findUnique({
       where: { id: athleteId },
       select: {
         firstName: true,
         lastName: true,
         isApproved: true,
-        groupAssignments: {
-          where: { isActive: true },
-          select: {
-            trainingDay: true,
-            hourNumber: true,
-            groupNumber: true,
+        recurringTrainingAssignments: {
+          include: {
+            trainingGroup: {
+              include: {
+                recurringTraining: {
+                  select: {
+                    id: true,
+                    dayOfWeek: true,
+                    isActive: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -53,45 +60,70 @@ export async function GET() {
       });
     }
 
-    // Get next training session
+    // Get recurring training IDs the athlete is assigned to
     const now = new Date();
-    const nextSession = await prisma.trainingSession.findFirst({
-      where: {
-        date: { gte: now },
-        OR: athlete.groupAssignments.map((assignment) => ({
-          dayOfWeek: assignment.trainingDay,
-          hourNumber: assignment.hourNumber,
-          groupNumber: assignment.groupNumber,
-        })),
-      },
-      orderBy: { date: 'asc' },
-      include: {
-        cancellations: {
+    const recurringTrainingIds = athlete.recurringTrainingAssignments
+      .filter(assignment => assignment.trainingGroup.recurringTraining?.isActive)
+      .map(assignment => assignment.trainingGroup.recurringTraining.id);
+
+    // Get next training session
+    const nextSession = recurringTrainingIds.length > 0 
+      ? await prisma.trainingSession.findFirst({
           where: {
-            athleteId,
-            isActive: true,
+            date: { gte: now },
+            recurringTrainingId: {
+              in: recurringTrainingIds,
+            },
+            isCancelled: false,
           },
-        },
-      },
-    });
+          orderBy: { date: 'asc' },
+          include: {
+            recurringTraining: {
+              select: {
+                name: true,
+                dayOfWeek: true,
+                startTime: true,
+                endTime: true,
+              },
+            },
+            groups: {
+              include: {
+                trainingGroup: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+            cancellations: {
+              where: {
+                athleteId,
+                isActive: true,
+              },
+            },
+          },
+        })
+      : null;
 
     // Count upcoming sessions (next 30 days)
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-    const upcomingSessionsCount = await prisma.trainingSession.count({
-      where: {
-        date: {
-          gte: now,
-          lte: thirtyDaysFromNow,
-        },
-        OR: athlete.groupAssignments.map((assignment) => ({
-          dayOfWeek: assignment.trainingDay,
-          hourNumber: assignment.hourNumber,
-          groupNumber: assignment.groupNumber,
-        })),
-      },
-    });
+    const upcomingSessionsCount = recurringTrainingIds.length > 0
+      ? await prisma.trainingSession.count({
+          where: {
+            date: {
+              gte: now,
+              lte: thirtyDaysFromNow,
+            },
+            recurringTrainingId: {
+              in: recurringTrainingIds,
+            },
+            isCancelled: false,
+          },
+        })
+      : 0;
 
     // Calculate attendance percentage (last 3 months)
     const threeMonthsAgo = new Date();
@@ -132,6 +164,13 @@ export async function GET() {
     const attendancePercentage =
       totalSessions > 0 ? Math.round((presentSessions / totalSessions) * 100) : 0;
 
+    // Find athlete's group for the next session
+    const athleteGroupForNextSession = nextSession
+      ? athlete.recurringTrainingAssignments.find(
+          assignment => assignment.trainingGroup.recurringTraining.id === nextSession.recurringTrainingId
+        )
+      : null;
+
     return NextResponse.json({
       upcomingSessions: upcomingSessionsCount,
       totalPresent: presentSessions,
@@ -141,7 +180,6 @@ export async function GET() {
         date: record.trainingSession.date.toISOString(),
         status: record.status,
       })),
-      // Legacy fields for backward compatibility
       athlete: {
         firstName: athlete.firstName,
         lastName: athlete.lastName,
@@ -151,10 +189,11 @@ export async function GET() {
         ? {
             id: nextSession.id,
             date: nextSession.date,
+            trainingName: nextSession.recurringTraining?.name,
             dayOfWeek: nextSession.dayOfWeek,
             startTime: nextSession.startTime,
             endTime: nextSession.endTime,
-            groupNumber: nextSession.groupNumber,
+            groupName: athleteGroupForNextSession?.trainingGroup.name || null,
             isCancelled: nextSession.cancellations.length > 0,
           }
         : null,

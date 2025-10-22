@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       group,
       youthCategory,
       isCompetition,
+      hasDtbId,
     } = body;
 
     // Validate required fields
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
         configuredAt: new Date(),
         youthCategory,
         competitionParticipation: Boolean(isCompetition),
+        hasDtbId: Boolean(hasDtbId),
       },
     });
 

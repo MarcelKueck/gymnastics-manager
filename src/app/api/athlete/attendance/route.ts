@@ -13,17 +13,73 @@ export async function GET() {
 
     const athleteId = session.user.id;
 
+    // Get athlete with recurring training group assignments
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      include: {
+        recurringTrainingAssignments: {
+          include: {
+            trainingGroup: {
+              include: {
+                recurringTraining: {
+                  select: {
+                    id: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!athlete) {
+      return NextResponse.json({ error: 'Athlete not found' }, { status: 404 });
+    }
+
+    // Create a map of recurringTrainingId -> groupName
+    const groupMap = new Map(
+      athlete.recurringTrainingAssignments.map((assignment) => [
+        assignment.trainingGroup.recurringTraining.id,
+        assignment.trainingGroup.name,
+      ])
+    );
+
     // Get all attendance records
     const attendanceRecords = await prisma.attendanceRecord.findMany({
       where: { athleteId },
       include: {
         trainingSession: {
           select: {
+            id: true,
             date: true,
             dayOfWeek: true,
             startTime: true,
             endTime: true,
-            groupNumber: true,
+            recurringTrainingId: true,
+            recurringTraining: {
+              select: {
+                name: true,
+              },
+            },
+            groups: {
+              include: {
+                trainingGroup: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+                sessionAthleteAssignments: {
+                  where: {
+                    athleteId,
+                  },
+                  select: {
+                    id: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -64,15 +120,39 @@ export async function GET() {
       cancellations.map((c) => [c.trainingSessionId, c.reason])
     );
 
-    // Attach cancellation reasons to attendance records
-    const recordsWithReasons = attendanceRecords.map((record) => ({
-      ...record,
-      cancellationReason: cancellationMap.get(record.trainingSessionId) || null,
-    }));
+    // Attach cancellation reasons and group info to attendance records
+    const recordsWithReasons = attendanceRecords.map((record) => {
+      // Find which group this athlete was in for this session
+      let groupName = null;
+      
+      if (record.trainingSession.recurringTrainingId) {
+        // Check if athlete was temporarily reassigned
+        const tempGroup = record.trainingSession.groups.find(
+          (g) => g.sessionAthleteAssignments.length > 0
+        );
+        
+        if (tempGroup) {
+          groupName = tempGroup.trainingGroup.name;
+        } else {
+          // Use default group assignment
+          groupName = groupMap.get(record.trainingSession.recurringTrainingId) || null;
+        }
+      }
+
+      return {
+        ...record,
+        cancellationReason: cancellationMap.get(record.trainingSessionId) || null,
+        trainingSession: {
+          ...record.trainingSession,
+          groupName,
+          trainingName: record.trainingSession.recurringTraining?.name || null,
+        },
+      };
+    });
 
     return NextResponse.json({
       records: recordsWithReasons,
-      statistics: {
+      stats: {
         totalSessions,
         presentSessions,
         excusedAbsences,

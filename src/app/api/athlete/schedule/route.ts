@@ -13,18 +13,24 @@ export async function GET(request: Request) {
 
     const athleteId = session.user.id;
 
-    // Get athlete with recurring training assignments
+    // Get athlete with recurring training group assignments
     const athlete = await prisma.athlete.findUnique({
       where: { id: athleteId },
       include: {
         recurringTrainingAssignments: {
           include: {
-            recurringTraining: {
-              select: {
-                id: true,
-                isActive: true,
-                dayOfWeek: true,
-                groupNumber: true,
+            trainingGroup: {
+              include: {
+                recurringTraining: {
+                  select: {
+                    id: true,
+                    isActive: true,
+                    dayOfWeek: true,
+                    name: true,
+                    startTime: true,
+                    endTime: true,
+                  },
+                },
               },
             },
           },
@@ -47,25 +53,32 @@ export async function GET(request: Request) {
 
     const now = new Date();
     
-    // Get all recurring training IDs the athlete is assigned to
-    const recurringTrainingIds = athlete.recurringTrainingAssignments
-      .filter(assignment => assignment.recurringTraining?.isActive)
-      .map(assignment => assignment.recurringTraining?.id)
-      .filter((id): id is string => id !== undefined);
+    // Get all training group IDs and their recurring training IDs
+    const groupAssignments = athlete.recurringTrainingAssignments
+      .filter(assignment => assignment.trainingGroup.recurringTraining?.isActive)
+      .map(assignment => ({
+        trainingGroupId: assignment.trainingGroup.id,
+        trainingGroupName: assignment.trainingGroup.name,
+        recurringTrainingId: assignment.trainingGroup.recurringTraining.id,
+        recurringTrainingName: assignment.trainingGroup.recurringTraining.name,
+      }));
 
-    if (recurringTrainingIds.length === 0) {
+    if (groupAssignments.length === 0) {
       return NextResponse.json({ sessions: [] });
     }
+
+    // Get unique recurring training IDs
+    const recurringTrainingIds = [...new Set(groupAssignments.map(a => a.recurringTrainingId))];
 
     const whereCondition = {
       recurringTrainingId: {
         in: recurringTrainingIds,
       },
-      isCancelled: false, // Don't show cancelled sessions
+      isCancelled: false,
       ...(includeAll ? {} : { date: { gte: now } }),
     };
 
-    // Get training sessions
+    // Get training sessions with their groups
     const sessions = await prisma.trainingSession.findMany({
       where: whereCondition,
       orderBy: { date: 'asc' },
@@ -73,10 +86,32 @@ export async function GET(request: Request) {
       include: {
         recurringTraining: {
           select: {
+            id: true,
             name: true,
             dayOfWeek: true,
             startTime: true,
             endTime: true,
+          },
+        },
+        groups: {
+          include: {
+            trainingGroup: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+              },
+            },
+            sessionAthleteAssignments: {
+              where: {
+                athleteId,
+              },
+              select: {
+                id: true,
+                reason: true,
+                movedAt: true,
+              },
+            },
           },
         },
         cancellations: {
@@ -93,7 +128,38 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json({ sessions });
+    // Filter and enrich sessions to only include athlete's groups
+    const enrichedSessions = sessions.map(session => {
+      // Find which group(s) this athlete is in for this session
+      const athleteGroups = groupAssignments
+        .filter(ga => ga.recurringTrainingId === session.recurringTrainingId)
+        .map(ga => {
+          const sessionGroup = session.groups.find(sg => sg.trainingGroup.id === ga.trainingGroupId);
+          
+          // Check if athlete was temporarily reassigned to a different group
+          const tempReassignment = session.groups.find(sg => 
+            sg.sessionAthleteAssignments.length > 0
+          );
+
+          return {
+            trainingGroupId: ga.trainingGroupId,
+            trainingGroupName: tempReassignment 
+              ? tempReassignment.trainingGroup.name 
+              : ga.trainingGroupName,
+            exercises: sessionGroup?.exercises || null,
+            notes: sessionGroup?.notes || null,
+            isTemporarilyReassigned: !!tempReassignment,
+            reassignmentReason: tempReassignment?.sessionAthleteAssignments[0]?.reason || null,
+          };
+        });
+
+      return {
+        ...session,
+        athleteGroups,
+      };
+    });
+
+    return NextResponse.json({ sessions: enrichedSessions });
   } catch (error: unknown) {
     console.error('Error fetching schedule:', error);
     return NextResponse.json(

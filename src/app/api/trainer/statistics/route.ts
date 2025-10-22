@@ -19,11 +19,14 @@ export async function GET() {
 
     // Current year statistics
     const [sessionsConducted, attendanceMarked] = await Promise.all([
-      prisma.trainerSessionAssignment.count({
+      // Count sessions conducted through SessionGroupTrainerAssignment
+      prisma.sessionGroupTrainerAssignment.count({
         where: {
           trainerId: session.user.id,
-          session: {
-            date: { gte: yearStart, lte: yearEnd },
+          sessionGroup: {
+            trainingSession: {
+              date: { gte: yearStart, lte: yearEnd },
+            },
           },
         },
       }),
@@ -40,7 +43,8 @@ export async function GET() {
       prisma.athlete.count({
         where: { approvedBy: session.user.id },
       }),
-      prisma.trainerSessionAssignment.count({
+      // Count all sessions conducted
+      prisma.sessionGroupTrainerAssignment.count({
         where: { trainerId: session.user.id },
       }),
       prisma.upload.count({
@@ -51,11 +55,13 @@ export async function GET() {
     // Current status
     const athletesInGroupsData = await prisma.recurringTrainingAthleteAssignment.findMany({
       where: {
-        recurringTraining: {
+        trainingGroup: {
           trainerAssignments: {
             some: { trainerId: session.user.id },
           },
-          isActive: true,
+          recurringTraining: {
+            isActive: true,
+          },
         },
       },
       select: { athleteId: true },
@@ -65,7 +71,11 @@ export async function GET() {
     const recurringTrainingAssignments = await prisma.recurringTrainingTrainerAssignment.count({
       where: {
         trainerId: session.user.id,
-        recurringTraining: { isActive: true },
+        trainingGroup: {
+          recurringTraining: {
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -79,11 +89,13 @@ export async function GET() {
     // Get top athletes by attendance rate (from trainer's assigned groups)
     const athletesInGroups = await prisma.recurringTrainingAthleteAssignment.findMany({
       where: {
-        recurringTraining: {
+        trainingGroup: {
           trainerAssignments: {
             some: { trainerId: session.user.id },
           },
-          isActive: true,
+          recurringTraining: {
+            isActive: true,
+          },
         },
       },
       select: {

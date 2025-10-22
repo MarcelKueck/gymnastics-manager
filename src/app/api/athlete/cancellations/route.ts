@@ -116,7 +116,6 @@ export async function GET() {
             dayOfWeek: true,
             startTime: true,
             endTime: true,
-            groupNumber: true,
           },
         },
       },
