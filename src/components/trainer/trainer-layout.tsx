@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { RoleSwitcher } from '@/components/shared/role-switcher';
 import {
   Home,
   Users,
@@ -68,6 +69,7 @@ export function TrainerLayout({ children, userName, isAdmin }: TrainerLayoutProp
               <span className="text-xs md:text-sm text-gray-700 truncate max-w-[100px] md:max-w-none">
                 {userName.split(' ')[0]} {isAdmin && <span className="text-primary">(Admin)</span>}
               </span>
+              <RoleSwitcher />
               <Button
                 variant="ghost"
                 size="sm"

@@ -7,7 +7,7 @@ import { AthleteDashboardContent } from '@/components/athlete/dashboard-content'
 export default async function AthleteDashboardPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ATHLETE') {
+  if (!session || session.user.activeRole !== 'ATHLETE') {
     redirect('/login');
   }
 

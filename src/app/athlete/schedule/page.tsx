@@ -7,7 +7,7 @@ import { AthleteScheduleContent } from '@/components/athlete/schedule-content';
 export default async function AthleteSchedulePage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ATHLETE') {
+  if (!session || session.user.activeRole !== 'ATHLETE') {
     redirect('/login');
   }
 

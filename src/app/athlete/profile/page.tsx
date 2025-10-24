@@ -7,7 +7,7 @@ import { AthleteProfileContent } from '@/components/athlete/profile-content';
 export default async function AthleteProfilePage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ATHLETE') {
+  if (!session || session.user.activeRole !== 'ATHLETE') {
     redirect('/login');
   }
 

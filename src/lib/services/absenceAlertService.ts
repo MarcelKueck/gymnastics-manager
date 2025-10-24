@@ -111,11 +111,12 @@ export class AbsenceAlertService {
     }
 
     // Get athlete info
-    const athlete = await prisma.athlete.findUnique({
+    const athleteProfile = await prisma.athleteProfile.findUnique({
       where: { id: athleteId },
+      include: { user: true },
     });
 
-    if (!athlete) {
+    if (!athleteProfile) {
       throw new Error('Athlete not found');
     }
 
@@ -134,8 +135,8 @@ export class AbsenceAlertService {
     // Send emails
     try {
       await sendEnhancedAbsenceAlertEmail({
-        athleteName: `${athlete.firstName} ${athlete.lastName}`,
-        athleteEmail: athlete.email,
+        athleteName: `${athleteProfile.user.firstName} ${athleteProfile.user.lastName}`,
+        athleteEmail: athleteProfile.user.email,
         adminEmail: settings.adminEmail,
         absenceCount,
         periodDays: settings.windowDays,
@@ -189,9 +190,13 @@ export class AbsenceAlertService {
         athlete: {
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
           },
         },
       },

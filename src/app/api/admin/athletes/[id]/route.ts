@@ -26,30 +26,40 @@ export async function PUT(request: Request, context: RouteContext) {
       isApproved,
     } = body;
 
-    // Check if athlete exists
-    const existingAthlete = await prisma.athlete.findUnique({
+    // Check if athlete profile exists
+    const existingAthlete = await prisma.athleteProfile.findUnique({
       where: { id: athleteId },
+      include: { user: true },
     });
 
     if (!existingAthlete) {
       return NextResponse.json({ success: false, error: 'Athlete not found' }, { status: 404 });
     }
 
-    // Build update data object
-    const updateData: any = {};
-    
-    if (firstName !== undefined) updateData.firstName = firstName;
-    if (lastName !== undefined) updateData.lastName = lastName;
-    if (birthDate !== undefined) updateData.birthDate = new Date(birthDate);
-    if (phone !== undefined) updateData.phone = phone;
-    if (youthCategory !== undefined) updateData.youthCategory = youthCategory;
-    if (competitionParticipation !== undefined) updateData.competitionParticipation = competitionParticipation;
-    if (hasDtbId !== undefined) updateData.hasDtbId = hasDtbId;
-    if (isApproved !== undefined) updateData.isApproved = isApproved;
+    // Build update data for User fields
+    const userUpdateData: any = {};
+    if (firstName !== undefined) userUpdateData.firstName = firstName;
+    if (lastName !== undefined) userUpdateData.lastName = lastName;
+    if (birthDate !== undefined) userUpdateData.birthDate = new Date(birthDate);
+    if (phone !== undefined) userUpdateData.phone = phone;
 
-    const updatedAthlete = await prisma.athlete.update({
+    // Build update data for AthleteProfile fields
+    const profileUpdateData: any = {};
+    if (youthCategory !== undefined) profileUpdateData.youthCategory = youthCategory;
+    if (competitionParticipation !== undefined) profileUpdateData.competitionParticipation = competitionParticipation;
+    if (hasDtbId !== undefined) profileUpdateData.hasDtbId = hasDtbId;
+    if (isApproved !== undefined) profileUpdateData.isApproved = isApproved;
+
+    // Update both User and AthleteProfile
+    const updatedAthlete = await prisma.athleteProfile.update({
       where: { id: athleteId },
-      data: updateData,
+      data: {
+        ...profileUpdateData,
+        user: {
+          update: userUpdateData,
+        },
+      },
+      include: { user: true },
     });
 
     return NextResponse.json({
@@ -71,18 +81,20 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { id: athleteId } = context.params;
 
     // Get athlete info before deletion for email
-    const athlete = await prisma.athlete.findUnique({
+    const athlete = await prisma.athleteProfile.findUnique({
       where: { id: athleteId },
+      include: { user: true },
     });
 
     if (!athlete) {
       return NextResponse.json({ success: false, error: 'Athlete not found' }, { status: 404 });
     }
 
-    const athleteName = `${athlete.firstName} ${athlete.lastName}`;
-    const athleteEmail = athlete.email;
+    const athleteName = `${athlete.user.firstName} ${athlete.user.lastName}`;
+    const athleteEmail = athlete.user.email;
+    const userId = athlete.userId;
 
-    // Delete all related data (Prisma cascade should handle most of this)
+    // Delete all related data and user (Prisma cascade should handle profile deletion)
     await prisma.$transaction([
       // Delete absence alerts
       prisma.absenceAlert.deleteMany({ where: { athleteId } }),
@@ -94,8 +106,15 @@ export async function DELETE(request: Request, context: RouteContext) {
       prisma.sessionAthleteAssignment.deleteMany({ where: { athleteId } }),
       // Delete recurring training assignments
       prisma.recurringTrainingAthleteAssignment.deleteMany({ where: { athleteId } }),
-      // Delete athlete profile
-      prisma.athlete.delete({ where: { id: athleteId } }),
+      // Delete athlete profile (will cascade to user if user has no trainer profile)
+      prisma.athleteProfile.delete({ where: { id: athleteId } }),
+      // Delete user if they don't have a trainer profile
+      prisma.user.deleteMany({ 
+        where: { 
+          id: userId,
+          trainerProfile: null,
+        } 
+      }),
     ]);
 
     // Send notification email to the athlete

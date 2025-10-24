@@ -43,7 +43,11 @@ export class TrainerService {
     lastName?: string;
     phone?: string;
   }) {
-    return trainerRepository.update(trainerId, data);
+    return trainerRepository.update(trainerId, {
+      user: {
+        update: data,
+      },
+    });
   }
 
   /**
@@ -56,7 +60,7 @@ export class TrainerService {
     }
 
     // Verify current password
-    const isValid = await bcrypt.compare(currentPassword, trainer.passwordHash);
+    const isValid = await bcrypt.compare(currentPassword, trainer.user.passwordHash);
     if (!isValid) {
       throw new Error('Aktuelles Passwort ist falsch');
     }
@@ -65,7 +69,11 @@ export class TrainerService {
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
     // Update password
-    return trainerRepository.update(trainerId, { passwordHash });
+    return trainerRepository.update(trainerId, {
+      user: {
+        update: { passwordHash },
+      },
+    });
   }
 
   /**
@@ -98,7 +106,9 @@ export class TrainerService {
     }
     return trainerRepository.findMany({
       orderBy: {
-        lastName: 'asc',
+        user: {
+          lastName: 'asc',
+        },
       },
     });
   }

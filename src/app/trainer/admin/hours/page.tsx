@@ -7,7 +7,7 @@ import { AdminHoursContent } from '@/components/admin/hours-content';
 export default async function AdminHoursPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session || session.user.activeRole !== 'ADMIN') {
     redirect('/login');
   }
 

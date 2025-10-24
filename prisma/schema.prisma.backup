@@ -1,4 +1,4 @@
-// Database schema for Gymnastics Manager V2 - Dual Role Implementation
+// Database schema for Gymnastics Manager V2
 generator client {
   provider = "prisma-client-js"
 }
@@ -53,40 +53,19 @@ enum AttendanceStatus {
 }
 
 // ============================================================================
-// USER MODELS (NEW UNIFIED STRUCTURE)
+// USER MODELS
 // ============================================================================
 
-// Unified User model - Core identity
-model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+// Main Athlete model
+model Athlete {
+  id           String   @id @default(cuid())
+  email        String   @unique
   passwordHash String
   firstName    String
   lastName     String
+  birthDate    DateTime
+  gender       Gender
   phone        String
-  birthDate    DateTime?
-  gender       Gender?
-
-  // Profile flags
-  isAthlete Boolean @default(false)
-  isTrainer Boolean @default(false)
-
-  // Relationships to profiles
-  athleteProfile AthleteProfile?
-  trainerProfile TrainerProfile?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([email])
-  @@index([isAthlete, isTrainer])
-}
-
-// Athlete-specific profile
-model AthleteProfile {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Guardian information (for minors)
   guardianName          String?
@@ -101,9 +80,9 @@ model AthleteProfile {
   hasDtbId                 Boolean       @default(false)
 
   // Account status
-  isApproved        Boolean         @default(false)
+  isApproved        Boolean   @default(false)
   approvedBy        String?
-  approvedByTrainer TrainerProfile? @relation("AthleteApprovals", fields: [approvedBy], references: [id])
+  approvedByTrainer Trainer?  @relation("AthleteApprovals", fields: [approvedBy], references: [id])
   approvedAt        DateTime?
   configuredAt      DateTime?
 
@@ -120,21 +99,25 @@ model AthleteProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
+  @@index([email])
   @@index([isApproved])
-  @@index([youthCategory])
+  @@index([lastName])
+  @@index([birthDate])
 }
 
-// Trainer-specific profile
-model TrainerProfile {
-  id       String   @id @default(cuid())
-  userId   String   @unique
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role     UserRole @default(TRAINER)
-  isActive Boolean  @default(true)
+// Trainer/Admin account
+model Trainer {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String
+  role         UserRole @default(TRAINER)
+  isActive     Boolean  @default(true)
 
   // Relationships
-  approvedAthletes              AthleteProfile[]                     @relation("AthleteApprovals")
+  approvedAthletes              Athlete[]                            @relation("AthleteApprovals")
   createdRecurringTrainings     RecurringTraining[]                  @relation("RecurringTrainingCreator")
   recurringTrainingAssignments  RecurringTrainingTrainerAssignment[] @relation("RecurringTrainingAssignments")
   recurringAthleteAssignments   RecurringTrainingAthleteAssignment[] @relation("AthleteAssignmentCreator")
@@ -151,7 +134,7 @@ model TrainerProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
+  @@index([email])
   @@index([role])
   @@index([isActive])
 }
@@ -188,7 +171,7 @@ model RecurringTraining {
 
   // Creator
   createdBy        String
-  createdByTrainer TrainerProfile @relation("RecurringTrainingCreator", fields: [createdBy], references: [id])
+  createdByTrainer Trainer @relation("RecurringTrainingCreator", fields: [createdBy], references: [id])
 
   // Relationships
   groups           TrainingGroup[]
@@ -223,16 +206,16 @@ model TrainingGroup {
 
 // Athlete assignment to training group (recurring)
 model RecurringTrainingAthleteAssignment {
-  id              String         @id @default(cuid())
+  id              String        @id @default(cuid())
   trainingGroupId String
-  trainingGroup   TrainingGroup  @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
+  trainingGroup   TrainingGroup @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
   athleteId       String
-  athlete         AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete         Athlete       @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   // Assignment metadata
   assignedBy        String
-  assignedByTrainer TrainerProfile @relation("AthleteAssignmentCreator", fields: [assignedBy], references: [id])
-  assignedAt        DateTime       @default(now())
+  assignedByTrainer Trainer  @relation("AthleteAssignmentCreator", fields: [assignedBy], references: [id])
+  assignedAt        DateTime @default(now())
 
   createdAt DateTime @default(now())
 
@@ -243,12 +226,12 @@ model RecurringTrainingAthleteAssignment {
 
 // Trainer assignment to training group (recurring)
 model RecurringTrainingTrainerAssignment {
-  id              String         @id @default(cuid())
+  id              String        @id @default(cuid())
   trainingGroupId String
-  trainingGroup   TrainingGroup  @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
+  trainingGroup   TrainingGroup @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
   trainerId       String
-  trainer         TrainerProfile @relation("RecurringTrainingAssignments", fields: [trainerId], references: [id], onDelete: Cascade)
-  isPrimary       Boolean        @default(true)
+  trainer         Trainer       @relation("RecurringTrainingAssignments", fields: [trainerId], references: [id], onDelete: Cascade)
+  isPrimary       Boolean       @default(true)
 
   // Optional date range for assignment
   effectiveFrom  DateTime?
@@ -256,8 +239,8 @@ model RecurringTrainingTrainerAssignment {
 
   // Assignment metadata
   assignedBy        String
-  assignedByTrainer TrainerProfile @relation("TrainerAssignmentCreator", fields: [assignedBy], references: [id])
-  assignedAt        DateTime       @default(now())
+  assignedByTrainer Trainer  @relation("TrainerAssignmentCreator", fields: [assignedBy], references: [id])
+  assignedAt        DateTime @default(now())
 
   createdAt DateTime @default(now())
 
@@ -331,11 +314,11 @@ model SessionGroup {
 
 // Session-specific trainer assignment
 model SessionGroupTrainerAssignment {
-  id             String          @id @default(cuid())
+  id             String       @id @default(cuid())
   sessionGroupId String
-  sessionGroup   SessionGroup    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  sessionGroup   SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
   trainerId      String?
-  trainer        TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  trainer        Trainer?     @relation(fields: [trainerId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
@@ -351,12 +334,12 @@ model SessionAthleteAssignment {
   sessionGroupId    String
   sessionGroup      SessionGroup    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
   athleteId         String
-  athlete           AthleteProfile  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete           Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   // Audit trail
   movedBy        String
-  movedByTrainer TrainerProfile @relation("SessionAthleteReassignments", fields: [movedBy], references: [id])
-  movedAt        DateTime       @default(now())
+  movedByTrainer Trainer  @relation("SessionAthleteReassignments", fields: [movedBy], references: [id])
+  movedAt        DateTime @default(now())
   reason         String?
 
   createdAt DateTime @default(now())
@@ -375,7 +358,7 @@ model SessionAthleteAssignment {
 model Cancellation {
   id                String          @id @default(cuid())
   athleteId         String
-  athlete           AthleteProfile  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete           Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainingSessionId String
   trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
   reason            String
@@ -396,15 +379,15 @@ model Cancellation {
 model AttendanceRecord {
   id                String           @id @default(cuid())
   athleteId         String
-  athlete           AthleteProfile   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete           Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainingSessionId String
   trainingSession   TrainingSession  @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
   status            AttendanceStatus
 
   // Audit trail
   markedBy           String
-  markedByTrainer    TrainerProfile @relation(fields: [markedBy], references: [id])
-  markedAt           DateTime       @default(now())
+  markedByTrainer    Trainer   @relation(fields: [markedBy], references: [id])
+  markedAt           DateTime  @default(now())
   lastModifiedBy     String?
   lastModifiedAt     DateTime?
   modificationReason String?
@@ -437,9 +420,9 @@ model Upload {
 
   // Upload metadata
   uploadedBy        String
-  uploadedByTrainer TrainerProfile @relation(fields: [uploadedBy], references: [id])
-  uploadedAt        DateTime       @default(now())
-  version           Int            @default(1)
+  uploadedByTrainer Trainer  @relation(fields: [uploadedBy], references: [id])
+  uploadedAt        DateTime @default(now())
+  version           Int      @default(1)
 
   // Version control
   replacedBy String?
@@ -458,14 +441,14 @@ model Upload {
 
 // Audit Log
 model AuditLog {
-  id              String         @id @default(cuid())
+  id              String   @id @default(cuid())
   entityType      String
   entityId        String
   action          String
   changes         Json
   performedBy     String
-  performedByUser TrainerProfile @relation(fields: [performedBy], references: [id])
-  performedAt     DateTime       @default(now())
+  performedByUser Trainer  @relation(fields: [performedBy], references: [id])
+  performedAt     DateTime @default(now())
   reason          String?
 
   @@index([entityType, entityId])
@@ -475,11 +458,11 @@ model AuditLog {
 
 // Monthly Trainer Hours Summary
 model MonthlyTrainerSummary {
-  id        String         @id @default(cuid())
+  id        String  @id @default(cuid())
   month     Int
   year      Int
   trainerId String
-  trainer   TrainerProfile @relation("TrainerMonthlySummaries", fields: [trainerId], references: [id], onDelete: Cascade)
+  trainer   Trainer @relation("TrainerMonthlySummaries", fields: [trainerId], references: [id], onDelete: Cascade)
 
   // Hours calculation
   calculatedHours Decimal  @default(0) @db.Decimal(10, 2)
@@ -489,7 +472,7 @@ model MonthlyTrainerSummary {
 
   // Modification tracking
   lastModifiedBy     String?
-  lastModifiedByUser TrainerProfile? @relation("TrainerSummaryModifier", fields: [lastModifiedBy], references: [id])
+  lastModifiedByUser Trainer?  @relation("TrainerSummaryModifier", fields: [lastModifiedBy], references: [id])
   lastModifiedAt     DateTime?
 
   createdAt DateTime @default(now())
@@ -520,7 +503,7 @@ model SystemSettings {
 
   // Modification tracking
   lastModifiedBy        String?
-  lastModifiedByTrainer TrainerProfile? @relation(fields: [lastModifiedBy], references: [id])
+  lastModifiedByTrainer Trainer?  @relation(fields: [lastModifiedBy], references: [id])
   lastModifiedAt        DateTime?
 
   createdAt DateTime @default(now())
@@ -529,9 +512,9 @@ model SystemSettings {
 
 // Absence alert tracking (to prevent duplicate alerts within cooldown period)
 model AbsenceAlert {
-  id        String         @id @default(cuid())
+  id        String  @id @default(cuid())
   athleteId String
-  athlete   AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   // Alert details
   absenceCount       Int // Number of absences that triggered this alert

@@ -6,12 +6,12 @@ export default withAuth(
     const token = req.nextauth.token;
     const path = req.nextUrl.pathname;
 
-    // Redirect root to appropriate dashboard based on role (only if authenticated)
+    // Redirect root to appropriate dashboard based on active role (only if authenticated)
     if (path === '/') {
       if (token) {
-        if (token.role === 'ATHLETE') {
+        if (token.activeRole === 'ATHLETE') {
           return NextResponse.redirect(new URL('/athlete/dashboard', req.url));
-        } else if (token.role === 'TRAINER' || token.role === 'ADMIN') {
+        } else if (token.activeRole === 'TRAINER' || token.activeRole === 'ADMIN') {
           return NextResponse.redirect(new URL('/trainer/dashboard', req.url));
         }
       }
@@ -21,28 +21,28 @@ export default withAuth(
 
     // Protect athlete routes
     if (path.startsWith('/athlete')) {
-      if (token?.role !== 'ATHLETE') {
+      if (token?.activeRole !== 'ATHLETE') {
         return NextResponse.redirect(new URL('/unauthorized', req.url));
       }
     }
 
     // Protect trainer routes
     if (path.startsWith('/trainer')) {
-      if (token?.role !== 'TRAINER' && token?.role !== 'ADMIN') {
+      if (token?.activeRole !== 'TRAINER' && token?.activeRole !== 'ADMIN') {
         return NextResponse.redirect(new URL('/unauthorized', req.url));
       }
     }
 
     // Protect admin routes (under /trainer/admin)
     if (path.startsWith('/trainer/admin')) {
-      if (token?.role !== 'ADMIN') {
+      if (token?.activeRole !== 'ADMIN') {
         return NextResponse.redirect(new URL('/unauthorized', req.url));
       }
     }
 
     // Protect API routes
     if (path.startsWith('/api/athlete')) {
-      if (token?.role !== 'ATHLETE') {
+      if (token?.activeRole !== 'ATHLETE') {
         return new NextResponse(
           JSON.stringify({ error: 'Unauthorized' }),
           { status: 401, headers: { 'content-type': 'application/json' } }
@@ -51,7 +51,7 @@ export default withAuth(
     }
 
     if (path.startsWith('/api/trainer')) {
-      if (token?.role !== 'TRAINER' && token?.role !== 'ADMIN') {
+      if (token?.activeRole !== 'TRAINER' && token?.activeRole !== 'ADMIN') {
         return new NextResponse(
           JSON.stringify({ error: 'Unauthorized' }),
           { status: 401, headers: { 'content-type': 'application/json' } }
@@ -60,7 +60,7 @@ export default withAuth(
     }
 
     if (path.startsWith('/api/admin')) {
-      if (token?.role !== 'ADMIN') {
+      if (token?.activeRole !== 'ADMIN') {
         return new NextResponse(
           JSON.stringify({ error: 'Unauthorized' }),
           { status: 401, headers: { 'content-type': 'application/json' } }

@@ -80,8 +80,12 @@ export class TrainerHoursService {
         },
       },
       include: {
-        trainer: true,
-        lastModifiedByUser: true,
+        trainer: {
+          include: { user: true },
+        },
+        lastModifiedByUser: {
+          include: { user: true },
+        },
       },
     });
 
@@ -99,8 +103,12 @@ export class TrainerHoursService {
           finalHours: calculated.calculatedHours,
         },
         include: {
-          trainer: true,
-          lastModifiedByUser: true,
+          trainer: {
+            include: { user: true },
+          },
+          lastModifiedByUser: {
+            include: { user: true },
+          },
         },
       });
     }
@@ -144,7 +152,7 @@ export class TrainerHoursService {
    */
   async recalculateMonth(month: number, year: number) {
     // Get all active trainers
-    const trainers = await prisma.trainer.findMany({
+    const trainers = await prisma.trainerProfile.findMany({
       where: { isActive: true },
     });
 
@@ -207,9 +215,10 @@ export class TrainerHoursService {
    * Get all summaries for a month (admin view)
    */
   async getAllSummariesForMonth(month: number, year: number) {
-    const trainers = await prisma.trainer.findMany({
+    const trainers = await prisma.trainerProfile.findMany({
       where: { isActive: true },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      include: { user: true },
+      orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
     });
 
     const summaries = [];
@@ -239,14 +248,14 @@ export class TrainerHoursService {
     ];
 
     const rows = summaries.map((summary) => [
-      `${summary.trainer.firstName} ${summary.trainer.lastName}`,
+      `${summary.trainer.user.firstName} ${summary.trainer.user.lastName}`,
       summary.calculatedHours.toString(),
       summary.adjustedHours?.toString() || '',
       summary.finalHours.toString(),
       summary.notes || '',
       summary.lastModifiedAt?.toLocaleDateString('de-DE') || '',
       summary.lastModifiedByUser
-        ? `${summary.lastModifiedByUser.firstName} ${summary.lastModifiedByUser.lastName}`
+        ? `${summary.lastModifiedByUser.user.firstName} ${summary.lastModifiedByUser.user.lastName}`
         : '',
     ]);
 

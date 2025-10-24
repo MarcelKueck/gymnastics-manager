@@ -3,42 +3,56 @@ import { Prisma, UserRole } from '@prisma/client';
 
 export class TrainerRepository {
   /**
-   * Find trainer by ID
+   * Find trainer profile by ID
    */
-  async findById(id: string, include?: Prisma.TrainerInclude) {
-    return prisma.trainer.findUnique({
+  async findById(id: string, include?: Prisma.TrainerProfileInclude) {
+    return prisma.trainerProfile.findUnique({
       where: { id },
-      include,
+      include: {
+        user: true,
+        ...include,
+      },
     });
   }
 
   /**
-   * Find trainer by email
+   * Find trainer by user email
    */
   async findByEmail(email: string) {
-    return prisma.trainer.findUnique({
-      where: { email: email.toLowerCase() },
+    return prisma.trainerProfile.findFirst({
+      where: { 
+        user: {
+          email: email.toLowerCase(),
+        },
+      },
+      include: { user: true },
     });
   }
 
   /**
-   * Get all trainers
+   * Get all trainer profiles
    */
   async findMany(params?: {
-    where?: Prisma.TrainerWhereInput;
-    include?: Prisma.TrainerInclude;
-    orderBy?: Prisma.TrainerOrderByWithRelationInput;
+    where?: Prisma.TrainerProfileWhereInput;
+    include?: Prisma.TrainerProfileInclude;
+    orderBy?: Prisma.TrainerProfileOrderByWithRelationInput;
   }) {
-    return prisma.trainer.findMany(params);
+    return prisma.trainerProfile.findMany({
+      ...params,
+      include: {
+        user: true,
+        ...params?.include,
+      },
+    });
   }
 
   /**
    * Get active trainers only
    */
   async findActive() {
-    return prisma.trainer.findMany({
+    return prisma.trainerProfile.findMany({
       where: { isActive: true },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      include: { user: true },
     });
   }
 
@@ -46,43 +60,74 @@ export class TrainerRepository {
    * Get trainers by role
    */
   async findByRole(role: UserRole) {
-    return prisma.trainer.findMany({
+    return prisma.trainerProfile.findMany({
       where: { role, isActive: true },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      include: { user: true },
     });
   }
 
   /**
-   * Create new trainer
+   * Update trainer profile
    */
-  async create(data: Prisma.TrainerCreateInput) {
-    return prisma.trainer.create({ data });
-  }
-
-  /**
-   * Update trainer
-   */
-  async update(id: string, data: Prisma.TrainerUpdateInput) {
-    return prisma.trainer.update({
+  async update(id: string, data: Prisma.TrainerProfileUpdateInput) {
+    return prisma.trainerProfile.update({
       where: { id },
       data,
+      include: { user: true },
     });
   }
 
   /**
-   * Delete trainer
+   * Create new user with trainer profile (admin-created)
+   */
+  async create(userData: {
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    birthDate?: Date;
+    gender?: string;
+    role: UserRole;
+  }) {
+    return prisma.user.create({
+      data: {
+        email: userData.email,
+        passwordHash: userData.passwordHash,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+        birthDate: userData.birthDate,
+        gender: userData.gender as any,
+        isTrainer: true,
+        trainerProfile: {
+          create: {
+            role: userData.role,
+            isActive: true,
+          },
+        },
+      },
+      include: {
+        trainerProfile: true,
+      },
+    });
+  }
+
+  /**
+   * Delete trainer profile
    */
   async delete(id: string) {
-    return prisma.trainer.delete({ where: { id } });
+    return prisma.trainerProfile.delete({ where: { id } });
   }
 
   /**
    * Deactivate trainer
    */
   async deactivate(id: string) {
-    return prisma.trainer.update({
+    return prisma.trainerProfile.update({
       where: { id },
       data: { isActive: false },
+      include: { user: true },
     });
   }
 
@@ -90,17 +135,18 @@ export class TrainerRepository {
    * Activate trainer
    */
   async activate(id: string) {
-    return prisma.trainer.update({
+    return prisma.trainerProfile.update({
       where: { id },
       data: { isActive: true },
+      include: { user: true },
     });
   }
 
   /**
-   * Count trainers
+   * Count trainer profiles
    */
-  async count(where?: Prisma.TrainerWhereInput) {
-    return prisma.trainer.count({ where });
+  async count(where?: Prisma.TrainerProfileWhereInput) {
+    return prisma.trainerProfile.count({ where });
   }
 
   /**

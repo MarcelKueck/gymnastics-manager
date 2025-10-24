@@ -7,14 +7,14 @@ import { SessionDetailContent } from '@/components/trainer/session-detail-conten
 export default async function SessionDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
+  if (!session || (session.user.activeRole !== 'TRAINER' && session.user.activeRole !== 'ADMIN')) {
     redirect('/login');
   }
 
   return (
     <TrainerLayout
       userName={session.user.name}
-      isAdmin={session.user.role === 'ADMIN'}
+      isAdmin={session.user.activeRole === 'ADMIN'}
     >
       <SessionDetailContent sessionId={params.id} />
     </TrainerLayout>

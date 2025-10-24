@@ -7,7 +7,7 @@ import { AdminTrainingsContent } from '@/components/admin/trainings-content';
 export default async function AdminTrainingsPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session || session.user.activeRole !== 'ADMIN') {
     redirect('/login');
   }
 

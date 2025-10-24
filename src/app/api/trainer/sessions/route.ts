@@ -24,7 +24,7 @@ export const GET = asyncHandler(async (request: Request) => {
   await trainingService.generateSessions(daysAhead);
 
   // Admins see all sessions, trainers only see sessions they're assigned to
-  const sessions = session.user.role === ROLES.ADMIN
+  const sessions = session.user.activeRole === ROLES.ADMIN
     ? await sessionService.getSessionsInRange(startDate, endDate)
     : await sessionService.getTrainersSessions(session.user.id, startDate, endDate);
 

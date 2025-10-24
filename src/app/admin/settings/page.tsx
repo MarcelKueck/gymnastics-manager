@@ -7,7 +7,7 @@ import { AdminSettingsContent } from '@/components/admin/admin-settings-content'
 export default async function AdminSettingsPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session || session.user.activeRole !== 'ADMIN') {
     redirect('/login');
   }
 

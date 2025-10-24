@@ -3,56 +3,70 @@ import { Prisma, YouthCategory } from '@prisma/client';
 
 export class AthleteRepository {
   /**
-   * Find athlete by ID with optional includes
+   * Find athlete profile by ID with optional includes
    */
-  async findById(id: string, include?: Prisma.AthleteInclude) {
-    return prisma.athlete.findUnique({
+  async findById(id: string, include?: Prisma.AthleteProfileInclude) {
+    return prisma.athleteProfile.findUnique({
       where: { id },
-      include,
+      include: {
+        user: true,
+        ...include,
+      },
     });
   }
 
   /**
-   * Find athlete by email
+   * Find athlete by user email
    */
   async findByEmail(email: string) {
-    return prisma.athlete.findUnique({
-      where: { email: email.toLowerCase() },
+    return prisma.athleteProfile.findFirst({
+      where: { 
+        user: {
+          email: email.toLowerCase(),
+        },
+      },
+      include: { user: true },
     });
   }
 
   /**
-   * Get all athletes with filters
+   * Get all athlete profiles with filters
    */
   async findMany(params: {
-    where?: Prisma.AthleteWhereInput;
-    include?: Prisma.AthleteInclude;
-    orderBy?: Prisma.AthleteOrderByWithRelationInput | Prisma.AthleteOrderByWithRelationInput[];
+    where?: Prisma.AthleteProfileWhereInput;
+    include?: Prisma.AthleteProfileInclude;
+    orderBy?: Prisma.AthleteProfileOrderByWithRelationInput | Prisma.AthleteProfileOrderByWithRelationInput[];
     skip?: number;
     take?: number;
   }) {
-    return prisma.athlete.findMany(params);
+    return prisma.athleteProfile.findMany({
+      ...params,
+      include: {
+        user: true,
+        ...params.include,
+      },
+    });
   }
 
   /**
    * Get pending athlete approvals
    */
   async findPendingApprovals() {
-    return prisma.athlete.findMany({
+    return prisma.athleteProfile.findMany({
       where: { isApproved: false },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        birthDate: true,
-        gender: true,
-        phone: true,
-        guardianName: true,
-        guardianEmail: true,
-        guardianPhone: true,
-        createdAt: true,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            birthDate: true,
+            gender: true,
+            phone: true,
+            createdAt: true,
+          },
+        },
       },
     });
   }
@@ -65,23 +79,25 @@ export class AthleteRepository {
     competitionOnly?: boolean;
     search?: string;
   }) {
-    const where: Prisma.AthleteWhereInput = {
+    const where: Prisma.AthleteProfileWhereInput = {
       isApproved: true,
       ...(filters?.youthCategory && { youthCategory: filters.youthCategory }),
       ...(filters?.competitionOnly && { competitionParticipation: true }),
       ...(filters?.search && {
-        OR: [
-          { firstName: { contains: filters.search, mode: 'insensitive' } },
-          { lastName: { contains: filters.search, mode: 'insensitive' } },
-          { email: { contains: filters.search, mode: 'insensitive' } },
-        ],
+        user: {
+          OR: [
+            { firstName: { contains: filters.search, mode: 'insensitive' } },
+            { lastName: { contains: filters.search, mode: 'insensitive' } },
+            { email: { contains: filters.search, mode: 'insensitive' } },
+          ],
+        },
       }),
     };
 
-    return prisma.athlete.findMany({
+    return prisma.athleteProfile.findMany({
       where,
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       include: {
+        user: true,
         recurringTrainingAssignments: {
           include: {
             trainingGroup: {
@@ -96,56 +112,95 @@ export class AthleteRepository {
   }
 
   /**
-   * Create new athlete
+   * Update athlete profile
    */
-  async create(data: Prisma.AthleteCreateInput) {
-    return prisma.athlete.create({ data });
+  async update(id: string, data: Prisma.AthleteProfileUpdateInput) {
+    return prisma.athleteProfile.update({
+      where: { id },
+      data,
+      include: { user: true },
+    });
   }
 
   /**
-   * Update athlete
+   * Create new user with athlete profile (for registration)
    */
-  async update(id: string, data: Prisma.AthleteUpdateInput) {
-    return prisma.athlete.update({
-      where: { id },
-      data,
+  async create(userData: {
+    email: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    birthDate: Date;
+    gender: string;
+    phone: string;
+    guardianName?: string;
+    guardianEmail?: string;
+    guardianPhone?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+  }) {
+    return prisma.user.create({
+      data: {
+        email: userData.email,
+        passwordHash: userData.passwordHash,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        birthDate: userData.birthDate,
+        gender: userData.gender as any,
+        phone: userData.phone,
+        isAthlete: true,
+        athleteProfile: {
+          create: {
+            guardianName: userData.guardianName,
+            guardianEmail: userData.guardianEmail,
+            guardianPhone: userData.guardianPhone,
+            emergencyContactName: userData.emergencyContactName,
+            emergencyContactPhone: userData.emergencyContactPhone,
+            isApproved: false, // Registration requires approval
+          },
+        },
+      },
+      include: {
+        athleteProfile: true,
+      },
     });
   }
 
   /**
    * Approve athlete
    */
-  async approve(id: string, approvedBy: string) {
-    return prisma.athlete.update({
+  async approve(id: string, approvedByTrainerId: string) {
+    return prisma.athleteProfile.update({
       where: { id },
       data: {
         isApproved: true,
-        approvedBy,
+        approvedBy: approvedByTrainerId,
         approvedAt: new Date(),
         configuredAt: new Date(),
       },
+      include: { user: true },
     });
   }
 
   /**
-   * Delete athlete
+   * Delete athlete profile
    */
   async delete(id: string) {
-    return prisma.athlete.delete({ where: { id } });
+    return prisma.athleteProfile.delete({ where: { id } });
   }
 
   /**
-   * Count athletes
+   * Count athlete profiles
    */
-  async count(where?: Prisma.AthleteWhereInput) {
-    return prisma.athlete.count({ where });
+  async count(where?: Prisma.AthleteProfileWhereInput) {
+    return prisma.athleteProfile.count({ where });
   }
 
   /**
    * Get athletes by training group
    */
   async findByTrainingGroup(trainingGroupId: string) {
-    return prisma.athlete.findMany({
+    return prisma.athleteProfile.findMany({
       where: {
         isApproved: true,
         recurringTrainingAssignments: {
@@ -154,65 +209,8 @@ export class AthleteRepository {
           },
         },
       },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      include: { user: true },
     });
-  }
-
-  /**
-   * Get athletes for a specific session
-   */
-  async findBySession(sessionId: string) {
-    const session = await prisma.trainingSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        groups: {
-          include: {
-            trainingGroup: {
-              include: {
-                athleteAssignments: {
-                  include: {
-                    athlete: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        sessionAthleteAssignments: {
-          include: {
-            athlete: true,
-            sessionGroup: true,
-          },
-        },
-      },
-    });
-
-    if (!session) return [];
-
-    // Collect all athletes from groups and session-specific assignments
-    const athleteMap = new Map();
-
-    // Add athletes from recurring assignments
-    session.groups.forEach((sessionGroup) => {
-      sessionGroup.trainingGroup.athleteAssignments.forEach((assignment) => {
-        if (!athleteMap.has(assignment.athlete.id)) {
-          athleteMap.set(assignment.athlete.id, {
-            ...assignment.athlete,
-            sessionGroupId: sessionGroup.id,
-          });
-        }
-      });
-    });
-
-    // Override with session-specific assignments
-    session.sessionAthleteAssignments.forEach((assignment) => {
-      athleteMap.set(assignment.athlete.id, {
-        ...assignment.athlete,
-        sessionGroupId: assignment.sessionGroupId,
-      });
-    });
-
-    return Array.from(athleteMap.values());
   }
 
   /**

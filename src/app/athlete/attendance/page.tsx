@@ -7,7 +7,7 @@ import { AthleteAttendanceContent } from '@/components/athlete/attendance-conten
 export default async function AthleteAttendancePage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ATHLETE') {
+  if (!session || session.user.activeRole !== 'ATHLETE') {
     redirect('/login');
   }
 

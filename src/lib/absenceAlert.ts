@@ -26,18 +26,24 @@ export async function checkAbsenceAlerts() {
     }
 
     // Get all active trainers and admins
-    const trainers = await prisma.trainer.findMany({
+    const trainerProfiles = await prisma.trainerProfile.findMany({
       where: {
         isActive: true,
-        role: { in: ['TRAINER', 'ADMIN'] },
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
       },
     });
 
     // Send alerts
     for (const athlete of athletesWithAlerts) {
-      for (const trainer of trainers) {
+      for (const trainerProfile of trainerProfiles) {
         await sendAbsenceAlertEmail(
-          trainer.email,
+          trainerProfile.user.email,
           `${athlete.firstName} ${athlete.lastName}`,
           athlete.consecutiveAbsences
         );

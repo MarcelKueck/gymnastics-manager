@@ -17,15 +17,27 @@ CREATE TYPE "RecurrenceInterval" AS ENUM ('WEEKLY', 'BIWEEKLY', 'MONTHLY');
 CREATE TYPE "AttendanceStatus" AS ENUM ('PRESENT', 'ABSENT_UNEXCUSED', 'ABSENT_EXCUSED');
 
 -- CreateTable
-CREATE TABLE "Athlete" (
+CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
-    "birthDate" TIMESTAMP(3) NOT NULL,
-    "gender" "Gender" NOT NULL,
     "phone" TEXT NOT NULL,
+    "birthDate" TIMESTAMP(3),
+    "gender" "Gender",
+    "isAthlete" BOOLEAN NOT NULL DEFAULT false,
+    "isTrainer" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AthleteProfile" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
     "guardianName" TEXT,
     "guardianEmail" TEXT,
     "guardianPhone" TEXT,
@@ -42,23 +54,19 @@ CREATE TABLE "Athlete" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Athlete_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "AthleteProfile_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Trainer" (
+CREATE TABLE "TrainerProfile" (
     "id" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "passwordHash" TEXT NOT NULL,
-    "firstName" TEXT NOT NULL,
-    "lastName" TEXT NOT NULL,
-    "phone" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
     "role" "UserRole" NOT NULL DEFAULT 'TRAINER',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Trainer_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "TrainerProfile_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -271,32 +279,72 @@ CREATE TABLE "MonthlyTrainerSummary" (
     CONSTRAINT "MonthlyTrainerSummary_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "Athlete_email_key" ON "Athlete"("email");
+-- CreateTable
+CREATE TABLE "SystemSettings" (
+    "id" TEXT NOT NULL,
+    "cancellationDeadlineHours" INTEGER NOT NULL DEFAULT 2,
+    "absenceAlertThreshold" INTEGER NOT NULL DEFAULT 3,
+    "absenceAlertWindowDays" INTEGER NOT NULL DEFAULT 30,
+    "absenceAlertCooldownDays" INTEGER NOT NULL DEFAULT 14,
+    "adminNotificationEmail" TEXT NOT NULL DEFAULT 'admin@svesting.de',
+    "absenceAlertEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "maxUploadSizeMB" INTEGER NOT NULL DEFAULT 10,
+    "sessionGenerationDaysAhead" INTEGER NOT NULL DEFAULT 90,
+    "lastModifiedBy" TEXT,
+    "lastModifiedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SystemSettings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AbsenceAlert" (
+    "id" TEXT NOT NULL,
+    "athleteId" TEXT NOT NULL,
+    "absenceCount" INTEGER NOT NULL,
+    "absencePeriodStart" TIMESTAMP(3) NOT NULL,
+    "absencePeriodEnd" TIMESTAMP(3) NOT NULL,
+    "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "emailSentToAthlete" BOOLEAN NOT NULL DEFAULT false,
+    "emailSentToAdmin" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AbsenceAlert_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateIndex
-CREATE INDEX "Athlete_email_idx" ON "Athlete"("email");
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
-CREATE INDEX "Athlete_isApproved_idx" ON "Athlete"("isApproved");
+CREATE INDEX "User_email_idx" ON "User"("email");
 
 -- CreateIndex
-CREATE INDEX "Athlete_lastName_idx" ON "Athlete"("lastName");
+CREATE INDEX "User_isAthlete_isTrainer_idx" ON "User"("isAthlete", "isTrainer");
 
 -- CreateIndex
-CREATE INDEX "Athlete_birthDate_idx" ON "Athlete"("birthDate");
+CREATE UNIQUE INDEX "AthleteProfile_userId_key" ON "AthleteProfile"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Trainer_email_key" ON "Trainer"("email");
+CREATE INDEX "AthleteProfile_userId_idx" ON "AthleteProfile"("userId");
 
 -- CreateIndex
-CREATE INDEX "Trainer_email_idx" ON "Trainer"("email");
+CREATE INDEX "AthleteProfile_isApproved_idx" ON "AthleteProfile"("isApproved");
 
 -- CreateIndex
-CREATE INDEX "Trainer_role_idx" ON "Trainer"("role");
+CREATE INDEX "AthleteProfile_youthCategory_idx" ON "AthleteProfile"("youthCategory");
 
 -- CreateIndex
-CREATE INDEX "Trainer_isActive_idx" ON "Trainer"("isActive");
+CREATE UNIQUE INDEX "TrainerProfile_userId_key" ON "TrainerProfile"("userId");
+
+-- CreateIndex
+CREATE INDEX "TrainerProfile_userId_idx" ON "TrainerProfile"("userId");
+
+-- CreateIndex
+CREATE INDEX "TrainerProfile_role_idx" ON "TrainerProfile"("role");
+
+-- CreateIndex
+CREATE INDEX "TrainerProfile_isActive_idx" ON "TrainerProfile"("isActive");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "UploadCategory_name_key" ON "UploadCategory"("name");
@@ -418,11 +466,23 @@ CREATE INDEX "MonthlyTrainerSummary_trainerId_idx" ON "MonthlyTrainerSummary"("t
 -- CreateIndex
 CREATE UNIQUE INDEX "MonthlyTrainerSummary_trainerId_month_year_key" ON "MonthlyTrainerSummary"("trainerId", "month", "year");
 
--- AddForeignKey
-ALTER TABLE "Athlete" ADD CONSTRAINT "Athlete_approvedBy_fkey" FOREIGN KEY ("approvedBy") REFERENCES "Trainer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- CreateIndex
+CREATE INDEX "AbsenceAlert_athleteId_idx" ON "AbsenceAlert"("athleteId");
+
+-- CreateIndex
+CREATE INDEX "AbsenceAlert_sentAt_idx" ON "AbsenceAlert"("sentAt");
 
 -- AddForeignKey
-ALTER TABLE "RecurringTraining" ADD CONSTRAINT "RecurringTraining_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "Trainer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "AthleteProfile" ADD CONSTRAINT "AthleteProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AthleteProfile" ADD CONSTRAINT "AthleteProfile_approvedBy_fkey" FOREIGN KEY ("approvedBy") REFERENCES "TrainerProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TrainerProfile" ADD CONSTRAINT "TrainerProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RecurringTraining" ADD CONSTRAINT "RecurringTraining_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "TrainerProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "TrainingGroup" ADD CONSTRAINT "TrainingGroup_recurringTrainingId_fkey" FOREIGN KEY ("recurringTrainingId") REFERENCES "RecurringTraining"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -431,19 +491,19 @@ ALTER TABLE "TrainingGroup" ADD CONSTRAINT "TrainingGroup_recurringTrainingId_fk
 ALTER TABLE "RecurringTrainingAthleteAssignment" ADD CONSTRAINT "RecurringTrainingAthleteAssignment_trainingGroupId_fkey" FOREIGN KEY ("trainingGroupId") REFERENCES "TrainingGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RecurringTrainingAthleteAssignment" ADD CONSTRAINT "RecurringTrainingAthleteAssignment_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "Athlete"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "RecurringTrainingAthleteAssignment" ADD CONSTRAINT "RecurringTrainingAthleteAssignment_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "AthleteProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RecurringTrainingAthleteAssignment" ADD CONSTRAINT "RecurringTrainingAthleteAssignment_assignedBy_fkey" FOREIGN KEY ("assignedBy") REFERENCES "Trainer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "RecurringTrainingAthleteAssignment" ADD CONSTRAINT "RecurringTrainingAthleteAssignment_assignedBy_fkey" FOREIGN KEY ("assignedBy") REFERENCES "TrainerProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "RecurringTrainingTrainerAssignment" ADD CONSTRAINT "RecurringTrainingTrainerAssignment_trainingGroupId_fkey" FOREIGN KEY ("trainingGroupId") REFERENCES "TrainingGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RecurringTrainingTrainerAssignment" ADD CONSTRAINT "RecurringTrainingTrainerAssignment_trainerId_fkey" FOREIGN KEY ("trainerId") REFERENCES "Trainer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "RecurringTrainingTrainerAssignment" ADD CONSTRAINT "RecurringTrainingTrainerAssignment_trainerId_fkey" FOREIGN KEY ("trainerId") REFERENCES "TrainerProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "RecurringTrainingTrainerAssignment" ADD CONSTRAINT "RecurringTrainingTrainerAssignment_assignedBy_fkey" FOREIGN KEY ("assignedBy") REFERENCES "Trainer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "RecurringTrainingTrainerAssignment" ADD CONSTRAINT "RecurringTrainingTrainerAssignment_assignedBy_fkey" FOREIGN KEY ("assignedBy") REFERENCES "TrainerProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "TrainingSession" ADD CONSTRAINT "TrainingSession_recurringTrainingId_fkey" FOREIGN KEY ("recurringTrainingId") REFERENCES "RecurringTraining"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -458,7 +518,7 @@ ALTER TABLE "SessionGroup" ADD CONSTRAINT "SessionGroup_trainingGroupId_fkey" FO
 ALTER TABLE "SessionGroupTrainerAssignment" ADD CONSTRAINT "SessionGroupTrainerAssignment_sessionGroupId_fkey" FOREIGN KEY ("sessionGroupId") REFERENCES "SessionGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SessionGroupTrainerAssignment" ADD CONSTRAINT "SessionGroupTrainerAssignment_trainerId_fkey" FOREIGN KEY ("trainerId") REFERENCES "Trainer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "SessionGroupTrainerAssignment" ADD CONSTRAINT "SessionGroupTrainerAssignment_trainerId_fkey" FOREIGN KEY ("trainerId") REFERENCES "TrainerProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SessionAthleteAssignment" ADD CONSTRAINT "SessionAthleteAssignment_trainingSessionId_fkey" FOREIGN KEY ("trainingSessionId") REFERENCES "TrainingSession"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -467,37 +527,43 @@ ALTER TABLE "SessionAthleteAssignment" ADD CONSTRAINT "SessionAthleteAssignment_
 ALTER TABLE "SessionAthleteAssignment" ADD CONSTRAINT "SessionAthleteAssignment_sessionGroupId_fkey" FOREIGN KEY ("sessionGroupId") REFERENCES "SessionGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SessionAthleteAssignment" ADD CONSTRAINT "SessionAthleteAssignment_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "Athlete"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "SessionAthleteAssignment" ADD CONSTRAINT "SessionAthleteAssignment_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "AthleteProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SessionAthleteAssignment" ADD CONSTRAINT "SessionAthleteAssignment_movedBy_fkey" FOREIGN KEY ("movedBy") REFERENCES "Trainer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "SessionAthleteAssignment" ADD CONSTRAINT "SessionAthleteAssignment_movedBy_fkey" FOREIGN KEY ("movedBy") REFERENCES "TrainerProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Cancellation" ADD CONSTRAINT "Cancellation_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "Athlete"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Cancellation" ADD CONSTRAINT "Cancellation_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "AthleteProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Cancellation" ADD CONSTRAINT "Cancellation_trainingSessionId_fkey" FOREIGN KEY ("trainingSessionId") REFERENCES "TrainingSession"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AttendanceRecord" ADD CONSTRAINT "AttendanceRecord_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "Athlete"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AttendanceRecord" ADD CONSTRAINT "AttendanceRecord_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "AthleteProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AttendanceRecord" ADD CONSTRAINT "AttendanceRecord_trainingSessionId_fkey" FOREIGN KEY ("trainingSessionId") REFERENCES "TrainingSession"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AttendanceRecord" ADD CONSTRAINT "AttendanceRecord_markedBy_fkey" FOREIGN KEY ("markedBy") REFERENCES "Trainer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "AttendanceRecord" ADD CONSTRAINT "AttendanceRecord_markedBy_fkey" FOREIGN KEY ("markedBy") REFERENCES "TrainerProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Upload" ADD CONSTRAINT "Upload_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "UploadCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Upload" ADD CONSTRAINT "Upload_uploadedBy_fkey" FOREIGN KEY ("uploadedBy") REFERENCES "Trainer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Upload" ADD CONSTRAINT "Upload_uploadedBy_fkey" FOREIGN KEY ("uploadedBy") REFERENCES "TrainerProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_performedBy_fkey" FOREIGN KEY ("performedBy") REFERENCES "Trainer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_performedBy_fkey" FOREIGN KEY ("performedBy") REFERENCES "TrainerProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MonthlyTrainerSummary" ADD CONSTRAINT "MonthlyTrainerSummary_trainerId_fkey" FOREIGN KEY ("trainerId") REFERENCES "Trainer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "MonthlyTrainerSummary" ADD CONSTRAINT "MonthlyTrainerSummary_trainerId_fkey" FOREIGN KEY ("trainerId") REFERENCES "TrainerProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MonthlyTrainerSummary" ADD CONSTRAINT "MonthlyTrainerSummary_lastModifiedBy_fkey" FOREIGN KEY ("lastModifiedBy") REFERENCES "Trainer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "MonthlyTrainerSummary" ADD CONSTRAINT "MonthlyTrainerSummary_lastModifiedBy_fkey" FOREIGN KEY ("lastModifiedBy") REFERENCES "TrainerProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SystemSettings" ADD CONSTRAINT "SystemSettings_lastModifiedBy_fkey" FOREIGN KEY ("lastModifiedBy") REFERENCES "TrainerProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AbsenceAlert" ADD CONSTRAINT "AbsenceAlert_athleteId_fkey" FOREIGN KEY ("athleteId") REFERENCES "AthleteProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -24,38 +24,25 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Try trainer login first
-      let result = await signIn('trainer-credentials', {
+      // Single unified login - no need to try multiple providers
+      const result = await signIn('credentials', {
         email,
         password,
         redirect: false,
       });
 
-      // Store first error for better error messages
-      let firstError = result?.error;
-
-      // If trainer login fails, try athlete login
       if (result?.error) {
-        result = await signIn('athlete-credentials', {
-          email,
-          password,
-          redirect: false,
-        });
-      }
-
-      if (result?.error) {
-        // Use the athlete error if available, otherwise use the first error
-        const errorMessage = result.error || firstError;
-        
         // Map error messages to user-friendly German messages
-        if (errorMessage?.includes('pending approval')) {
+        if (result.error.includes('pending approval')) {
           setError('Dein Account muss noch genehmigt werden. Du erhältst eine E-Mail, sobald dein Account aktiviert wurde.');
-        } else if (errorMessage?.includes('deactivated')) {
+        } else if (result.error.includes('deactivated')) {
           setError('Dein Account wurde deaktiviert. Bitte kontaktiere einen Administrator.');
-        } else if (errorMessage?.includes('Invalid email or password')) {
+        } else if (result.error.includes('Invalid email or password')) {
           setError('Ungültige E-Mail-Adresse oder Passwort');
+        } else if (result.error.includes('No active profiles')) {
+          setError('Kein aktives Profil gefunden. Bitte kontaktiere einen Administrator.');
         } else {
-          setError(errorMessage || 'Ungültige E-Mail-Adresse oder Passwort');
+          setError(result.error || 'Ungültige E-Mail-Adresse oder Passwort');
         }
       } else {
         // Redirect will be handled by the callback

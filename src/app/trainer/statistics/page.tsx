@@ -7,14 +7,14 @@ import { TrainerStatisticsContent } from '@/components/trainer/statistics-conten
 export default async function TrainerStatisticsPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
+  if (!session || (session.user.activeRole !== 'TRAINER' && session.user.activeRole !== 'ADMIN')) {
     redirect('/login');
   }
 
   return (
     <TrainerLayout
       userName={session.user.name}
-      isAdmin={session.user.role === 'ADMIN'}
+      isAdmin={session.user.activeRole === 'ADMIN'}
     >
       <TrainerStatisticsContent />
     </TrainerLayout>

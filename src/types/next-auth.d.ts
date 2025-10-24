@@ -7,7 +7,13 @@ declare module 'next-auth' {
     id: string;
     email: string;
     name: string;
-    role: UserRole;
+    roles: UserRole[];      // Array of all available roles
+    activeRole: UserRole;    // Currently active role
+    isAthlete: boolean;      // Quick check flags
+    isTrainer: boolean;
+    isAdmin: boolean;
+    athleteProfileId?: string;  // ID of athlete profile if exists
+    trainerProfileId?: string;  // ID of trainer profile if exists
   }
 
   interface Session {
@@ -15,7 +21,13 @@ declare module 'next-auth' {
       id: string;
       email: string;
       name: string;
-      role: UserRole;
+      roles: UserRole[];
+      activeRole: UserRole;
+      isAthlete: boolean;
+      isTrainer: boolean;
+      isAdmin: boolean;
+      athleteProfileId?: string;
+      trainerProfileId?: string;
     };
   }
 }
@@ -23,6 +35,12 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     id: string;
-    role: UserRole;
+    roles: UserRole[];
+    activeRole: UserRole;
+    isAthlete: boolean;
+    isTrainer: boolean;
+    isAdmin: boolean;
+    athleteProfileId?: string;
+    trainerProfileId?: string;
   }
 }

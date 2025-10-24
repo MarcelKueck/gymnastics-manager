@@ -7,7 +7,7 @@ import { AthleteStatisticsContent } from '@/components/athlete/statistics-conten
 export default async function AthleteStatisticsPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ATHLETE') {
+  if (!session || session.user.activeRole !== 'ATHLETE') {
     redirect('/login');
   }
 

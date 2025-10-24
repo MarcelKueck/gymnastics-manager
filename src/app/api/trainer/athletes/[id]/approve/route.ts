@@ -20,14 +20,17 @@ export const POST = asyncHandler(
 
     const validatedData = approvalSchema.parse(body);
 
-    const athlete = await athleteService.approveAndConfigure(
+    const athleteProfile = await athleteService.approveAndConfigure(
       params.id,
       session.user.id,
       validatedData
     );
 
     // Send approval email
-    await sendAthleteApprovalEmail(athlete.email, `${athlete.firstName} ${athlete.lastName}`);
+    await sendAthleteApprovalEmail(
+      athleteProfile.user.email, 
+      `${athleteProfile.user.firstName} ${athleteProfile.user.lastName}`
+    );
 
     return messageResponse('Athlet erfolgreich genehmigt', 200);
   }

@@ -24,13 +24,24 @@ export async function GET() {
   try {
     const session = await requireAdmin();
 
-    const athletes = await prisma.athlete.findMany({
+    const athletes = await prisma.athleteProfile.findMany({
       orderBy: [
         { isApproved: 'desc' },
-        { lastName: 'asc' },
-        { firstName: 'asc' },
+        { user: { lastName: 'asc' } },
+        { user: { firstName: 'asc' } },
       ],
       include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            birthDate: true,
+            gender: true,
+          },
+        },
         _count: {
           select: {
             attendanceRecords: true,
@@ -59,13 +70,13 @@ export async function POST(request: Request) {
     const validatedData = createAthleteSchema.parse(body);
 
     // Check if email already exists
-    const existingAthlete = await prisma.athlete.findUnique({
+    const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email },
     });
 
-    if (existingAthlete) {
+    if (existingUser) {
       return NextResponse.json(
-        { success: false, error: 'Ein Athlet mit dieser E-Mail existiert bereits' },
+        { success: false, error: 'Ein Benutzer mit dieser E-Mail existiert bereits' },
         { status: 400 }
       );
     }
@@ -73,8 +84,13 @@ export async function POST(request: Request) {
     // Hash password
     const passwordHash = await bcrypt.hash(validatedData.password, 10);
 
-    // Create athlete
-    const athlete = await prisma.athlete.create({
+    // Get the admin's trainer profile ID for the approvedBy field
+    const adminTrainerProfile = await prisma.trainerProfile.findUnique({
+      where: { userId: session.user.id },
+    });
+
+    // Create user with athlete profile
+    const user = await prisma.user.create({
       data: {
         email: validatedData.email,
         passwordHash,
@@ -83,21 +99,29 @@ export async function POST(request: Request) {
         birthDate: new Date(validatedData.birthDate),
         gender: validatedData.gender,
         phone: validatedData.phone,
-        guardianName: validatedData.guardianName,
-        guardianEmail: validatedData.guardianEmail || null,
-        guardianPhone: validatedData.guardianPhone,
-        emergencyContactName: validatedData.emergencyContactName,
-        emergencyContactPhone: validatedData.emergencyContactPhone,
-        isApproved: true,
-        approvedBy: session.user.id,
-        approvedAt: new Date(),
-        configuredAt: new Date(),
+        isAthlete: true,
+        athleteProfile: {
+          create: {
+            guardianName: validatedData.guardianName,
+            guardianEmail: validatedData.guardianEmail || null,
+            guardianPhone: validatedData.guardianPhone,
+            emergencyContactName: validatedData.emergencyContactName,
+            emergencyContactPhone: validatedData.emergencyContactPhone,
+            isApproved: true,
+            approvedBy: adminTrainerProfile?.id,
+            approvedAt: new Date(),
+            configuredAt: new Date(),
+          },
+        },
+      },
+      include: {
+        athleteProfile: true,
       },
     });
 
     return NextResponse.json({
       success: true,
-      data: athlete,
+      data: user.athleteProfile,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

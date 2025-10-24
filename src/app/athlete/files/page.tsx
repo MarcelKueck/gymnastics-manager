@@ -7,7 +7,7 @@ import { AthleteFilesContent } from '@/components/athlete/files-content';
 export default async function AthleteFilesPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ATHLETE') {
+  if (!session || session.user.activeRole !== 'ATHLETE') {
     redirect('/login');
   }
 

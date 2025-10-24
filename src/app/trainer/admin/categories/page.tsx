@@ -7,7 +7,7 @@ import { AdminCategoriesContent } from '@/components/admin/categories-content';
 export default async function AdminCategoriesPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session || session.user.activeRole !== 'ADMIN') {
     redirect('/login');
   }
 

@@ -7,8 +7,8 @@ import { UserRole } from '@prisma/client';
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
-      id: 'athlete-credentials',
-      name: 'Athlete Login',
+      id: 'credentials',
+      name: 'Login',
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
@@ -18,91 +18,114 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email and password are required');
         }
 
-        const athlete = await prisma.athlete.findUnique({
+        // Find user with both profiles
+        const user = await prisma.user.findUnique({
           where: { email: credentials.email.toLowerCase() },
           include: {
-            approvedByTrainer: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
-            },
+            athleteProfile: true,
+            trainerProfile: true,
           },
         });
 
-        if (!athlete) {
+        if (!user) {
           throw new Error('Invalid email or password');
         }
 
-        if (!athlete.isApproved) {
-          throw new Error('Your account is pending approval');
-        }
-
-        const isPasswordValid = await bcrypt.compare(credentials.password, athlete.passwordHash);
+        // Verify password
+        const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
 
         if (!isPasswordValid) {
           throw new Error('Invalid email or password');
         }
 
+        // Build roles array based on profiles
+        const roles: UserRole[] = [];
+        let isAthlete = false;
+        let isTrainer = false;
+        let isAdmin = false;
+
+        // Check athlete profile
+        if (user.athleteProfile) {
+          if (!user.athleteProfile.isApproved) {
+            throw new Error('Your account is pending approval');
+          }
+          roles.push(UserRole.ATHLETE);
+          isAthlete = true;
+        }
+
+        // Check trainer profile
+        if (user.trainerProfile) {
+          if (!user.trainerProfile.isActive) {
+            throw new Error('Your account has been deactivated');
+          }
+          roles.push(user.trainerProfile.role); // TRAINER or ADMIN
+          isTrainer = true;
+          if (user.trainerProfile.role === UserRole.ADMIN) {
+            isAdmin = true;
+          }
+        }
+
+        // Must have at least one active role
+        if (roles.length === 0) {
+          throw new Error('No active profiles found');
+        }
+
+        // Determine default active role
+        // Priority: ADMIN > TRAINER > ATHLETE
+        let activeRole: UserRole;
+        if (isAdmin) {
+          activeRole = UserRole.ADMIN;
+        } else if (isTrainer) {
+          activeRole = UserRole.TRAINER;
+        } else {
+          activeRole = UserRole.ATHLETE;
+        }
+
         return {
-          id: athlete.id,
-          email: athlete.email,
-          name: `${athlete.firstName} ${athlete.lastName}`,
-          role: UserRole.ATHLETE,
-        };
-      },
-    }),
-    CredentialsProvider({
-      id: 'trainer-credentials',
-      name: 'Trainer Login',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error('Email and password are required');
-        }
-
-        const trainer = await prisma.trainer.findUnique({
-          where: { email: credentials.email.toLowerCase() },
-        });
-
-        if (!trainer) {
-          throw new Error('Invalid email or password');
-        }
-
-        if (!trainer.isActive) {
-          throw new Error('Your account has been deactivated');
-        }
-
-        const isPasswordValid = await bcrypt.compare(credentials.password, trainer.passwordHash);
-
-        if (!isPasswordValid) {
-          throw new Error('Invalid email or password');
-        }
-
-        return {
-          id: trainer.id,
-          email: trainer.email,
-          name: `${trainer.firstName} ${trainer.lastName}`,
-          role: trainer.role,
+          id: user.id,
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          roles,
+          activeRole,
+          isAthlete,
+          isTrainer,
+          isAdmin,
+          athleteProfileId: user.athleteProfile?.id,
+          trainerProfileId: user.trainerProfile?.id,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
+        token.roles = user.roles;
+        token.activeRole = user.activeRole;
+        token.isAthlete = user.isAthlete;
+        token.isTrainer = user.isTrainer;
+        token.isAdmin = user.isAdmin;
+        token.athleteProfileId = user.athleteProfileId;
+        token.trainerProfileId = user.trainerProfileId;
       }
+
+      // Handle role switching via session update
+      if (trigger === 'update' && session?.activeRole) {
+        token.activeRole = session.activeRole;
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
+        session.user.roles = token.roles as UserRole[];
+        session.user.activeRole = token.activeRole as UserRole;
+        session.user.isAthlete = token.isAthlete as boolean;
+        session.user.isTrainer = token.isTrainer as boolean;
+        session.user.isAdmin = token.isAdmin as boolean;
+        session.user.athleteProfileId = token.athleteProfileId as string | undefined;
+        session.user.trainerProfileId = token.trainerProfileId as string | undefined;
       }
       return session;
     },

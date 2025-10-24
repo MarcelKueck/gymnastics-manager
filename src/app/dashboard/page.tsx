@@ -10,14 +10,14 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  // Redirect based on user role
-  switch (session.user.role) {
+  // Redirect based on active role
+  switch (session.user.activeRole) {
     case UserRole.ATHLETE:
       redirect('/athlete/dashboard');
     case UserRole.TRAINER:
       redirect('/trainer/dashboard');
     case UserRole.ADMIN:
-      redirect('/trainer/dashboard'); // Admins use trainer interface
+      redirect('/trainer/dashboard');
     default:
       redirect('/login');
   }

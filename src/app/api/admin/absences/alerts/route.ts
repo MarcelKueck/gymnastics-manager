@@ -95,9 +95,9 @@ export async function GET() {
 
         athleteMap.set(athlete.id, {
           id: athlete.id,
-          firstName: athlete.firstName,
-          lastName: athlete.lastName,
-          email: athlete.email,
+          firstName: athlete.user.firstName,
+          lastName: athlete.user.lastName,
+          email: athlete.user.email,
           absenceCount: alert.absenceCount,
           lastAlertDate: alert.sentAt.toISOString(),
           recentAbsences: recentAbsences.map((session: any) => ({

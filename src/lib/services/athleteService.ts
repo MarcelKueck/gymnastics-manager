@@ -62,8 +62,8 @@ export class AthleteService {
     }
   ) {
     return prisma.$transaction(async (tx) => {
-      // Update athlete
-      const athlete = await tx.athlete.update({
+      // Update athlete profile
+      const athleteProfile = await tx.athleteProfile.update({
         where: { id: athleteId },
         data: {
           isApproved: true,
@@ -74,6 +74,7 @@ export class AthleteService {
           competitionParticipation: config.competitionParticipation,
           hasDtbId: config.hasDtbId,
         },
+        include: { user: true },
       });
 
       // Assign to training groups
@@ -107,7 +108,7 @@ export class AthleteService {
         },
       });
 
-      return athlete;
+      return athleteProfile;
     });
   }
 
@@ -125,13 +126,16 @@ export class AthleteService {
     }
   ) {
     return prisma.$transaction(async (tx) => {
-      const athlete = await tx.athlete.findUnique({ where: { id: athleteId } });
-      if (!athlete) {
+      const athleteProfile = await tx.athleteProfile.findUnique({ 
+        where: { id: athleteId },
+        include: { user: true },
+      });
+      if (!athleteProfile) {
         throw new Error('Athlet nicht gefunden');
       }
 
-      // Update athlete fields
-      const updatedAthlete = await tx.athlete.update({
+      // Update athlete profile fields
+      const updatedAthlete = await tx.athleteProfile.update({
         where: { id: athleteId },
         data: {
           ...(config.youthCategory && { youthCategory: config.youthCategory }),
@@ -141,6 +145,7 @@ export class AthleteService {
           ...(config.hasDtbId !== undefined && { hasDtbId: config.hasDtbId }),
           configuredAt: new Date(),
         },
+        include: { user: true },
       });
 
       // Update training group assignments if provided
@@ -222,20 +227,49 @@ export class AthleteService {
     emergencyContactPhone?: string;
     autoConfirmFutureSessions?: boolean;
   }) {
-    return athleteRepository.update(athleteId, data);
+    // Separate user fields from athlete profile fields
+    const userFields: { firstName?: string; lastName?: string; phone?: string } = {};
+    const profileFields: {
+      guardianName?: string;
+      guardianEmail?: string;
+      guardianPhone?: string;
+      emergencyContactName?: string;
+      emergencyContactPhone?: string;
+      autoConfirmFutureSessions?: boolean;
+    } = {};
+
+    if (data.firstName !== undefined) userFields.firstName = data.firstName;
+    if (data.lastName !== undefined) userFields.lastName = data.lastName;
+    if (data.phone !== undefined) userFields.phone = data.phone;
+
+    if (data.guardianName !== undefined) profileFields.guardianName = data.guardianName;
+    if (data.guardianEmail !== undefined) profileFields.guardianEmail = data.guardianEmail;
+    if (data.guardianPhone !== undefined) profileFields.guardianPhone = data.guardianPhone;
+    if (data.emergencyContactName !== undefined) profileFields.emergencyContactName = data.emergencyContactName;
+    if (data.emergencyContactPhone !== undefined) profileFields.emergencyContactPhone = data.emergencyContactPhone;
+    if (data.autoConfirmFutureSessions !== undefined) profileFields.autoConfirmFutureSessions = data.autoConfirmFutureSessions;
+
+    return athleteRepository.update(athleteId, {
+      ...profileFields,
+      ...(Object.keys(userFields).length > 0 && {
+        user: {
+          update: userFields,
+        },
+      }),
+    });
   }
 
   /**
    * Change athlete password
    */
   async changePassword(athleteId: string, currentPassword: string, newPassword: string) {
-    const athlete = await athleteRepository.findById(athleteId);
-    if (!athlete) {
+    const athleteProfile = await athleteRepository.findById(athleteId);
+    if (!athleteProfile) {
       throw new Error('Athlet nicht gefunden');
     }
 
     // Verify current password
-    const isValid = await bcrypt.compare(currentPassword, athlete.passwordHash);
+    const isValid = await bcrypt.compare(currentPassword, athleteProfile.user.passwordHash);
     if (!isValid) {
       throw new Error('Aktuelles Passwort ist falsch');
     }
@@ -243,8 +277,11 @@ export class AthleteService {
     // Hash new password
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    // Update password
-    return athleteRepository.update(athleteId, { passwordHash });
+    // Update password in User table
+    return prisma.user.update({
+      where: { id: athleteProfile.userId },
+      data: { passwordHash },
+    });
   }
 
   /**
@@ -339,8 +376,8 @@ export class AthleteService {
         },
       },
       orderBy: [
-        { lastName: 'asc' },
-        { firstName: 'asc' },
+        { user: { lastName: 'asc' } },
+        { user: { firstName: 'asc' } },
       ],
     });
   }

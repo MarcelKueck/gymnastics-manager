@@ -32,7 +32,7 @@ export async function requireRole(roles: UserRole | UserRole[]) {
   const session = await requireAuth();
   const allowedRoles = Array.isArray(roles) ? roles : [roles];
 
-  if (!allowedRoles.includes(session.user.role)) {
+  if (!allowedRoles.includes(session.user.activeRole)) {
     throw new Error('Unzureichende Berechtigungen');
   }
 
@@ -66,7 +66,7 @@ export async function requireAdmin() {
 export async function isAdmin() {
   try {
     const session = await getAuthSession();
-    return session?.user?.role === UserRole.ADMIN;
+    return session?.user?.isAdmin || session?.user?.activeRole === UserRole.ADMIN;
   } catch {
     return false;
   }
@@ -79,8 +79,8 @@ export async function isTrainerOrAdmin() {
   try {
     const session = await getAuthSession();
     return (
-      session?.user?.role === UserRole.TRAINER ||
-      session?.user?.role === UserRole.ADMIN
+      session?.user?.activeRole === UserRole.TRAINER ||
+      session?.user?.activeRole === UserRole.ADMIN
     );
   } catch {
     return false;
@@ -95,8 +95,8 @@ export async function verifyOwnership(resourceOwnerId: string) {
 
   // Admins and trainers can access any resource
   if (
-    session.user.role === UserRole.ADMIN ||
-    session.user.role === UserRole.TRAINER
+    session.user.activeRole === UserRole.ADMIN ||
+    session.user.activeRole === UserRole.TRAINER
   ) {
     return session;
   }

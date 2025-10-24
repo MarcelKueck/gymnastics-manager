@@ -1,10 +1,10 @@
-import { PrismaClient, UserRole, DayOfWeek, RecurrenceInterval, YouthCategory } from '@prisma/client';
+import { PrismaClient, UserRole, DayOfWeek, RecurrenceInterval, YouthCategory, Gender } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Starting database seed...');
+  console.log('Starting database seed with new unified User model...');
 
   // Create or get system settings
   const settings = await prisma.systemSettings.upsert({
@@ -22,11 +22,11 @@ async function main() {
       sessionGenerationDaysAhead: 90,
     },
   });
-  console.log('Created system settings');
+  console.log('✓ Created system settings');
 
-  // Create admin trainer
+  // Create admin user with BOTH profiles (trainer + athlete)
   const adminPassword = await bcrypt.hash('admin123', 10);
-  const admin = await prisma.trainer.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: 'admin@svesting.de' },
     update: {},
     create: {
@@ -35,15 +35,39 @@ async function main() {
       firstName: 'Admin',
       lastName: 'User',
       phone: '+49 123 456789',
-      role: UserRole.ADMIN,
-      isActive: true,
+      birthDate: new Date('1990-01-01'),
+      gender: Gender.OTHER,
+      isAthlete: true, // All trainers have athlete profiles
+      isTrainer: true,
+      athleteProfile: {
+        create: {
+          youthCategory: YouthCategory.F,
+          competitionParticipation: false,
+          hasDtbId: false,
+          isApproved: true,
+          approvedAt: new Date(),
+          configuredAt: new Date(),
+          autoConfirmFutureSessions: false,
+        },
+      },
+      trainerProfile: {
+        create: {
+          role: UserRole.ADMIN,
+          isActive: true,
+        },
+      },
     },
   });
-  console.log('Created admin user:', admin.email);
+  console.log('✓ Created admin user (with both profiles):', admin.email);
 
-  // Create sample trainers
+  // Get the admin's trainer profile ID for later use
+  const adminTrainerProfile = await prisma.trainerProfile.findUnique({
+    where: { userId: admin.id },
+  });
+
+  // Create sample trainer 1 with BOTH profiles
   const trainerPassword = await bcrypt.hash('trainer123', 10);
-  const trainer1 = await prisma.trainer.upsert({
+  const trainer1User = await prisma.user.upsert({
     where: { email: 'trainer@svesting.de' },
     update: {},
     create: {
@@ -52,13 +76,38 @@ async function main() {
       firstName: 'Max',
       lastName: 'Mustermann',
       phone: '+49 987 654321',
-      role: UserRole.TRAINER,
-      isActive: true,
+      birthDate: new Date('1995-06-15'),
+      gender: Gender.MALE,
+      isAthlete: true, // All trainers have athlete profiles
+      isTrainer: true,
+      athleteProfile: {
+        create: {
+          youthCategory: YouthCategory.F,
+          competitionParticipation: false,
+          hasDtbId: false,
+          isApproved: true,
+          approvedBy: adminTrainerProfile?.id,
+          approvedAt: new Date(),
+          configuredAt: new Date(),
+          autoConfirmFutureSessions: false,
+        },
+      },
+      trainerProfile: {
+        create: {
+          role: UserRole.TRAINER,
+          isActive: true,
+        },
+      },
     },
   });
-  console.log('Created trainer user:', trainer1.email);
+  console.log('✓ Created trainer 1 (with both profiles):', trainer1User.email);
 
-  const trainer2 = await prisma.trainer.upsert({
+  const trainer1Profile = await prisma.trainerProfile.findUnique({
+    where: { userId: trainer1User.id },
+  });
+
+  // Create sample trainer 2 with BOTH profiles
+  const trainer2User = await prisma.user.upsert({
     where: { email: 'sarah.trainer@svesting.de' },
     update: {},
     create: {
@@ -67,11 +116,35 @@ async function main() {
       firstName: 'Sarah',
       lastName: 'Schmidt',
       phone: '+49 987 654322',
-      role: UserRole.TRAINER,
-      isActive: true,
+      birthDate: new Date('1993-03-20'),
+      gender: Gender.FEMALE,
+      isAthlete: true, // All trainers have athlete profiles
+      isTrainer: true,
+      athleteProfile: {
+        create: {
+          youthCategory: YouthCategory.F,
+          competitionParticipation: false,
+          hasDtbId: false,
+          isApproved: true,
+          approvedBy: adminTrainerProfile?.id,
+          approvedAt: new Date(),
+          configuredAt: new Date(),
+          autoConfirmFutureSessions: false,
+        },
+      },
+      trainerProfile: {
+        create: {
+          role: UserRole.TRAINER,
+          isActive: true,
+        },
+      },
     },
   });
-  console.log('Created second trainer:', trainer2.email);
+  console.log('✓ Created trainer 2 (with both profiles):', trainer2User.email);
+
+  const trainer2Profile = await prisma.trainerProfile.findUnique({
+    where: { userId: trainer2User.id },
+  });
 
   // Create sample recurring trainings
   let mondayTraining = await prisma.recurringTraining.findFirst({
@@ -81,7 +154,7 @@ async function main() {
     },
   });
 
-  if (!mondayTraining) {
+  if (!mondayTraining && adminTrainerProfile) {
     mondayTraining = await prisma.recurringTraining.create({
       data: {
         name: 'Montag - Jugendtraining',
@@ -90,11 +163,11 @@ async function main() {
         endTime: '18:30',
         recurrence: RecurrenceInterval.WEEKLY,
         isActive: true,
-        createdBy: admin.id,
+        createdBy: adminTrainerProfile.id,
       },
     });
   }
-  console.log('Created Monday training:', mondayTraining.name);
+  console.log('✓ Created Monday training:', mondayTraining?.name);
 
   let wednesdayTraining = await prisma.recurringTraining.findFirst({
     where: {
@@ -103,7 +176,7 @@ async function main() {
     },
   });
 
-  if (!wednesdayTraining) {
+  if (!wednesdayTraining && adminTrainerProfile) {
     wednesdayTraining = await prisma.recurringTraining.create({
       data: {
         name: 'Mittwoch - Anfänger',
@@ -112,11 +185,11 @@ async function main() {
         endTime: '17:30',
         recurrence: RecurrenceInterval.WEEKLY,
         isActive: true,
-        createdBy: admin.id,
+        createdBy: adminTrainerProfile.id,
       },
     });
   }
-  console.log('Created Wednesday training:', wednesdayTraining.name);
+  console.log('✓ Created Wednesday training:', wednesdayTraining?.name);
 
   let fridayTraining = await prisma.recurringTraining.findFirst({
     where: {
@@ -125,7 +198,7 @@ async function main() {
     },
   });
 
-  if (!fridayTraining) {
+  if (!fridayTraining && adminTrainerProfile) {
     fridayTraining = await prisma.recurringTraining.create({
       data: {
         name: 'Freitag - Wettkampfgruppe',
@@ -134,14 +207,14 @@ async function main() {
         endTime: '19:30',
         recurrence: RecurrenceInterval.WEEKLY,
         isActive: true,
-        createdBy: admin.id,
+        createdBy: adminTrainerProfile.id,
       },
     });
   }
-  console.log('Created Friday training:', fridayTraining.name);
+  console.log('✓ Created Friday training:', fridayTraining?.name);
 
   // Create training groups for Monday
-  const beginnerGroup = await prisma.trainingGroup.upsert({
+  const beginnerGroup = mondayTraining ? await prisma.trainingGroup.upsert({
     where: {
       recurringTrainingId_name: {
         recurringTrainingId: mondayTraining.id,
@@ -154,9 +227,9 @@ async function main() {
       recurringTrainingId: mondayTraining.id,
       sortOrder: 0,
     },
-  });
+  }) : null;
 
-  const advancedGroup = await prisma.trainingGroup.upsert({
+  const advancedGroup = mondayTraining ? await prisma.trainingGroup.upsert({
     where: {
       recurringTrainingId_name: {
         recurringTrainingId: mondayTraining.id,
@@ -169,10 +242,10 @@ async function main() {
       recurringTrainingId: mondayTraining.id,
       sortOrder: 1,
     },
-  });
+  }) : null;
 
   // Create group for Wednesday
-  const wednesdayGroup = await prisma.trainingGroup.upsert({
+  const wednesdayGroup = wednesdayTraining ? await prisma.trainingGroup.upsert({
     where: {
       recurringTrainingId_name: {
         recurringTrainingId: wednesdayTraining.id,
@@ -185,10 +258,10 @@ async function main() {
       recurringTrainingId: wednesdayTraining.id,
       sortOrder: 0,
     },
-  });
+  }) : null;
 
   // Create group for Friday
-  const fridayGroup = await prisma.trainingGroup.upsert({
+  const fridayGroup = fridayTraining ? await prisma.trainingGroup.upsert({
     where: {
       recurringTrainingId_name: {
         recurringTrainingId: fridayTraining.id,
@@ -201,76 +274,152 @@ async function main() {
       recurringTrainingId: fridayTraining.id,
       sortOrder: 0,
     },
-  });
-  console.log('Created training groups');
+  }) : null;
+  console.log('✓ Created training groups');
 
   // Assign trainers to groups
-  await prisma.recurringTrainingTrainerAssignment.upsert({
-    where: {
-      trainingGroupId_trainerId: {
+  if (beginnerGroup && trainer1Profile && adminTrainerProfile) {
+    await prisma.recurringTrainingTrainerAssignment.upsert({
+      where: {
+        trainingGroupId_trainerId: {
+          trainingGroupId: beginnerGroup.id,
+          trainerId: trainer1Profile.id,
+        },
+      },
+      update: {},
+      create: {
         trainingGroupId: beginnerGroup.id,
-        trainerId: trainer1.id,
+        trainerId: trainer1Profile.id,
+        assignedBy: adminTrainerProfile.id,
+        isPrimary: true,
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: beginnerGroup.id,
-      trainerId: trainer1.id,
-      assignedBy: admin.id,
-      isPrimary: true,
-    },
-  });
+    });
+  }
 
-  await prisma.recurringTrainingTrainerAssignment.upsert({
-    where: {
-      trainingGroupId_trainerId: {
+  if (advancedGroup && trainer2Profile && adminTrainerProfile) {
+    await prisma.recurringTrainingTrainerAssignment.upsert({
+      where: {
+        trainingGroupId_trainerId: {
+          trainingGroupId: advancedGroup.id,
+          trainerId: trainer2Profile.id,
+        },
+      },
+      update: {},
+      create: {
         trainingGroupId: advancedGroup.id,
-        trainerId: trainer2.id,
+        trainerId: trainer2Profile.id,
+        assignedBy: adminTrainerProfile.id,
+        isPrimary: true,
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: advancedGroup.id,
-      trainerId: trainer2.id,
-      assignedBy: admin.id,
-      isPrimary: true,
-    },
-  });
+    });
+  }
 
-  await prisma.recurringTrainingTrainerAssignment.upsert({
-    where: {
-      trainingGroupId_trainerId: {
+  if (wednesdayGroup && trainer1Profile && adminTrainerProfile) {
+    await prisma.recurringTrainingTrainerAssignment.upsert({
+      where: {
+        trainingGroupId_trainerId: {
+          trainingGroupId: wednesdayGroup.id,
+          trainerId: trainer1Profile.id,
+        },
+      },
+      update: {},
+      create: {
         trainingGroupId: wednesdayGroup.id,
-        trainerId: trainer1.id,
+        trainerId: trainer1Profile.id,
+        assignedBy: adminTrainerProfile.id,
+        isPrimary: true,
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: wednesdayGroup.id,
-      trainerId: trainer1.id,
-      assignedBy: admin.id,
-      isPrimary: true,
-    },
-  });
+    });
+  }
 
-  await prisma.recurringTrainingTrainerAssignment.upsert({
-    where: {
-      trainingGroupId_trainerId: {
+  if (fridayGroup && trainer2Profile && adminTrainerProfile) {
+    await prisma.recurringTrainingTrainerAssignment.upsert({
+      where: {
+        trainingGroupId_trainerId: {
+          trainingGroupId: fridayGroup.id,
+          trainerId: trainer2Profile.id,
+        },
+      },
+      update: {},
+      create: {
         trainingGroupId: fridayGroup.id,
-        trainerId: trainer2.id,
+        trainerId: trainer2Profile.id,
+        assignedBy: adminTrainerProfile.id,
+        isPrimary: true,
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: fridayGroup.id,
-      trainerId: trainer2.id,
-      assignedBy: admin.id,
-      isPrimary: true,
-    },
-  });
-  console.log('Assigned trainers to groups');
+    });
+  }
+  console.log('✓ Assigned trainers to groups');
 
-  // Create sample athletes
+  // Get the admin's and trainers' athlete profiles
+  const adminAthleteProfile = await prisma.athleteProfile.findUnique({
+    where: { userId: admin.id },
+  });
+  const trainer1AthleteProfile = await prisma.athleteProfile.findUnique({
+    where: { userId: trainer1User.id },
+  });
+  const trainer2AthleteProfile = await prisma.athleteProfile.findUnique({
+    where: { userId: trainer2User.id },
+  });
+
+  // Assign trainers as ATHLETES to groups they DON'T teach (testing dual-role)
+  // Trainer 1 teaches beginnerGroup and wednesdayGroup, so add them as athlete to advancedGroup & fridayGroup
+  if (advancedGroup && trainer1AthleteProfile && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: advancedGroup.id,
+          athleteId: trainer1AthleteProfile.id,
+        },
+      },
+      update: {},
+      create: {
+        trainingGroupId: advancedGroup.id,
+        athleteId: trainer1AthleteProfile.id,
+        assignedBy: adminTrainerProfile.id,
+      },
+    });
+    console.log('✓ Added trainer 1 as athlete to advanced group (dual-role test)');
+  }
+
+  if (fridayGroup && trainer1AthleteProfile && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: fridayGroup.id,
+          athleteId: trainer1AthleteProfile.id,
+        },
+      },
+      update: {},
+      create: {
+        trainingGroupId: fridayGroup.id,
+        athleteId: trainer1AthleteProfile.id,
+        assignedBy: adminTrainerProfile.id,
+      },
+    });
+    console.log('✓ Added trainer 1 as athlete to friday group (dual-role test)');
+  }
+
+  // Trainer 2 teaches advancedGroup and fridayGroup, so add them as athlete to beginnerGroup
+  if (beginnerGroup && trainer2AthleteProfile && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: beginnerGroup.id,
+          athleteId: trainer2AthleteProfile.id,
+        },
+      },
+      update: {},
+      create: {
+        trainingGroupId: beginnerGroup.id,
+        athleteId: trainer2AthleteProfile.id,
+        assignedBy: adminTrainerProfile.id,
+      },
+    });
+    console.log('✓ Added trainer 2 as athlete to beginner group (dual-role test)');
+  }
+
+  // Create sample athletes (athlete-only accounts)
   const athletePassword = await bcrypt.hash('athlete123', 10);
   
   const athletes = [
@@ -279,7 +428,7 @@ async function main() {
       firstName: 'Anna',
       lastName: 'Beispiel',
       birthDate: new Date('2010-05-15'),
-      gender: 'FEMALE' as const,
+      gender: Gender.FEMALE,
       youthCategory: YouthCategory.D,
     },
     {
@@ -287,7 +436,7 @@ async function main() {
       firstName: 'Lisa',
       lastName: 'Müller',
       birthDate: new Date('2011-03-20'),
-      gender: 'FEMALE' as const,
+      gender: Gender.FEMALE,
       youthCategory: YouthCategory.D,
     },
     {
@@ -295,7 +444,7 @@ async function main() {
       firstName: 'Tom',
       lastName: 'Schmidt',
       birthDate: new Date('2009-08-10'),
-      gender: 'MALE' as const,
+      gender: Gender.MALE,
       youthCategory: YouthCategory.D,
     },
     {
@@ -303,7 +452,7 @@ async function main() {
       firstName: 'Emma',
       lastName: 'Wagner',
       birthDate: new Date('2012-01-25'),
-      gender: 'FEMALE' as const,
+      gender: Gender.FEMALE,
       youthCategory: YouthCategory.E,
     },
     {
@@ -311,108 +460,137 @@ async function main() {
       firstName: 'Lukas',
       lastName: 'Bauer',
       birthDate: new Date('2010-11-30'),
-      gender: 'MALE' as const,
+      gender: Gender.MALE,
       youthCategory: YouthCategory.D,
     },
   ];
 
-  const createdAthletes = [];
+  const createdAthleteProfiles = [];
   for (const athleteData of athletes) {
-    const athlete = await prisma.athlete.upsert({
+    const user = await prisma.user.upsert({
       where: { email: athleteData.email },
       update: {},
       create: {
-        ...athleteData,
+        email: athleteData.email,
         passwordHash: athletePassword,
+        firstName: athleteData.firstName,
+        lastName: athleteData.lastName,
         phone: '+49 111 222333',
-        competitionParticipation: false,
-        hasDtbId: false,
-        isApproved: true,
-        approvedBy: admin.id,
-        approvedAt: new Date(),
-        configuredAt: new Date(),
+        birthDate: athleteData.birthDate,
+        gender: athleteData.gender,
+        isAthlete: true,
+        isTrainer: false, // Athlete-only accounts
+        athleteProfile: {
+          create: {
+            youthCategory: athleteData.youthCategory,
+            competitionParticipation: false,
+            hasDtbId: false,
+            isApproved: true,
+            approvedBy: adminTrainerProfile?.id,
+            approvedAt: new Date(),
+            configuredAt: new Date(),
+            autoConfirmFutureSessions: false,
+          },
+        },
       },
     });
-    createdAthletes.push(athlete);
-    console.log('Created athlete:', athlete.email);
+
+    const athleteProfile = await prisma.athleteProfile.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (athleteProfile) {
+      createdAthleteProfiles.push(athleteProfile);
+    }
+    console.log('✓ Created athlete (athlete-only):', user.email);
   }
 
   // Assign athletes to groups
-  await prisma.recurringTrainingAthleteAssignment.upsert({
-    where: {
-      trainingGroupId_athleteId: {
-        trainingGroupId: beginnerGroup.id,
-        athleteId: createdAthletes[0].id,
+  if (beginnerGroup && createdAthleteProfiles[0] && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: beginnerGroup.id,
+          athleteId: createdAthleteProfiles[0].id,
+        },
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: beginnerGroup.id,
-      athleteId: createdAthletes[0].id,
-      assignedBy: admin.id,
-    },
-  });
-
-  await prisma.recurringTrainingAthleteAssignment.upsert({
-    where: {
-      trainingGroupId_athleteId: {
+      update: {},
+      create: {
         trainingGroupId: beginnerGroup.id,
-        athleteId: createdAthletes[1].id,
+        athleteId: createdAthleteProfiles[0].id,
+        assignedBy: adminTrainerProfile.id,
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: beginnerGroup.id,
-      athleteId: createdAthletes[1].id,
-      assignedBy: admin.id,
-    },
-  });
+    });
+  }
 
-  await prisma.recurringTrainingAthleteAssignment.upsert({
-    where: {
-      trainingGroupId_athleteId: {
+  if (beginnerGroup && createdAthleteProfiles[1] && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: beginnerGroup.id,
+          athleteId: createdAthleteProfiles[1].id,
+        },
+      },
+      update: {},
+      create: {
+        trainingGroupId: beginnerGroup.id,
+        athleteId: createdAthleteProfiles[1].id,
+        assignedBy: adminTrainerProfile.id,
+      },
+    });
+  }
+
+  if (advancedGroup && createdAthleteProfiles[2] && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: advancedGroup.id,
+          athleteId: createdAthleteProfiles[2].id,
+        },
+      },
+      update: {},
+      create: {
         trainingGroupId: advancedGroup.id,
-        athleteId: createdAthletes[2].id,
+        athleteId: createdAthleteProfiles[2].id,
+        assignedBy: adminTrainerProfile.id,
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: advancedGroup.id,
-      athleteId: createdAthletes[2].id,
-      assignedBy: admin.id,
-    },
-  });
+    });
+  }
 
-  await prisma.recurringTrainingAthleteAssignment.upsert({
-    where: {
-      trainingGroupId_athleteId: {
+  if (wednesdayGroup && createdAthleteProfiles[3] && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: wednesdayGroup.id,
+          athleteId: createdAthleteProfiles[3].id,
+        },
+      },
+      update: {},
+      create: {
         trainingGroupId: wednesdayGroup.id,
-        athleteId: createdAthletes[3].id,
+        athleteId: createdAthleteProfiles[3].id,
+        assignedBy: adminTrainerProfile.id,
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: wednesdayGroup.id,
-      athleteId: createdAthletes[3].id,
-      assignedBy: admin.id,
-    },
-  });
+    });
+  }
 
-  await prisma.recurringTrainingAthleteAssignment.upsert({
-    where: {
-      trainingGroupId_athleteId: {
-        trainingGroupId: fridayGroup.id,
-        athleteId: createdAthletes[4].id,
+  if (fridayGroup && createdAthleteProfiles[4] && adminTrainerProfile) {
+    await prisma.recurringTrainingAthleteAssignment.upsert({
+      where: {
+        trainingGroupId_athleteId: {
+          trainingGroupId: fridayGroup.id,
+          athleteId: createdAthleteProfiles[4].id,
+        },
       },
-    },
-    update: {},
-    create: {
-      trainingGroupId: fridayGroup.id,
-      athleteId: createdAthletes[4].id,
-      assignedBy: admin.id,
-    },
-  });
-  console.log('Assigned athletes to groups');
+      update: {},
+      create: {
+        trainingGroupId: fridayGroup.id,
+        athleteId: createdAthleteProfiles[4].id,
+        assignedBy: adminTrainerProfile.id,
+      },
+    });
+  }
+  console.log('✓ Assigned athletes to groups');
 
   // Create file upload categories
   const categories = [
@@ -428,19 +606,21 @@ async function main() {
       create: category,
     });
   }
-  console.log('Created upload categories');
+  console.log('✓ Created upload categories');
 
-  console.log('Seed completed successfully!');
-  console.log('\nTest credentials:');
-  console.log('Admin: admin@svesting.de / admin123');
-  console.log('Trainer 1: trainer@svesting.de / trainer123');
-  console.log('Trainer 2: sarah.trainer@svesting.de / trainer123');
-  console.log('Athletes: athlete@example.com, lisa.mueller@example.com, etc. / athlete123');
+  console.log('\n✅ Seed completed successfully with new unified User model!');
+  console.log('\n📝 Test credentials:');
+  console.log('👤 Admin (dual-role): admin@svesting.de / admin123');
+  console.log('👤 Trainer 1 (dual-role): trainer@svesting.de / trainer123');
+  console.log('👤 Trainer 2 (dual-role): sarah.trainer@svesting.de / trainer123');
+  console.log('👤 Athletes (athlete-only): athlete@example.com, lisa.mueller@example.com, etc. / athlete123');
+  console.log('\n💡 All trainers have BOTH athlete and trainer profiles.');
+  console.log('💡 All regular athletes have ONLY athlete profiles.');
 }
 
 main()
   .catch((e) => {
-    console.error('Error during seed:', e);
+    console.error('❌ Error during seed:', e);
     process.exit(1);
   })
   .finally(async () => {

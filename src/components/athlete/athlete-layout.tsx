@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { RoleSwitcher } from '@/components/shared/role-switcher';
 import {
   Home,
   Calendar,
@@ -53,6 +54,7 @@ export function AthleteLayout({ children, userName }: AthleteLayoutProps) {
               <span className="text-xs md:text-sm text-gray-700 truncate max-w-[120px] md:max-w-none">
                 {userName}
               </span>
+              <RoleSwitcher />
               <Button
                 variant="ghost"
                 size="sm"

@@ -53,12 +53,18 @@ export class AttendanceRepository {
     return prisma.attendanceRecord.findMany({
       where: { trainingSessionId: sessionId },
       include: {
-        athlete: true,
-        markedByTrainer: true,
+        athlete: {
+          include: { user: true },
+        },
+        markedByTrainer: {
+          include: { user: true },
+        },
       },
       orderBy: {
         athlete: {
-          lastName: 'asc',
+          user: {
+            lastName: 'asc',
+          },
         },
       },
     });

@@ -183,7 +183,7 @@ export class StatisticsService {
     });
 
     // Pending athlete approvals
-    const pendingApprovals = await prisma.athlete.count({
+    const pendingApprovals = await prisma.athleteProfile.count({
       where: { isApproved: false },
     });
 
@@ -246,9 +246,9 @@ export class StatisticsService {
       todaySessions,
       weekSessions,
     ] = await Promise.all([
-      prisma.athlete.count({ where: { isApproved: true } }),
-      prisma.trainer.count({ where: { isActive: true } }),
-      prisma.athlete.count({ where: { isApproved: false } }),
+      prisma.athleteProfile.count({ where: { isApproved: true } }),
+      prisma.trainerProfile.count({ where: { isActive: true } }),
+      prisma.athleteProfile.count({ where: { isApproved: false } }),
       prisma.recurringTraining.count({ where: { isActive: true } }),
       prisma.trainingSession.count({
         where: {
@@ -271,7 +271,7 @@ export class StatisticsService {
     ]);
 
     // Recent registrations (last 7 days)
-    const recentRegistrations = await prisma.athlete.count({
+    const recentRegistrations = await prisma.athleteProfile.count({
       where: {
         createdAt: {
           gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
@@ -296,16 +296,27 @@ export class StatisticsService {
     });
 
     // Recent approvals
-    const recentApprovals = await prisma.athlete.findMany({
+    const recentApprovals = await prisma.athleteProfile.findMany({
       where: {
         isApproved: true,
         approvedAt: { not: null },
       },
       include: {
-        approvedByTrainer: {
+        user: {
           select: {
             firstName: true,
             lastName: true,
+          },
+        },
+        approvedByTrainer: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
