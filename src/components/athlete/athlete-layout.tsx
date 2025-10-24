@@ -90,11 +90,11 @@ export function AthleteLayout({ children, userName }: AthleteLayoutProps) {
       {/* Mobile Sidebar */}
       <aside
         className={cn(
-          'fixed top-14 left-0 h-[calc(100vh-3.5rem)] w-64 bg-white border-r border-gray-200 z-40 transform transition-transform duration-200 ease-in-out md:hidden',
+          'fixed top-14 left-0 bottom-0 w-64 bg-white border-r border-gray-200 z-40 transform transition-transform duration-200 ease-in-out overflow-y-auto md:hidden',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <nav className="p-3 space-y-1 safe-bottom">
+        <nav className="p-3 space-y-1 pb-6">
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;

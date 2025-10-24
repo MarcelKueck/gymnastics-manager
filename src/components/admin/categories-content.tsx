@@ -167,14 +167,14 @@ export function AdminCategoriesContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Datei-Kategorien verwalten</h1>
-          <p className="text-muted-foreground">Kategorien für Datei-Uploads verwalten</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Datei-Kategorien verwalten</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Kategorien für Datei-Uploads verwalten</p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Kategorie hinzufügen
             </Button>
@@ -318,38 +318,41 @@ export function AdminCategoriesContent() {
         ) : (
           categories.map((category) => (
             <Card key={category.id}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4 flex-1">
-                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <FolderOpen className="h-6 w-6 text-primary" />
+              <CardContent className="p-4 sm:p-6">
+                <div className="space-y-4">
+                  <div className="flex items-start space-x-3 sm:space-x-4">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <FolderOpen className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold">{category.name}</h3>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                        <h3 className="font-semibold text-base">{category.name}</h3>
                         <Badge variant={category.isActive ? 'default' : 'secondary'}>
                           {category.isActive ? 'Aktiv' : 'Inaktiv'}
                         </Badge>
                       </div>
                       {category.description && (
-                        <p className="text-sm text-muted-foreground">{category.description}</p>
+                        <p className="text-sm text-muted-foreground break-words">{category.description}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
                         Sortierung: {category.sortOrder} • {category._count?.uploads || 0} Dateien
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       variant="outline"
                       size="sm"
+                      className="flex-1 sm:flex-none"
                       onClick={() => handleEdit(category)}
                     >
-                      <Edit className="h-4 w-4" />
+                      <Edit className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Bearbeiten</span>
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="flex-1 sm:flex-none"
                       onClick={() => handleToggleActive(category.id, category.isActive)}
                     >
                       {category.isActive ? 'Deaktivieren' : 'Aktivieren'}

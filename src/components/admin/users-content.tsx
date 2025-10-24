@@ -566,8 +566,8 @@ export function AdminUsersContent() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Benutzer verwalten</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-bold">Benutzer verwalten</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Verwalte alle Athleten, Trainer und Registrierungsanfragen
         </p>
       </div>
@@ -575,22 +575,25 @@ export function AdminUsersContent() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="all-athletes">
-            <User className="h-4 w-4 mr-2" />
-            Athleten ({athletes.length})
+          <TabsTrigger value="all-athletes" className="text-xs sm:text-sm">
+            <User className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden xs:inline">Athleten</span>
+            <span className="xs:hidden">Ath.</span> ({athletes.length})
           </TabsTrigger>
-          <TabsTrigger value="pending">
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Ausstehend
+          <TabsTrigger value="pending" className="text-xs sm:text-sm">
+            <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden xs:inline">Ausstehend</span>
+            <span className="xs:hidden">Aus.</span>
             {pendingAthletes.length > 0 && (
               <Badge variant="destructive" className="ml-2">
                 {pendingAthletes.length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="trainers">
-            <Shield className="h-4 w-4 mr-2" />
-            Trainer ({trainers.length})
+          <TabsTrigger value="trainers" className="text-xs sm:text-sm">
+            <Shield className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden xs:inline">Trainer</span>
+            <span className="xs:hidden">Tr.</span> ({trainers.length})
           </TabsTrigger>
         </TabsList>
 
@@ -599,7 +602,7 @@ export function AdminUsersContent() {
           <div className="flex justify-end">
             <Dialog open={isCreateAthleteDialogOpen} onOpenChange={setIsCreateAthleteDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Athlet hinzufügen
                 </Button>
@@ -824,15 +827,15 @@ export function AdminUsersContent() {
           ) : (
             athletes.map((athlete) => (
               <Card key={athlete.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4 flex-1">
-                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-6 w-6 text-primary" />
+                <CardContent className="p-4 sm:p-6">
+                  <div className="space-y-4">
+                    <div className="flex items-start space-x-3 sm:space-x-4">
+                      <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <h3 className="font-semibold">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                          <h3 className="font-semibold text-base break-words">
                             {athlete.firstName} {athlete.lastName}
                           </h3>
                           <Badge variant="default">
@@ -846,29 +849,33 @@ export function AdminUsersContent() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">{athlete.email}</p>
+                        <p className="text-sm text-muted-foreground break-words">{athlete.email}</p>
                         <p className="text-sm text-muted-foreground">
-                          {calculateAge(athlete.birthDate)} Jahre • {athlete.phone} • Mitglied seit{' '}
-                          {formatDate(athlete.createdAt)}
+                          {calculateAge(athlete.birthDate)} Jahre • {athlete.phone}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
+                          Mitglied seit {formatDate(athlete.createdAt)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
                           {athlete._count.attendanceRecords} Anwesenheiten •{' '}
                           {athlete._count.cancellations} Absagen
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() => handleOpenEditAthleteModal(athlete)}
                       >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Bearbeiten
+                        <Edit className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Bearbeiten</span>
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() => {
                           setSelectedAthleteForGroups({
                             id: athlete.id,
@@ -877,12 +884,13 @@ export function AdminUsersContent() {
                           setShowAthleteGroupsEditor(true);
                         }}
                       >
-                        <UsersIcon className="h-4 w-4 mr-1" />
-                        Gruppen
+                        <UsersIcon className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Gruppen</span>
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() => handleToggleAthleteActive(athlete.id, athlete.isApproved)}
                       >
                         {athlete.isApproved ? 'Deaktivieren' : 'Aktivieren'}
@@ -919,15 +927,15 @@ export function AdminUsersContent() {
           ) : (
             pendingAthletes.map((athlete) => (
               <Card key={athlete.id} className="border-l-4 border-l-yellow-500">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4 flex-1">
-                      <div className="h-12 w-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                        <User className="h-6 w-6 text-yellow-500" />
+                <CardContent className="p-4 sm:p-6">
+                  <div className="space-y-4">
+                    <div className="flex items-start space-x-3 sm:space-x-4">
+                      <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
+                        <User className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-500" />
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <h3 className="font-semibold">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                          <h3 className="font-semibold text-base break-words">
                             {athlete.firstName} {athlete.lastName}
                           </h3>
                           <Badge variant="secondary">
@@ -935,25 +943,29 @@ export function AdminUsersContent() {
                             Ausstehend
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">{athlete.email}</p>
+                        <p className="text-sm text-muted-foreground break-words">{athlete.email}</p>
                         <p className="text-sm text-muted-foreground">
-                          {calculateAge(athlete.birthDate)} Jahre • {athlete.phone} • Registriert am{' '}
-                          {formatDate(athlete.createdAt)}
+                          {calculateAge(athlete.birthDate)} Jahre • {athlete.phone}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Registriert am {formatDate(athlete.createdAt)}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="default"
                         size="sm"
+                        className="flex-1"
                         onClick={() => handleOpenApprovalModal(athlete)}
                       >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Konfigurieren & Genehmigen
+                        <CheckCircle className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden xs:inline">Konfigurieren & </span>Genehmigen
                       </Button>
                       <Button
                         variant="destructive"
                         size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() =>
                           handleRejectAthlete(
                             athlete.id,
@@ -961,8 +973,8 @@ export function AdminUsersContent() {
                           )
                         }
                       >
-                        <XCircle className="h-4 w-4 mr-1" />
-                        Ablehnen
+                        <XCircle className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Ablehnen</span>
                       </Button>
                     </div>
                   </div>
@@ -977,7 +989,7 @@ export function AdminUsersContent() {
           <div className="flex justify-end">
             <Dialog open={isCreateTrainerDialogOpen} onOpenChange={setIsCreateTrainerDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Trainer hinzufügen
                 </Button>
@@ -1106,19 +1118,19 @@ export function AdminUsersContent() {
           ) : (
             trainers.map((trainer) => (
               <Card key={trainer.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4 flex-1">
-                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="space-y-4">
+                    <div className="flex items-start space-x-3 sm:space-x-4">
+                      <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                         {trainer.role === 'ADMIN' ? (
-                          <Shield className="h-6 w-6 text-primary" />
+                          <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                         ) : (
-                          <User className="h-6 w-6 text-primary" />
+                          <User className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                         )}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <h3 className="font-semibold">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                          <h3 className="font-semibold text-base break-words">
                             {trainer.firstName} {trainer.lastName}
                           </h3>
                           <Badge variant={trainer.role === 'ADMIN' ? 'default' : 'secondary'}>
@@ -1128,25 +1140,27 @@ export function AdminUsersContent() {
                             {trainer.isActive ? 'Aktiv' : 'Inaktiv'}
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">{trainer.email}</p>
+                        <p className="text-sm text-muted-foreground break-words">{trainer.email}</p>
                         <p className="text-sm text-muted-foreground">
                           {trainer.phone && `${trainer.phone} • `}
                           Mitglied seit {formatDate(trainer.createdAt)}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() => handleOpenEditTrainerModal(trainer)}
                       >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Bearbeiten
+                        <Edit className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Bearbeiten</span>
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() => {
                           setSelectedTrainerForGroups({
                             id: trainer.id,
@@ -1155,12 +1169,13 @@ export function AdminUsersContent() {
                           setShowGroupsEditor(true);
                         }}
                       >
-                        <UsersIcon className="h-4 w-4 mr-1" />
-                        Gruppen
+                        <UsersIcon className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Gruppen</span>
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
+                        className="flex-1 sm:flex-none"
                         onClick={() => handleToggleTrainerActive(trainer.id, trainer.isActive)}
                       >
                         {trainer.isActive ? 'Deaktivieren' : 'Aktivieren'}
