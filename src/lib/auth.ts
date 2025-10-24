@@ -1,81 +1,92 @@
-// Save as: src/lib/auth.ts
-
-import { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/lib/prisma";
-import bcrypt from "bcrypt";
+import { NextAuthOptions } from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import bcrypt from 'bcryptjs';
+import { prisma } from '@/lib/prisma';
+import { UserRole } from '@prisma/client';
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as unknown as NextAuthOptions['adapter'],
   providers: [
     CredentialsProvider({
-      name: "credentials",
+      id: 'athlete-credentials',
+      name: 'Athlete Login',
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-        userType: { label: "User Type", type: "text" }, // 'athlete' or 'trainer'
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password required");
+          throw new Error('Email and password are required');
         }
 
-        let user;
-        let role;
-        let userType;
-
-        // First, try to find a trainer
-        const trainer = await prisma.trainer.findUnique({
-          where: { email: credentials.email },
+        const athlete = await prisma.athlete.findUnique({
+          where: { email: credentials.email.toLowerCase() },
+          include: {
+            approvedByTrainer: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
         });
 
-        if (trainer) {
-          user = trainer;
-          role = trainer.role;
-          userType = "trainer";
-
-          // Check if trainer is active
-          if (!trainer.isActive) {
-            throw new Error("Account is inactive");
-          }
-        } else {
-          // If not a trainer, try to find an athlete
-          const athlete = await prisma.athlete.findUnique({
-            where: { email: credentials.email },
-          });
-
-          if (athlete) {
-            user = athlete;
-            role = "ATHLETE";
-            userType = "athlete";
-
-            // Check if athlete is approved
-            if (!athlete.isApproved) {
-              throw new Error("Account pending approval");
-            }
-          }
+        if (!athlete) {
+          throw new Error('Invalid email or password');
         }
 
-        if (!user || !user.passwordHash) {
-          throw new Error("Invalid credentials");
+        if (!athlete.isApproved) {
+          throw new Error('Your account is pending approval');
         }
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.passwordHash
-        );
+        const isPasswordValid = await bcrypt.compare(credentials.password, athlete.passwordHash);
 
         if (!isPasswordValid) {
-          throw new Error("Invalid credentials");
+          throw new Error('Invalid email or password');
         }
 
         return {
-          id: user.id,
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          role: role || 'ATHLETE',
-          userType: userType || 'athlete',
+          id: athlete.id,
+          email: athlete.email,
+          name: `${athlete.firstName} ${athlete.lastName}`,
+          role: UserRole.ATHLETE,
+        };
+      },
+    }),
+    CredentialsProvider({
+      id: 'trainer-credentials',
+      name: 'Trainer Login',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('Email and password are required');
+        }
+
+        const trainer = await prisma.trainer.findUnique({
+          where: { email: credentials.email.toLowerCase() },
+        });
+
+        if (!trainer) {
+          throw new Error('Invalid email or password');
+        }
+
+        if (!trainer.isActive) {
+          throw new Error('Your account has been deactivated');
+        }
+
+        const isPasswordValid = await bcrypt.compare(credentials.password, trainer.passwordHash);
+
+        if (!isPasswordValid) {
+          throw new Error('Invalid email or password');
+        }
+
+        return {
+          id: trainer.id,
+          email: trainer.email,
+          name: `${trainer.firstName} ${trainer.lastName}`,
+          role: trainer.role,
         };
       },
     }),
@@ -83,27 +94,25 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
-        token.userType = user.userType;
         token.id = user.id;
+        token.role = user.role;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.role = token.role as string;
-        session.user.userType = token.userType as string;
         session.user.id = token.id as string;
+        session.user.role = token.role as UserRole;
       }
       return session;
     },
   },
   pages: {
-    signIn: "/login",
-    error: "/login",
+    signIn: '/login',
+    error: '/login',
   },
   session: {
-    strategy: "jwt",
+    strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   secret: process.env.NEXTAUTH_SECRET,

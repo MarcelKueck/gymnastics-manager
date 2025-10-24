@@ -1,7 +1,0 @@
-export default function PendingApprovalsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return <>{children}</>;
-}

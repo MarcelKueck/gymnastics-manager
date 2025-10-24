@@ -1,127 +1,91 @@
 'use client';
 
-import { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { Menu, X, LayoutDashboard, Calendar, ClipboardList, UserCircle, LogOut, FileText } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  Home,
+  Calendar,
+  ClipboardList,
+  BarChart3,
+  FileText,
+  User,
+  LogOut,
+} from 'lucide-react';
 
-const navigation = [
-  { name: 'Dashboard', href: '/athlete/dashboard', icon: LayoutDashboard },
-  { name: 'Trainingstermine', href: '/athlete/schedule', icon: Calendar },
-  { name: 'Dateien', href: '/athlete/files', icon: FileText },
-  { name: 'Anwesenheit', href: '/athlete/attendance', icon: ClipboardList },
-  { name: 'Profil', href: '/athlete/profile', icon: UserCircle },
-];
+interface AthleteLayoutProps {
+  children: React.ReactNode;
+  userName: string;
+}
 
-export default function AthleteLayout({ children }: { children: React.ReactNode }) {
+export function AthleteLayout({ children, userName }: AthleteLayoutProps) {
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleSignOut = async () => {
-    await signOut({ callbackUrl: '/login' });
-  };
+  const navigation = [
+    { name: 'Dashboard', href: '/athlete/dashboard', icon: Home },
+    { name: 'Trainingsplan', href: '/athlete/schedule', icon: Calendar },
+    { name: 'Anwesenheit', href: '/athlete/attendance', icon: ClipboardList },
+    { name: 'Statistiken', href: '/athlete/statistics', icon: BarChart3 },
+    { name: 'Dateien', href: '/athlete/files', icon: FileText },
+    { name: 'Profil', href: '/athlete/profile', icon: User },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
-      <div className="lg:hidden text-white sv-esting-sidebar">
-        <div className="flex items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold">Athletenportal</h1>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-md transition-colors sv-esting-nav-item"
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <nav className="px-2 pb-3 space-y-1 border-t" style={{ borderColor: 'rgba(255, 255, 255, 0.3)' }}>
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium sv-esting-nav-item ${
-                    isActive ? 'sv-esting-nav-item-active' : ''
-                  }`}
-                  style={{ color: 'white' }}
-                >
-                  <Icon size={20} />
-                  {item.name}
-                </Link>
-              );
-            })}
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                handleSignOut();
-              }}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium sv-esting-nav-item w-full"
-              style={{ color: 'white' }}
-            >
-              <LogOut size={20} />
-              Abmelden
-            </button>
-          </nav>
-        )}
-      </div>
-
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto sv-esting-sidebar">
-          <div className="flex items-center flex-shrink-0 px-4">
-            <h1 className="text-xl font-bold text-white">Athletenportal</h1>
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <h1 className="text-xl font-bold text-primary">SV Esting Turnen</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-700">Hallo, {userName}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => signOut({ callbackUrl: '/login' })}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Abmelden
+              </Button>
+            </div>
           </div>
-          <nav className="mt-8 flex-1 flex flex-col px-2 space-y-1">
+        </div>
+      </header>
+
+      <div className="flex">
+        {/* Sidebar */}
+        <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-4rem)]">
+          <nav className="p-4 space-y-1">
             {navigation.map((item) => {
-              const Icon = item.icon;
               const isActive = pathname === item.href;
+              const Icon = item.icon;
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium sv-esting-nav-item ${
-                    isActive ? 'sv-esting-nav-item-active' : ''
-                  }`}
-                  style={{ color: 'white' }}
+                  className={cn(
+                    'flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                    isActive
+                      ? 'bg-primary text-white'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  )}
                 >
-                  <Icon size={20} />
+                  <Icon className="mr-3 h-5 w-5" />
                   {item.name}
                 </Link>
               );
             })}
           </nav>
-          <div className="px-2">
-            <Button
-              onClick={handleSignOut}
-              variant="outline"
-              className="w-full justify-start gap-3 bg-transparent border sv-esting-logout-btn"
-              style={{ 
-                color: 'white', 
-                borderColor: 'rgba(255, 255, 255, 0.4)' 
-              }}
-            >
-              <LogOut size={20} />
-              Abmelden
-            </Button>
-          </div>
-        </div>
-      </div>
+        </aside>
 
-      {/* Main Content */}
-      <div className="lg:pl-64">
-        <main className="py-6 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            {children}
-          </div>
+        {/* Main content */}
+        <main className="flex-1 p-8">
+          <div className="max-w-7xl mx-auto">{children}</div>
         </main>
       </div>
     </div>

@@ -1,48 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api/authHelpers';
+import { fileService } from '@/lib/services/fileService';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { asyncHandler } from '@/lib/api/errorHandlers';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: uploadId } = await params;
-    const session = await getServerSession(authOptions);
+export const GET = asyncHandler(
+  async (request: Request, { params }: { params: { id: string } }) => {
+    await requireAuth();
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get upload details
-    const upload = await prisma.upload.findUnique({
-      where: { id: uploadId, isActive: true },
-    });
+    const upload = await fileService.getFile(params.id);
 
     if (!upload) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      return new NextResponse('Datei nicht gefunden', { status: 404 });
     }
 
-    // Read file
-    const fullPath = join(process.cwd(), 'public', upload.filePath);
-    const fileBuffer = await readFile(fullPath);
+    const fileBuffer = await readFile(upload.filePath);
 
-    // Return file
-    return new NextResponse(fileBuffer as any, {
+    return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': upload.mimeType,
         'Content-Disposition': `attachment; filename="${upload.fileName}"`,
         'Content-Length': upload.fileSize.toString(),
       },
     });
-  } catch (error) {
-    console.error('Download training plan error:', error);
-    return NextResponse.json(
-      { error: 'Failed to download training plan' },
-      { status: 500 }
-    );
   }
-}
+);

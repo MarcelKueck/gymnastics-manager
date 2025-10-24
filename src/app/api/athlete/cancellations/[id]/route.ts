@@ -1,66 +1,84 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAthlete } from '@/lib/api/authHelpers';
+import { attendanceService } from '@/lib/services/attendanceService';
+import { settingsService } from '@/lib/services/settingsService';
+import { asyncHandler } from '@/lib/api/errorHandlers';
+import { messageResponse } from '@/lib/api/responseHelpers';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 
-// DELETE - Undo cancellation (before session date)
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: cancellationId } = await params;
-  try {
-    const session = await getServerSession(authOptions);
+const updateCancellationSchema = z.object({
+  reason: z.string().min(10, 'Grund muss mindestens 10 Zeichen lang sein'),
+});
 
-    if (!session?.user?.id || session.user.role !== 'ATHLETE') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+// Check if cancellation can be modified (deadline from settings)
+async function canModifyCancellation(cancellationId: string, athleteId: string) {
+  const cancellation = await prisma.cancellation.findUnique({
+    where: { id: cancellationId },
+    include: { trainingSession: true },
+  });
 
-    const athleteId = session.user.id;
+  if (!cancellation) {
+    throw new Error('Absage nicht gefunden');
+  }
 
-    // Get cancellation with session info
-    const cancellation = await prisma.cancellation.findUnique({
-      where: { id: cancellationId },
-      include: {
-        trainingSession: true,
-      },
-    });
+  if (cancellation.athleteId !== athleteId) {
+    throw new Error('Keine Berechtigung');
+  }
 
-    if (!cancellation) {
-      return NextResponse.json(
-        { error: 'Cancellation not found' },
-        { status: 404 }
-      );
-    }
+  if (!cancellation.isActive) {
+    throw new Error('Diese Absage ist nicht mehr aktiv');
+  }
 
-    // Check ownership
-    if (cancellation.athleteId !== athleteId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+  const session = cancellation.trainingSession;
+  const sessionDateTime = new Date(session.date);
+  const startTime = session.startTime || '00:00';
+  const [hours, minutes] = startTime.split(':').map(Number);
+  sessionDateTime.setHours(hours, minutes, 0, 0);
 
-    // Cannot undo if session is in the past
-    if (new Date(cancellation.trainingSession.date) < new Date()) {
-      return NextResponse.json(
-        { error: 'Cannot undo cancellation for past sessions' },
-        { status: 400 }
-      );
-    }
+  // Get deadline from settings
+  const deadlineHours = await settingsService.getCancellationDeadlineHours();
+  const deadline = new Date(sessionDateTime.getTime() - deadlineHours * 60 * 60 * 1000);
+  const now = new Date();
 
-    // Mark as inactive (undo)
-    await prisma.cancellation.update({
-      where: { id: cancellationId },
-      data: {
-        isActive: false,
-        undoneAt: new Date(),
-      },
-    });
-
-    return NextResponse.json({ message: 'Cancellation undone successfully' });
-  } catch (error) {
-    console.error('Undo cancellation API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+  if (now >= deadline) {
+    throw new Error(
+      `Absagen können nur bis ${deadlineHours} Stunden vor Trainingsbeginn bearbeitet werden`
     );
   }
+
+  return cancellation;
 }
+
+export const PUT = asyncHandler(
+  async (request: Request, { params }: { params: { id: string } }) => {
+    const session = await requireAthlete();
+    const body = await request.json();
+
+    const validatedData = updateCancellationSchema.parse(body);
+
+    // Verify modification is allowed
+    await canModifyCancellation(params.id, session.user.id);
+
+    // Update the cancellation reason
+    await prisma.cancellation.update({
+      where: { id: params.id },
+      data: { reason: validatedData.reason },
+    });
+
+    return messageResponse('Absage erfolgreich aktualisiert');
+  }
+);
+
+export const DELETE = asyncHandler(
+  async (request: Request, { params }: { params: { id: string } }) => {
+    const session = await requireAthlete();
+
+    // Verify modification is allowed
+    await canModifyCancellation(params.id, session.user.id);
+
+    // Undo the cancellation
+    await attendanceService.undoCancellation(params.id);
+
+    return messageResponse('Absage erfolgreich rückgängig gemacht');
+  }
+);

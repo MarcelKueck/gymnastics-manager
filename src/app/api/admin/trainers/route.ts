@@ -1,38 +1,37 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { requireAdmin } from '@/lib/api/authHelpers';
+import { trainerService } from '@/lib/services/trainerService';
+import { asyncHandler } from '@/lib/api/errorHandlers';
+import { successResponse, messageResponse } from '@/lib/api/responseHelpers';
+import { z } from 'zod';
+import { UserRole } from '@prisma/client';
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
+const createTrainerSchema = z.object({
+  email: z.string().email('Ungültige E-Mail-Adresse'),
+  password: z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein'),
+  firstName: z.string().min(1, 'Vorname erforderlich'),
+  lastName: z.string().min(1, 'Nachname erforderlich'),
+  phone: z.string().min(1, 'Telefonnummer erforderlich'),
+  role: z.nativeEnum(UserRole).optional(),
+});
 
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = asyncHandler(async (request: Request) => {
+  await requireAdmin();
+  const { searchParams } = new URL(request.url);
 
-    const trainers = await prisma.trainer.findMany({
-      where: {
-        isActive: true,
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: true,
-      },
-      orderBy: {
-        lastName: 'asc',
-      },
-    });
+  const activeOnly = searchParams.get('activeOnly') !== 'false';
 
-    return NextResponse.json({ trainers });
-  } catch (error) {
-    console.error('Error fetching trainers:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch trainers' },
-      { status: 500 }
-    );
-  }
-}
+  const trainers = await trainerService.getAll(activeOnly);
+
+  return successResponse(trainers);
+});
+
+export const POST = asyncHandler(async (request: Request) => {
+  await requireAdmin();
+  const body = await request.json();
+
+  const validatedData = createTrainerSchema.parse(body);
+
+  const trainer = await trainerService.create(validatedData);
+
+  return successResponse(trainer, 201);
+});

@@ -1,15 +1,13 @@
-// Save as: src/app/layout.tsx
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { Providers } from '@/components/shared/providers';
 
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import { Providers } from "@/components/Providers";
-
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Gymnastics Training Manager",
-  description: "Training management system for gymnastics clubs",
+  title: 'SV Esting Turnen - Trainingsmanagement',
+  description: 'Trainingsmanagement-System für SV Esting Turnen',
 };
 
 export default function RootLayout({

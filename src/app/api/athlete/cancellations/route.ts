@@ -1,133 +1,108 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAthlete } from '@/lib/api/authHelpers';
+import { attendanceService } from '@/lib/services/attendanceService';
+import { asyncHandler } from '@/lib/api/errorHandlers';
+import { successResponse, messageResponse } from '@/lib/api/responseHelpers';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 
-// POST - Cancel a session with mandatory reason
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
+const createCancellationSchema = z.object({
+  trainingSessionId: z.string().min(1),
+  reason: z.string().min(10, 'Grund muss mindestens 10 Zeichen lang sein'),
+});
 
-    if (!session?.user?.id || session.user.role !== 'ATHLETE') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+const bulkCancellationSchema = z.object({
+  startDate: z.string(),
+  endDate: z.string(),
+  reason: z.string().min(10, 'Grund muss mindestens 10 Zeichen lang sein'),
+  recurringTrainingIds: z.array(z.string().min(1)).optional(), // Optional: filter by specific trainings
+});
 
-    const athleteId = session.user.id;
-    const body = await request.json();
-    const { trainingSessionId, reason } = body;
+export const GET = asyncHandler(async (request: Request) => {
+  const session = await requireAthlete();
 
-    // Validate inputs
-    if (!trainingSessionId || !reason) {
-      return NextResponse.json(
-        { error: 'Training session ID and reason are required' },
-        { status: 400 }
-      );
-    }
+  const cancellations = await attendanceService.getActiveCancellations(session.user.id);
 
-    // Validate reason length (minimum 10 characters)
-    if (reason.trim().length < 10) {
-      return NextResponse.json(
-        { error: 'Reason must be at least 10 characters long' },
-        { status: 400 }
-      );
-    }
+  return successResponse(cancellations);
+});
 
-    // Check if session exists and is in the future
-    const trainingSession = await prisma.trainingSession.findUnique({
-      where: { id: trainingSessionId },
-    });
+export const POST = asyncHandler(async (request: Request) => {
+  const session = await requireAthlete();
+  const body = await request.json();
+  const { searchParams } = new URL(request.url);
+  const bulk = searchParams.get('bulk') === 'true';
 
-    if (!trainingSession) {
-      return NextResponse.json(
-        { error: 'Training session not found' },
-        { status: 404 }
-      );
-    }
+  if (bulk) {
+    // Bulk cancellation for date range
+    const validatedData = bulkCancellationSchema.parse(body);
+    const startDate = new Date(validatedData.startDate);
+    const endDate = new Date(validatedData.endDate);
 
-    // Cannot cancel past sessions
-    if (new Date(trainingSession.date) < new Date()) {
-      return NextResponse.json(
-        { error: 'Cannot cancel past training sessions' },
-        { status: 400 }
-      );
-    }
-
-    // Check if already cancelled
-    const existingCancellation = await prisma.cancellation.findFirst({
+    // Get athlete's sessions in the date range
+    const sessions = await prisma.trainingSession.findMany({
       where: {
-        athleteId,
-        trainingSessionId,
-        isActive: true,
-      },
-    });
-
-    if (existingCancellation) {
-      return NextResponse.json(
-        { error: 'Session already cancelled' },
-        { status: 400 }
-      );
-    }
-
-    // Create cancellation
-    const cancellation = await prisma.cancellation.create({
-      data: {
-        athleteId,
-        trainingSessionId,
-        reason: reason.trim(),
-      },
-    });
-
-    return NextResponse.json(
-      { 
-        message: 'Training session cancelled successfully',
-        cancellation 
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error('Cancel session API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-// GET - Get athlete's cancellations
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id || session.user.role !== 'ATHLETE') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const athleteId = session.user.id;
-
-    const cancellations = await prisma.cancellation.findMany({
-      where: {
-        athleteId,
-        isActive: true,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+        OR: [
+          {
+            groups: {
+              some: {
+                trainingGroup: {
+                  athleteAssignments: {
+                    some: { athleteId: session.user.id },
+                  },
+                },
+              },
+            },
+          },
+          {
+            sessionAthleteAssignments: {
+              some: { athleteId: session.user.id },
+            },
+          },
+        ],
+        ...(validatedData.recurringTrainingIds && validatedData.recurringTrainingIds.length > 0
+          ? { recurringTrainingId: { in: validatedData.recurringTrainingIds } }
+          : {}),
       },
       include: {
-        trainingSession: {
-          select: {
-            date: true,
-            dayOfWeek: true,
-            startTime: true,
-            endTime: true,
+        cancellations: {
+          where: {
+            athleteId: session.user.id,
+            isActive: true,
           },
         },
       },
-      orderBy: { cancelledAt: 'desc' },
     });
 
-    return NextResponse.json({ cancellations });
-  } catch (error) {
-    console.error('Get cancellations API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    // Filter out already cancelled sessions and sessions in the past
+    const now = new Date();
+    const sessionsToCancel = sessions.filter(
+      (s) => s.date >= now && s.cancellations.length === 0
     );
+
+    // Create cancellations for all sessions
+    const cancellations = await Promise.all(
+      sessionsToCancel.map((s) =>
+        attendanceService.createCancellation(session.user.id, s.id, validatedData.reason)
+      )
+    );
+
+    return messageResponse(
+      `${cancellations.length} Trainingseinheiten erfolgreich abgesagt`,
+      201
+    );
+  } else {
+    // Single cancellation
+    const validatedData = createCancellationSchema.parse(body);
+
+    await attendanceService.createCancellation(
+      session.user.id,
+      validatedData.trainingSessionId,
+      validatedData.reason
+    );
+
+    return messageResponse('Absage erfolgreich erstellt', 201);
   }
-}
+});

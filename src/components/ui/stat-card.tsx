@@ -1,69 +1,51 @@
-import { LucideIcon } from 'lucide-react';
+import * as React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from './card';
+import { cn } from '@/lib/utils';
 
 interface StatCardProps {
   title: string;
   value: string | number;
-  icon: LucideIcon;
-  color: 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'red';
-  subtitle?: string;
+  description?: string;
+  icon?: React.ReactNode;
+  trend?: {
+    value: number;
+    isPositive: boolean;
+  };
+  className?: string;
 }
 
-const colorClasses = {
-  blue: {
-    gradient: 'from-blue-50 to-blue-100',
-    border: 'border-blue-200',
-    icon: 'bg-blue-500',
-    text: 'text-blue-700',
-  },
-  green: {
-    gradient: 'from-green-50 to-green-100',
-    border: 'border-green-200',
-    icon: 'bg-green-500',
-    text: 'text-green-700',
-  },
-  purple: {
-    gradient: 'from-purple-50 to-purple-100',
-    border: 'border-purple-200',
-    icon: 'bg-purple-500',
-    text: 'text-purple-700',
-  },
-  orange: {
-    gradient: 'from-orange-50 to-orange-100',
-    border: 'border-orange-200',
-    icon: 'bg-orange-500',
-    text: 'text-orange-700',
-  },
-  teal: {
-    gradient: 'from-teal-50 to-teal-100',
-    border: 'border-teal-200',
-    icon: 'bg-teal-500',
-    text: 'text-teal-700',
-  },
-  red: {
-    gradient: 'from-red-50 to-red-100',
-    border: 'border-red-200',
-    icon: 'bg-red-500',
-    text: 'text-red-700',
-  },
-};
-
-export function StatCard({ title, value, icon: Icon, color, subtitle }: StatCardProps) {
-  const colors = colorClasses[color];
-
+export const StatCard: React.FC<StatCardProps> = ({
+  title,
+  value,
+  description,
+  icon,
+  trend,
+  className,
+}) => {
   return (
-    <div
-      className={`bg-gradient-to-br ${colors.gradient} rounded-lg p-4 border ${colors.border}`}
-    >
-      <div className="flex items-center gap-3">
-        <div className={`${colors.icon} rounded-full p-3`}>
-          <Icon className="h-6 w-6 text-white" />
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">{title}</p>
-          <p className={`text-2xl font-bold ${colors.text}`}>{value}</p>
-          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
-        </div>
-      </div>
-    </div>
+    <Card className={cn('', className)}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon && <div className="h-4 w-4 text-muted-foreground">{icon}</div>}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+        {trend && (
+          <div className="flex items-center mt-2 text-xs">
+            <span
+              className={cn(
+                'font-medium',
+                trend.isPositive ? 'text-green-600' : 'text-red-600'
+              )}
+            >
+              {trend.isPositive ? '+' : ''}
+              {trend.value}%
+            </span>
+            <span className="text-muted-foreground ml-1">gegenüber letztem Monat</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
-}
+};

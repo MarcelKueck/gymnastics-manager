@@ -1,77 +1,12 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { startOfDay, endOfDay } from 'date-fns';
+import { requireTrainer } from '@/lib/api/authHelpers';
+import { statisticsService } from '@/lib/services/statisticsService';
+import { asyncHandler } from '@/lib/api/errorHandlers';
+import { successResponse } from '@/lib/api/responseHelpers';
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
+export const GET = asyncHandler(async (request: Request) => {
+  const session = await requireTrainer();
 
-    if (!session || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const stats = await statisticsService.getTrainerDashboardStats(session.user.id);
 
-    // Get total active athletes
-    const totalAthletes = await prisma.athlete.count({
-      where: { isApproved: true },
-    });
-
-    // Get pending approvals
-    const pendingApprovals = await prisma.athlete.count({
-      where: { isApproved: false },
-    });
-
-    // Get today's sessions
-    const today = new Date();
-    const todaySessions = await prisma.trainingSession.count({
-      where: {
-        date: {
-          gte: startOfDay(today),
-          lte: endOfDay(today),
-        },
-      },
-    });
-
-    // Get athletes with 3+ unexcused absences (alert count)
-    const athletesWithAlerts = await prisma.athlete.findMany({
-      where: {
-        isApproved: true,
-        attendanceRecords: {
-          some: {
-            status: 'ABSENT_UNEXCUSED',
-          },
-        },
-      },
-      select: {
-        id: true,
-        attendanceRecords: {
-          where: {
-            status: 'ABSENT_UNEXCUSED',
-          },
-          select: {
-            id: true,
-          },
-        },
-      },
-    });
-
-    const alertCount = athletesWithAlerts.filter(
-      (athlete) => athlete.attendanceRecords.length >= 3
-    ).length;
-
-    return NextResponse.json({
-      totalAthletes,
-      pendingApprovals,
-      todaySessions,
-      alertCount,
-      userRole: session.user.role, // Include role to determine UI features
-    });
-  } catch (error) {
-    console.error('Dashboard stats error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch dashboard stats' },
-      { status: 500 }
-    );
-  }
-}
+  return successResponse(stats);
+});

@@ -1,117 +1,30 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { requireTrainer } from '@/lib/api/authHelpers';
+import { trainerService } from '@/lib/services/trainerService';
+import { asyncHandler } from '@/lib/api/errorHandlers';
+import { successResponse, messageResponse } from '@/lib/api/responseHelpers';
+import { z } from 'zod';
 
-// GET - Get trainer profile
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
+const updateProfileSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  phone: z.string().optional(),
+});
 
-    if (!session?.user?.id || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = asyncHandler(async (request: Request) => {
+  const session = await requireTrainer();
 
-    const trainer = await prisma.trainer.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+  const trainer = await trainerService.getDetails(session.user.id);
 
-    if (!trainer) {
-      return NextResponse.json({ error: 'Trainer not found' }, { status: 404 });
-    }
+  return successResponse(trainer);
+});
 
-    return NextResponse.json({ trainer });
-  } catch (error) {
-    console.error('Get profile API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
+export const PUT = asyncHandler(async (request: Request) => {
+  const session = await requireTrainer();
+  const body = await request.json();
 
-// PUT - Update editable profile fields (contact info only)
-export async function PUT(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
+  const validatedData = updateProfileSchema.parse(body);
 
-    if (!session?.user?.id || (session.user.role !== 'TRAINER' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  await trainerService.updateProfile(session.user.id, validatedData);
 
-    const body = await request.json();
-    const { email, phone } = body;
-
-    // Validate email format
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json(
-        { error: 'Invalid email format' },
-        { status: 400 }
-      );
-    }
-
-    // Check if email is already taken by another user
-    if (email && email !== session.user.email) {
-      const existingTrainer = await prisma.trainer.findFirst({
-        where: {
-          email,
-          id: { not: session.user.id },
-        },
-      });
-
-      if (existingTrainer) {
-        return NextResponse.json(
-          { error: 'Email already in use' },
-          { status: 400 }
-        );
-      }
-
-      // Also check athlete table
-      const existingAthlete = await prisma.athlete.findFirst({
-        where: { email },
-      });
-
-      if (existingAthlete) {
-        return NextResponse.json(
-          { error: 'Email already in use' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Update only editable fields
-    const updatedTrainer = await prisma.trainer.update({
-      where: { id: session.user.id },
-      data: {
-        email: email || undefined,
-        phone: phone || undefined,
-      },
-      select: {
-        email: true,
-        phone: true,
-      },
-    });
-
-    return NextResponse.json({
-      message: 'Profile updated successfully',
-      trainer: updatedTrainer,
-    });
-  } catch (error) {
-    console.error('Update profile API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
+  return messageResponse('Profil erfolgreich aktualisiert');
+});

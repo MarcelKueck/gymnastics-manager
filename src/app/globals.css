@@ -1,132 +1,36 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* SV Esting Primary Color Styles */
-.sv-esting-primary {
-  background-color: #509f28;
+@layer base {
+    :root {
+        --background: 0 0% 100%;
+        --foreground: 222.2 84% 4.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 222.2 84% 4.9%;
+        --primary: 221.2 83.2% 53.3%;
+        --primary-foreground: 210 40% 98%;
+        --secondary: 210 40% 96.1%;
+        --secondary-foreground: 222.2 47.4% 11.2%;
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+        --accent: 210 40% 96.1%;
+        --accent-foreground: 222.2 47.4% 11.2%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 210 40% 98%;
+        --border: 214.3 31.8% 91.4%;
+        --input: 214.3 31.8% 91.4%;
+        --ring: 221.2 83.2% 53.3%;
+        --radius: 0.5rem;
+    }
 }
 
-.sv-esting-primary:hover:not(:disabled) {
-  background-color: #3d7a1f;
-}
+@layer base {
+    * {
+        @apply border-border;
+    }
 
-/* SV Esting Sidebar Styles */
-.sv-esting-sidebar {
-  background-color: #509f28;
-}
-
-.sv-esting-nav-item {
-  transition: background-color 0.2s ease;
-}
-
-.sv-esting-nav-item:hover {
-  background-color: #3d7a1f;
-}
-
-.sv-esting-nav-item-active {
-  background-color: #3d7a1f;
-}
-
-.sv-esting-logout-btn:hover {
-  background-color: #3d7a1f !important;
-  border-color: rgba(255, 255, 255, 0.6) !important;
-}
-
-/* Custom animations for toasts and modals */
-@keyframes slide-in {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scale-in {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.animate-slide-in {
-  animation: slide-in 0.3s ease-out;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.2s ease-out;
-}
-
-.animate-scale-in {
-  animation: scale-in 0.2s ease-out;
-}
-
-/* Smooth transitions for interactive elements */
-button,
-a {
-  transition: all 0.15s ease-in-out;
-}
-
-/* Focus styles for accessibility - using SV Esting primary color */
-:focus-visible {
-  outline: 2px solid #509f28;
-  outline-offset: 2px;
-}
-
-/* Remove default focus outline but keep for keyboard users */
-:focus:not(:focus-visible) {
-  outline: none;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-/* Prevent iOS zoom on input focus */
-@supports (-webkit-touch-callout: none) {
-
-  input,
-  select,
-  textarea {
-    font-size: 16px !important;
-  }
-}
-
-/* Print styles */
-@media print {
-  .no-print {
-    display: none !important;
-  }
+    body {
+        @apply bg-background text-foreground;
+    }
 }

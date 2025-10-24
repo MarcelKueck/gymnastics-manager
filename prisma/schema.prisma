@@ -1,6 +1,4 @@
-// This is your Prisma schema file
-// Save this as: prisma/schema.prisma
-
+// Database schema for Gymnastics Manager V2
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,7 +8,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User roles enum
+// ============================================================================
+// ENUMS
+// ============================================================================
+
 enum UserRole {
   ATHLETE
   TRAINER
@@ -31,8 +32,12 @@ enum YouthCategory {
 
 enum DayOfWeek {
   MONDAY
+  TUESDAY
+  WEDNESDAY
   THURSDAY
   FRIDAY
+  SATURDAY
+  SUNDAY
 }
 
 enum RecurrenceInterval {
@@ -47,23 +52,11 @@ enum AttendanceStatus {
   ABSENT_EXCUSED
 }
 
-// Upload Category - ADMIN MANAGED
-model UploadCategory {
-  id          String  @id @default(cuid())
-  name        String  @unique // e.g., "Kraftziele", "Dehnübungen"
-  description String?
-  sortOrder   Int     @default(0) // For ordering categories
-  isActive    Boolean @default(true)
+// ============================================================================
+// USER MODELS
+// ============================================================================
 
-  uploads Upload[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([isActive, sortOrder])
-}
-
-// Main Athlete model (unified account)
+// Main Athlete model
 model Athlete {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -74,14 +67,14 @@ model Athlete {
   gender       Gender
   phone        String
 
-  // Optional guardian information
+  // Guardian information (for minors)
   guardianName          String?
   guardianEmail         String?
   guardianPhone         String?
   emergencyContactName  String?
   emergencyContactPhone String?
 
-  // Coach-managed training configuration
+  // Training configuration (coach-managed)
   youthCategory            YouthCategory @default(F)
   competitionParticipation Boolean       @default(false)
   hasDtbId                 Boolean       @default(false)
@@ -93,15 +86,15 @@ model Athlete {
   approvedAt        DateTime?
   configuredAt      DateTime?
 
-  // Athlete preferences
+  // Preferences
   autoConfirmFutureSessions Boolean @default(false)
 
   // Relationships
-  groupAssignments             AthleteGroupAssignment[]
   recurringTrainingAssignments RecurringTrainingAthleteAssignment[]
+  sessionAthleteAssignments    SessionAthleteAssignment[]
   cancellations                Cancellation[]
   attendanceRecords            AttendanceRecord[]
-  sessionAthleteAssignments    SessionAthleteAssignment[] // For one-time session-specific assignments
+  absenceAlerts                AbsenceAlert[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,10 +102,10 @@ model Athlete {
   @@index([email])
   @@index([isApproved])
   @@index([lastName])
-  @@index([birthDate]) // For age group calculations
+  @@index([birthDate])
 }
 
-// Trainer account
+// Trainer/Admin account
 model Trainer {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -124,72 +117,80 @@ model Trainer {
   isActive     Boolean  @default(true)
 
   // Relationships
-  approvedAthletes Athlete[]          @relation("AthleteApprovals")
-  uploads          Upload[]
-  attendanceMarked AttendanceRecord[]
-  auditLogs        AuditLog[]
-
-  // Legacy group assignments
-  legacyGroupAssignments AthleteGroupAssignment[] @relation("LegacyGroupAssignments")
-
-  // New recurring training relationships
-  createdRecurringTrainings    RecurringTraining[]                  @relation("RecurringTrainingCreator")
-  recurringTrainingAssignments RecurringTrainingTrainerAssignment[] @relation("RecurringTrainingAssignments")
-  recurringAthleteAssignments  RecurringTrainingAthleteAssignment[]
-  trainerAssignmentsCreated    RecurringTrainingTrainerAssignment[] @relation("TrainerAssignmentCreator")
-
-  // Session-specific assignments
-  sessionGroupAssignments     SessionGroupTrainerAssignment[]
-  sessionAthleteReassignments SessionAthleteAssignment[]      @relation("SessionAthleteReassignments")
-
-  // Monthly hours summaries
-  monthlyHoursSummaries         MonthlyTrainerSummary[] @relation("TrainerMonthlySummaries")
-  modifiedMonthlyHoursSummaries MonthlyTrainerSummary[] @relation("TrainerSummaryModifier")
+  approvedAthletes              Athlete[]                            @relation("AthleteApprovals")
+  createdRecurringTrainings     RecurringTraining[]                  @relation("RecurringTrainingCreator")
+  recurringTrainingAssignments  RecurringTrainingTrainerAssignment[] @relation("RecurringTrainingAssignments")
+  recurringAthleteAssignments   RecurringTrainingAthleteAssignment[] @relation("AthleteAssignmentCreator")
+  trainerAssignmentsCreated     RecurringTrainingTrainerAssignment[] @relation("TrainerAssignmentCreator")
+  sessionGroupAssignments       SessionGroupTrainerAssignment[]
+  sessionAthleteReassignments   SessionAthleteAssignment[]           @relation("SessionAthleteReassignments")
+  uploads                       Upload[]
+  attendanceMarked              AttendanceRecord[]
+  auditLogs                     AuditLog[]
+  monthlyHoursSummaries         MonthlyTrainerSummary[]              @relation("TrainerMonthlySummaries")
+  modifiedMonthlyHoursSummaries MonthlyTrainerSummary[]              @relation("TrainerSummaryModifier")
+  modifiedSystemSettings        SystemSettings[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([email])
   @@index([role])
+  @@index([isActive])
 }
 
-// Recurring Training Template - ADMIN ONLY
+// ============================================================================
+// TRAINING STRUCTURE MODELS
+// ============================================================================
+
+// Upload Category (admin-managed file categories)
+model UploadCategory {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  uploads Upload[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+// Recurring Training Template (admin-managed)
 model RecurringTraining {
-  id        String    @id @default(cuid())
-  name      String // e.g., "Montag - 1. Stunde"
-  dayOfWeek DayOfWeek
-  startTime String // e.g., "17:00"
-  endTime   String // e.g., "18:30"
+  id         String             @id @default(cuid())
+  name       String
+  dayOfWeek  DayOfWeek
+  startTime  String
+  endTime    String
+  recurrence RecurrenceInterval @default(WEEKLY)
+  isActive   Boolean            @default(true)
 
-  recurrenceInterval RecurrenceInterval @default(WEEKLY)
-  startDate          DateTime // When this template starts generating sessions
-  endDate            DateTime? // Optional: when to stop generating
-
-  isActive Boolean @default(true)
+  // Creator
+  createdBy        String
+  createdByTrainer Trainer @relation("RecurringTrainingCreator", fields: [createdBy], references: [id])
 
   // Relationships
-  groups   TrainingGroup[] // A recurring training can have multiple named groups
-  sessions TrainingSession[]
+  groups           TrainingGroup[]
+  trainingSessions TrainingSession[]
 
-  createdBy        String
-  createdByTrainer Trainer  @relation("RecurringTrainingCreator", fields: [createdBy], references: [id])
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([dayOfWeek])
   @@index([isActive])
-  @@index([startDate])
 }
 
-// Training Group - Named groups within a recurring training
+// Training Group within a recurring training
 model TrainingGroup {
   id                  String            @id @default(cuid())
   recurringTrainingId String
   recurringTraining   RecurringTraining @relation(fields: [recurringTrainingId], references: [id], onDelete: Cascade)
-
-  name        String // e.g., "Anfänger", "Fortgeschrittene", "Wettkampf"
-  description String? // Optional description
-  sortOrder   Int     @default(0) // For ordering groups within a session
+  name                String
+  sortOrder           Int               @default(0)
 
   // Relationships
   athleteAssignments RecurringTrainingAthleteAssignment[]
@@ -203,7 +204,7 @@ model TrainingGroup {
   @@index([recurringTrainingId])
 }
 
-// Athlete assignment to recurring training group - ADMIN/TRAINER MANAGED
+// Athlete assignment to training group (recurring)
 model RecurringTrainingAthleteAssignment {
   id              String        @id @default(cuid())
   trainingGroupId String
@@ -211,8 +212,9 @@ model RecurringTrainingAthleteAssignment {
   athleteId       String
   athlete         Athlete       @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
+  // Assignment metadata
   assignedBy        String
-  assignedByTrainer Trainer  @relation(fields: [assignedBy], references: [id])
+  assignedByTrainer Trainer  @relation("AthleteAssignmentCreator", fields: [assignedBy], references: [id])
   assignedAt        DateTime @default(now())
 
   createdAt DateTime @default(now())
@@ -222,19 +224,20 @@ model RecurringTrainingAthleteAssignment {
   @@index([athleteId])
 }
 
-// Trainer assignment to recurring training group - ADMIN ONLY
+// Trainer assignment to training group (recurring)
 model RecurringTrainingTrainerAssignment {
   id              String        @id @default(cuid())
   trainingGroupId String
   trainingGroup   TrainingGroup @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
   trainerId       String
   trainer         Trainer       @relation("RecurringTrainingAssignments", fields: [trainerId], references: [id], onDelete: Cascade)
-  isPrimary       Boolean       @default(false) // Primary or secondary trainer
+  isPrimary       Boolean       @default(true)
 
-  // Optional: Override for specific sessions
-  effectiveFrom  DateTime? // If set, applies from this date forward
-  effectiveUntil DateTime? // If set, applies until this date
+  // Optional date range for assignment
+  effectiveFrom  DateTime?
+  effectiveUntil DateTime?
 
+  // Assignment metadata
   assignedBy        String
   assignedByTrainer Trainer  @relation("TrainerAssignmentCreator", fields: [assignedBy], references: [id])
   assignedAt        DateTime @default(now())
@@ -246,53 +249,35 @@ model RecurringTrainingTrainerAssignment {
   @@index([trainerId])
 }
 
-// Legacy: Group Assignment (being phased out)
-model AthleteGroupAssignment {
-  id          String    @id @default(cuid())
-  athleteId   String
-  athlete     Athlete   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  groupNumber Int // 1, 2, or 3
-  hourNumber  Int // 1 or 2
-  trainingDay DayOfWeek
-  isActive    Boolean   @default(true)
+// ============================================================================
+// SESSION MODELS
+// ============================================================================
 
-  assignedBy        String
-  assignedByTrainer Trainer  @relation("LegacyGroupAssignments", fields: [assignedBy], references: [id])
-  assignedAt        DateTime @default(now())
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([athleteId])
-  @@index([groupNumber])
-  @@index([trainingDay, hourNumber, groupNumber])
-}
-
-// Training Session - Generated from RecurringTraining or created manually
+// Training Session (generated from recurring or manual)
 model TrainingSession {
   id        String    @id @default(cuid())
   date      DateTime
   dayOfWeek DayOfWeek
-  startTime String? // e.g., "17:00"
-  endTime   String? // e.g., "18:30"
+  startTime String?
+  endTime   String?
 
-  // Link to recurring template (if generated from one)
+  // Link to recurring template
   recurringTrainingId String?
   recurringTraining   RecurringTraining? @relation(fields: [recurringTrainingId], references: [id])
 
-  // Session details
+  // Session status
   notes              String?
   isCompleted        Boolean   @default(false)
   isCancelled        Boolean   @default(false)
-  cancelledBy        String? // Admin who cancelled
+  cancelledBy        String?
   cancelledAt        DateTime?
   cancellationReason String?
 
   // Relationships
-  groups                    SessionGroup[] // Groups within this session
-  cancellations             Cancellation[] // Athlete cancellations
+  groups                    SessionGroup[]
+  cancellations             Cancellation[]
   attendanceRecords         AttendanceRecord[]
-  sessionAthleteAssignments SessionAthleteAssignment[] // One-time athlete reassignments
+  sessionAthleteAssignments SessionAthleteAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -303,7 +288,7 @@ model TrainingSession {
   @@index([recurringTrainingId])
 }
 
-// Session Group - Instantiation of a TrainingGroup for a specific session
+// Session Group (instantiation of training group for specific session)
 model SessionGroup {
   id                String          @id @default(cuid())
   trainingSessionId String
@@ -312,12 +297,12 @@ model SessionGroup {
   trainingGroup     TrainingGroup   @relation(fields: [trainingGroupId], references: [id], onDelete: Restrict)
 
   // Session-specific data
-  exercises String? // Text field for exercises, can reference previous week
-  notes     String? // Additional notes for this group in this session
+  exercises String?
+  notes     String?
 
   // Relationships
   trainerAssignments        SessionGroupTrainerAssignment[]
-  sessionAthleteAssignments SessionAthleteAssignment[] // For drag-and-drop reassignments
+  sessionAthleteAssignments SessionAthleteAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -327,12 +312,12 @@ model SessionGroup {
   @@index([trainingGroupId])
 }
 
-// Session-specific trainer assignment (can override recurring assignment)
+// Session-specific trainer assignment
 model SessionGroupTrainerAssignment {
   id             String       @id @default(cuid())
   sessionGroupId String
   sessionGroup   SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  trainerId      String? // Nullable to allow "no trainer" in rare cases
+  trainerId      String?
   trainer        Trainer?     @relation(fields: [trainerId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
@@ -341,7 +326,7 @@ model SessionGroupTrainerAssignment {
   @@index([trainerId])
 }
 
-// Session-specific athlete assignment (for drag-and-drop one-time changes)
+// Session-specific athlete assignment (for drag-and-drop reassignments)
 model SessionAthleteAssignment {
   id                String          @id @default(cuid())
   trainingSessionId String
@@ -355,7 +340,7 @@ model SessionAthleteAssignment {
   movedBy        String
   movedByTrainer Trainer  @relation("SessionAthleteReassignments", fields: [movedBy], references: [id])
   movedAt        DateTime @default(now())
-  reason         String? // Optional reason for the move
+  reason         String?
 
   createdAt DateTime @default(now())
 
@@ -365,29 +350,21 @@ model SessionAthleteAssignment {
   @@index([athleteId])
 }
 
-// DEPRECATED: Legacy trainer-session assignment - kept for migration compatibility
-model TrainerSessionAssignment {
-  id        String   @id @default(cuid())
-  trainerId String
-  sessionId String
-  createdAt DateTime @default(now())
+// ============================================================================
+// ATTENDANCE MODELS
+// ============================================================================
 
-  @@unique([trainerId, sessionId])
-  @@index([sessionId])
-  @@index([trainerId])
-}
-
-// Cancellation - MANDATORY REASON
+// Athlete cancellation (self-reported absence)
 model Cancellation {
   id                String          @id @default(cuid())
   athleteId         String
   athlete           Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainingSessionId String
   trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
-  reason            String // MANDATORY, minimum 10 characters
+  reason            String
   cancelledAt       DateTime        @default(now())
 
-  // Optional: can be undone before session
+  // Can be undone
   isActive Boolean   @default(true)
   undoneAt DateTime?
 
@@ -398,7 +375,7 @@ model Cancellation {
   @@index([cancelledAt])
 }
 
-// Attendance Record - COACH/ADMIN ONLY CAN MODIFY
+// Attendance record (trainer-marked)
 model AttendanceRecord {
   id                String           @id @default(cuid())
   athleteId         String
@@ -414,8 +391,7 @@ model AttendanceRecord {
   lastModifiedBy     String?
   lastModifiedAt     DateTime?
   modificationReason String?
-
-  notes String?
+  notes              String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -426,26 +402,30 @@ model AttendanceRecord {
   @@index([status])
 }
 
-// Upload/File - Renamed from TrainingPlan
+// ============================================================================
+// FILE MANAGEMENT MODELS
+// ============================================================================
+
+// Upload/File
 model Upload {
   id         String         @id @default(cuid())
   categoryId String
   category   UploadCategory @relation(fields: [categoryId], references: [id])
   title      String
-  targetDate String? // "April 2026"
-  filePath   String // storage path
+  targetDate String?
+  filePath   String
   fileName   String
   fileSize   Int
-  mimeType   String // should always be 'application/pdf'
+  mimeType   String
 
-  // Upload info
+  // Upload metadata
   uploadedBy        String
   uploadedByTrainer Trainer  @relation(fields: [uploadedBy], references: [id])
   uploadedAt        DateTime @default(now())
   version           Int      @default(1)
 
-  // Optional: maintain history
-  replacedBy String? // id of newer version
+  // Version control
+  replacedBy String?
   isActive   Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -455,13 +435,17 @@ model Upload {
   @@index([isActive])
 }
 
-// Audit Log (for attendance changes)
+// ============================================================================
+// ADMINISTRATIVE MODELS
+// ============================================================================
+
+// Audit Log
 model AuditLog {
   id              String   @id @default(cuid())
-  entityType      String // 'attendance', 'athlete', 'session'
+  entityType      String
   entityId        String
-  action          String // 'create', 'update', 'delete'
-  changes         Json // JSON of what changed
+  action          String
+  changes         Json
   performedBy     String
   performedByUser Trainer  @relation(fields: [performedBy], references: [id])
   performedAt     DateTime @default(now())
@@ -472,27 +456,21 @@ model AuditLog {
   @@index([performedBy])
 }
 
-// Monthly Trainer Hours Summary - ADMIN ONLY
+// Monthly Trainer Hours Summary
 model MonthlyTrainerSummary {
   id        String  @id @default(cuid())
-  month     Int // 1-12
+  month     Int
   year      Int
   trainerId String
   trainer   Trainer @relation("TrainerMonthlySummaries", fields: [trainerId], references: [id], onDelete: Cascade)
 
-  // Calculated hours from sessions
-  calculatedHours Decimal @default(0) @db.Decimal(10, 2)
+  // Hours calculation
+  calculatedHours Decimal  @default(0) @db.Decimal(10, 2)
+  adjustedHours   Decimal? @db.Decimal(10, 2)
+  finalHours      Decimal  @default(0) @db.Decimal(10, 2)
+  notes           String?
 
-  // Admin can manually adjust the hours
-  adjustedHours Decimal? @db.Decimal(10, 2)
-
-  // Final hours (adjusted or calculated)
-  finalHours Decimal @default(0) @db.Decimal(10, 2)
-
-  // Notes for adjustments
-  notes String?
-
-  // Admin who made adjustments
+  // Modification tracking
   lastModifiedBy     String?
   lastModifiedByUser Trainer?  @relation("TrainerSummaryModifier", fields: [lastModifiedBy], references: [id])
   lastModifiedAt     DateTime?
@@ -503,4 +481,53 @@ model MonthlyTrainerSummary {
   @@unique([trainerId, month, year])
   @@index([month, year])
   @@index([trainerId])
+}
+
+// System-wide settings
+model SystemSettings {
+  id String @id @default(cuid())
+
+  // Cancellation settings
+  cancellationDeadlineHours Int @default(2) // Hours before session that cancellations are allowed
+  absenceAlertThreshold     Int @default(3) // Number of unexcused absences to trigger alert
+  absenceAlertWindowDays    Int @default(30) // Time window in days to count absences
+  absenceAlertCooldownDays  Int @default(14) // Days before sending another alert for same athlete
+
+  // Email settings
+  adminNotificationEmail String  @default("admin@svesting.de")
+  absenceAlertEnabled    Boolean @default(true)
+
+  // Other settings
+  maxUploadSizeMB            Int @default(10)
+  sessionGenerationDaysAhead Int @default(90)
+
+  // Modification tracking
+  lastModifiedBy        String?
+  lastModifiedByTrainer Trainer?  @relation(fields: [lastModifiedBy], references: [id])
+  lastModifiedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Absence alert tracking (to prevent duplicate alerts within cooldown period)
+model AbsenceAlert {
+  id        String  @id @default(cuid())
+  athleteId String
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  // Alert details
+  absenceCount       Int // Number of absences that triggered this alert
+  absencePeriodStart DateTime // Start of the period where absences were counted
+  absencePeriodEnd   DateTime // End of the period where absences were counted
+
+  // Email tracking
+  sentAt             DateTime @default(now())
+  emailSentToAthlete Boolean  @default(false)
+  emailSentToAdmin   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([athleteId])
+  @@index([sentAt])
 }

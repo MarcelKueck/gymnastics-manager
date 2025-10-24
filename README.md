@@ -1,36 +1,185 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SV Esting Training Management System
+
+Ein vollständiges Trainingsmanagement-System für SV Esting Turnen, entwickelt mit Next.js 14, TypeScript, Prisma und PostgreSQL.
+
+## Features
+
+### Athleten
+- Selbstregistrierung mit Genehmigungsprozess
+- Persönliches Dashboard mit Trainingsübersicht
+- Trainingsplan-Anzeige
+- Absagen von Trainingseinheiten
+- Anwesenheitshistorie und Statistiken
+- Zugriff auf Trainingspläne und Dokumente
+
+### Trainer
+- Dashboard mit Übersicht über kommende Trainings
+- Athletenverwaltung und -genehmigung
+- Trainingsplanung und -durchführung
+- Anwesenheitserfassung
+- Übungsverwaltung
+- Statistiken und Reports
+
+### Administratoren
+- Verwaltung wiederkehrender Trainings
+- Gruppenverwaltung
+- Trainerzuweisung
+- Athletenzuweisung zu Gruppen
+- Dateikategorien verwalten
+- Trainer-Stundenverwaltung
+- Automatische Session-Generierung
+
+## Tech Stack
+
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js
+- **Styling**: Tailwind CSS
+- **UI Components**: Radix UI
+- **Email**: Resend
+- **File Upload**: Native File System
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ 
+- PostgreSQL 14+
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/your-org/svesting-training.git
+cd svesting-training
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up environment variables:
+```bash
+cp .env.example .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Edit `.env.local` with your database and API credentials.
 
-## Learn More
+4. Set up the database:
+```bash
+# Generate Prisma Client
+npm run prisma:generate
 
-To learn more about Next.js, take a look at the following resources:
+# Run migrations
+npm run prisma:migrate
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# (Optional) Seed the database
+npm run prisma:seed
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. Run the development server:
+```bash
+npm run dev
+```
 
-## Deploy on Vercel
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Database Schema
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The application uses the following main entities:
+- **Athlete**: User profiles for athletes
+- **Trainer**: User profiles for trainers/admins
+- **RecurringTraining**: Weekly training schedule
+- **TrainingGroup**: Groups within each training
+- **TrainingSession**: Individual training instances
+- **AttendanceRecord**: Attendance tracking
+- **Upload**: File management
+- **AuditLog**: System audit trail
+
+## Project Structure
+```
+src/
+├── app/                    # Next.js app directory
+│   ├── api/               # API routes
+│   ├── athlete/           # Athlete pages
+│   ├── trainer/           # Trainer pages
+│   └── login/             # Auth pages
+├── components/            # React components
+│   ├── ui/               # Base UI components
+│   ├── athlete/          # Athlete-specific components
+│   ├── trainer/          # Trainer-specific components
+│   ├── admin/            # Admin-specific components
+│   └── shared/           # Shared components
+├── lib/                   # Utility functions
+│   ├── api/              # API helpers
+│   ├── repositories/     # Data access layer
+│   ├── services/         # Business logic
+│   ├── validation/       # Zod schemas
+│   └── constants/        # Constants and enums
+└── prisma/               # Prisma schema and migrations
+```
+
+## Environment Variables
+
+See `.env.example` for all required environment variables.
+
+Key variables:
+- `DATABASE_URL`: PostgreSQL connection string
+- `NEXTAUTH_SECRET`: Secret for NextAuth.js
+- `RESEND_API_KEY`: API key for email service
+- `UPLOAD_DIR`: Directory for file uploads
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Push your code to GitHub
+2. Import the project in Vercel
+3. Set environment variables in Vercel dashboard
+4. Deploy
+
+### Docker
+```bash
+docker build -t svesting-training .
+docker run -p 3000:3000 svesting-training
+```
+
+### Manual Deployment
+
+1. Build the application:
+```bash
+npm run build
+```
+
+2. Start the production server:
+```bash
+npm start
+```
+
+## Security
+
+- Passwords are hashed with bcrypt
+- Role-based access control (RBAC)
+- Session-based authentication with NextAuth.js
+- Input validation with Zod
+- SQL injection prevention with Prisma
+- CSRF protection
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+Proprietary - SV Esting Turnen
+
+## Support
+
+For support, email support@svesting-turnen.de
