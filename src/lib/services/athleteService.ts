@@ -338,10 +338,10 @@ export class AthleteService {
           },
         },
       },
-      orderBy: {
-        lastName: 'asc',
-        firstName: 'asc',
-      },
+      orderBy: [
+        { lastName: 'asc' },
+        { firstName: 'asc' },
+      ],
     });
   }
 

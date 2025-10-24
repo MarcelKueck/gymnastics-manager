@@ -27,7 +27,7 @@ export class AthleteRepository {
   async findMany(params: {
     where?: Prisma.AthleteWhereInput;
     include?: Prisma.AthleteInclude;
-    orderBy?: Prisma.AthleteOrderByWithRelationInput;
+    orderBy?: Prisma.AthleteOrderByWithRelationInput | Prisma.AthleteOrderByWithRelationInput[];
     skip?: number;
     take?: number;
   }) {
