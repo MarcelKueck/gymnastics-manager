@@ -70,11 +70,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8 safe-top safe-bottom">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">Anmelden</CardTitle>
-          <CardDescription className="text-center">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl md:text-2xl text-center">Anmelden</CardTitle>
+          <CardDescription className="text-center text-xs md:text-sm">
             Melde dich mit deinem Account an
           </CardDescription>
         </CardHeader>
@@ -83,12 +83,12 @@ export default function LoginPage() {
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription className="text-xs md:text-sm">{error}</AlertDescription>
               </Alert>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">E-Mail-Adresse</Label>
+              <Label htmlFor="email" className="text-sm">E-Mail-Adresse</Label>
               <Input
                 id="email"
                 type="email"
@@ -97,11 +97,12 @@ export default function LoginPage() {
                 placeholder="deine@email.de"
                 required
                 disabled={isLoading}
+                className="h-11 text-base"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Passwort</Label>
+              <Label htmlFor="password" className="text-sm">Passwort</Label>
               <Input
                 id="password"
                 type="password"
@@ -110,22 +111,23 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 required
                 disabled={isLoading}
+                className="h-11 text-base"
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full h-11" disabled={isLoading}>
               {isLoading ? 'Anmelden...' : 'Anmelden'}
             </Button>
           </form>
 
           <div className="mt-6 text-center space-y-2">
-            <p className="text-sm text-gray-600">
+            <p className="text-xs md:text-sm text-gray-600">
               Noch kein Account?{' '}
-              <Link href="/register" className="text-primary hover:underline">
+              <Link href="/register" className="text-primary hover:underline font-medium">
                 Registrieren
               </Link>
             </p>
-            <Link href="/" className="text-sm text-gray-600 hover:underline block">
+            <Link href="/" className="text-xs md:text-sm text-gray-600 hover:underline block">
               Zurück zur Startseite
             </Link>
           </div>

@@ -110,11 +110,11 @@ export function AthleteScheduleContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Trainingsplan</h1>
-          <p className="text-muted-foreground">Deine kommenden Trainingseinheiten</p>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl md:text-3xl font-bold">Trainingsplan</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Deine kommenden Trainingseinheiten</p>
         </div>
         <BulkCancellationDialog onSuccess={fetchSchedule} />
       </div>
@@ -127,7 +127,7 @@ export function AthleteScheduleContent() {
       />
 
       <Dialog open={showCancellationDialog} onOpenChange={setShowCancellationDialog}>
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md">
           <DialogHeader>
             <DialogTitle>Training absagen</DialogTitle>
           </DialogHeader>

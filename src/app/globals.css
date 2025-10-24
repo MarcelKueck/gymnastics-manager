@@ -8,8 +8,8 @@
         --foreground: 222.2 84% 4.9%;
         --card: 0 0% 100%;
         --card-foreground: 222.2 84% 4.9%;
-        --primary: 221.2 83.2% 53.3%;
-        --primary-foreground: 210 40% 98%;
+        --primary: 100 60% 39%;
+        --primary-foreground: 0 0% 100%;
         --secondary: 210 40% 96.1%;
         --secondary-foreground: 222.2 47.4% 11.2%;
         --muted: 210 40% 96.1%;
@@ -20,7 +20,7 @@
         --destructive-foreground: 210 40% 98%;
         --border: 214.3 31.8% 91.4%;
         --input: 214.3 31.8% 91.4%;
-        --ring: 221.2 83.2% 53.3%;
+        --ring: 100 60% 39%;
         --radius: 0.5rem;
     }
 }
@@ -28,9 +28,56 @@
 @layer base {
     * {
         @apply border-border;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+        -moz-text-size-adjust: 100%;
+        text-size-adjust: 100%;
     }
 
     body {
         @apply bg-background text-foreground;
+        touch-action: manipulation;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Optimize scrolling on mobile */
+    * {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Improve button and input touch targets */
+    button,
+    input,
+    select,
+    textarea {
+        touch-action: manipulation;
+    }
+}
+
+@layer utilities {
+    /* Mobile-friendly utilities */
+    .touch-target {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    .safe-top {
+        padding-top: env(safe-area-inset-top);
+    }
+    
+    .safe-bottom {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    .safe-left {
+        padding-left: env(safe-area-inset-left);
+    }
+    
+    .safe-right {
+        padding-right: env(safe-area-inset-right);
     }
 }

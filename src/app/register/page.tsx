@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import { calculateAge, requiresGuardian } from '@/lib/ageGroups';
+import { cn } from '@/lib/utils';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -108,16 +109,16 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8 safe-top safe-bottom">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
-              <CheckCircle className="h-16 w-16 text-green-600 mx-auto" />
-              <h2 className="text-2xl font-bold">Registrierung erfolgreich!</h2>
-              <p className="text-gray-600">
+              <CheckCircle className="h-12 w-12 md:h-16 md:w-16 text-green-600 mx-auto" />
+              <h2 className="text-xl md:text-2xl font-bold">Registrierung erfolgreich!</h2>
+              <p className="text-sm md:text-base text-gray-600">
                 Dein Account wurde erstellt. Du erhältst eine E-Mail, sobald er genehmigt wurde.
               </p>
-              <p className="text-sm text-gray-500">Du wirst weitergeleitet...</p>
+              <p className="text-xs md:text-sm text-gray-500">Du wirst weitergeleitet...</p>
             </div>
           </CardContent>
         </Card>
@@ -126,20 +127,20 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-6 md:py-8 safe-top safe-bottom">
       <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">Registrieren</CardTitle>
-          <CardDescription className="text-center">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl md:text-2xl text-center">Registrieren</CardTitle>
+          <CardDescription className="text-center text-xs md:text-sm">
             Erstelle einen neuen Athleten-Account
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription className="text-xs md:text-sm">{error}</AlertDescription>
               </Alert>
             )}
 
@@ -147,7 +148,7 @@ export default function RegisterPage() {
             {Object.keys(validationErrors).length > 0 && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
+                <AlertDescription className="text-xs md:text-sm">
                   <div className="space-y-1">
                     {Object.entries(validationErrors).map(([field, message]) => (
                       <div key={field}>• {message}</div>
@@ -158,35 +159,37 @@ export default function RegisterPage() {
             )}
 
             {/* Personal Information */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Persönliche Informationen</h3>
+            <div className="space-y-3 md:space-y-4">
+              <h3 className="font-semibold text-base md:text-lg">Persönliche Informationen</h3>
 
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-2 gap-3 md:gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">Vorname *</Label>
+                  <Label htmlFor="firstName" className="text-sm">Vorname *</Label>
                   <Input
                     id="firstName"
                     value={formData.firstName}
                     onChange={(e) => handleChange('firstName', e.target.value)}
                     required
                     disabled={isLoading}
+                    className="h-11 text-base"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Nachname *</Label>
+                  <Label htmlFor="lastName" className="text-sm">Nachname *</Label>
                   <Input
                     id="lastName"
                     value={formData.lastName}
                     onChange={(e) => handleChange('lastName', e.target.value)}
                     required
                     disabled={isLoading}
+                    className="h-11 text-base"
                   />
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-2 gap-3 md:gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="birthDate">Geburtsdatum *</Label>
+                  <Label htmlFor="birthDate" className="text-sm">Geburtsdatum *</Label>
                   <Input
                     id="birthDate"
                     type="date"
@@ -194,10 +197,10 @@ export default function RegisterPage() {
                     onChange={(e) => handleChange('birthDate', e.target.value)}
                     required
                     disabled={isLoading}
-                    className={validationErrors.birthDate ? 'border-red-500' : ''}
+                    className={cn("h-11 text-base", validationErrors.birthDate ? 'border-red-500' : '')}
                   />
                   {validationErrors.birthDate && (
-                    <p className="text-sm text-red-500">{validationErrors.birthDate}</p>
+                    <p className="text-xs text-red-500">{validationErrors.birthDate}</p>
                   )}
                 </div>
                 <div className="space-y-2">

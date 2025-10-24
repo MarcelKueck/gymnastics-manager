@@ -44,14 +44,14 @@ export function AthleteStatisticsContent() {
   if (!stats) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Statistiken</h1>
-        <p className="text-muted-foreground">Deine Trainingsstatistiken</p>
+        <h1 className="text-2xl md:text-3xl font-bold">Statistiken</h1>
+        <p className="text-sm md:text-base text-muted-foreground">Deine Trainingsstatistiken</p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <StatCard
           title="Gesamt Trainings"
           value={stats.totalSessions}
