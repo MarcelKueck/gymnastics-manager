@@ -41,6 +41,7 @@ enum DayOfWeek {
 }
 
 enum RecurrenceInterval {
+  ONCE
   WEEKLY
   BIWEEKLY
   MONTHLY
@@ -116,6 +117,7 @@ model AthleteProfile {
   cancellations                Cancellation[]
   attendanceRecords            AttendanceRecord[]
   absenceAlerts                AbsenceAlert[]
+  competitionRegistrations     CompetitionRegistration[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -147,6 +149,7 @@ model TrainerProfile {
   monthlyHoursSummaries         MonthlyTrainerSummary[]              @relation("TrainerMonthlySummaries")
   modifiedMonthlyHoursSummaries MonthlyTrainerSummary[]              @relation("TrainerSummaryModifier")
   modifiedSystemSettings        SystemSettings[]
+  createdCompetitions           Competition[]                        @relation("CompetitionCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -186,6 +189,10 @@ model RecurringTraining {
   recurrence RecurrenceInterval @default(WEEKLY)
   isActive   Boolean            @default(true)
 
+  // Date range for training validity (optional)
+  validFrom  DateTime? // Start date for this training
+  validUntil DateTime? // End date for this training (null = ongoing)
+
   // Creator
   createdBy        String
   createdByTrainer TrainerProfile @relation("RecurringTrainingCreator", fields: [createdBy], references: [id])
@@ -199,6 +206,7 @@ model RecurringTraining {
 
   @@index([dayOfWeek])
   @@index([isActive])
+  @@index([validFrom, validUntil])
 }
 
 // Training Group within a recurring training
@@ -547,4 +555,70 @@ model AbsenceAlert {
 
   @@index([athleteId])
   @@index([sentAt])
+}
+
+// ============================================================================
+// COMPETITION MODELS
+// ============================================================================
+
+// Competition Event
+model Competition {
+  id          String   @id @default(cuid())
+  name        String
+  date        DateTime
+  location    String
+  description String?
+
+  // Age category requirements
+  minYouthCategory YouthCategory? // Minimum category (e.g., only D and above)
+  maxYouthCategory YouthCategory? // Maximum category (e.g., only F and E)
+
+  // Registration
+  registrationDeadline DateTime?
+  maxParticipants      Int?
+  requiresDtbId        Boolean   @default(false)
+
+  // Costs
+  entryFee Decimal? @db.Decimal(10, 2)
+
+  // Status
+  isPublished Boolean @default(false)
+  isCancelled Boolean @default(false)
+
+  // Admin
+  createdBy        String
+  createdByTrainer TrainerProfile @relation("CompetitionCreator", fields: [createdBy], references: [id])
+
+  // Relationships
+  registrations CompetitionRegistration[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([isPublished])
+}
+
+// Athlete registration for competition
+model CompetitionRegistration {
+  id            String         @id @default(cuid())
+  competitionId String
+  competition   Competition    @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  athleteId     String
+  athlete       AthleteProfile @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  // Registration details
+  registeredAt DateTime @default(now())
+  notes        String? // e.g., "needs transportation"
+
+  // Status tracking
+  attended  Boolean? // null = pending, true/false = recorded
+  placement Int? // 1st, 2nd, 3rd place, etc.
+  score     Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([competitionId, athleteId])
+  @@index([competitionId])
+  @@index([athleteId])
 }

@@ -18,6 +18,8 @@ interface RecurringTrainingFormProps {
     endTime: string;
     recurrence: RecurrenceInterval;
     isActive: boolean;
+    validFrom?: Date | null;
+    validUntil?: Date | null;
   };
   onSubmit: (data: {
     name: string;
@@ -26,6 +28,8 @@ interface RecurringTrainingFormProps {
     endTime: string;
     recurrence: RecurrenceInterval;
     isActive: boolean;
+    validFrom?: string | null;
+    validUntil?: string | null;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -42,6 +46,8 @@ export function RecurringTrainingForm({
     endTime: initialData?.endTime || '18:30',
     recurrence: initialData?.recurrence || RecurrenceInterval.WEEKLY,
     isActive: initialData?.isActive ?? true,
+    validFrom: initialData?.validFrom ? new Date(initialData.validFrom).toISOString().split('T')[0] : '',
+    validUntil: initialData?.validUntil ? new Date(initialData.validUntil).toISOString().split('T')[0] : '',
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -60,9 +66,29 @@ export function RecurringTrainingForm({
       return;
     }
 
+    // Validate dates for ONCE recurrence
+    if (formData.recurrence === RecurrenceInterval.ONCE && !formData.validFrom) {
+      setError('Für einmalige Trainings muss ein Datum angegeben werden');
+      return;
+    }
+
+    // Validate date range
+    if (formData.validFrom && formData.validUntil) {
+      if (new Date(formData.validFrom) > new Date(formData.validUntil)) {
+        setError('Enddatum muss nach Startdatum liegen');
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
-      await onSubmit(formData);
+      // Convert dates or set to null
+      const submitData = {
+        ...formData,
+        validFrom: formData.validFrom || null,
+        validUntil: formData.validUntil || null,
+      };
+      await onSubmit(submitData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler beim Speichern');
       setIsLoading(false);
@@ -142,6 +168,40 @@ export function RecurringTrainingForm({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Date Range Fields */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="validFrom">
+            {formData.recurrence === RecurrenceInterval.ONCE ? 'Datum *' : 'Gültig ab (optional)'}
+          </Label>
+          <Input
+            id="validFrom"
+            type="date"
+            value={formData.validFrom}
+            onChange={(e) => handleChange('validFrom', e.target.value)}
+            required={formData.recurrence === RecurrenceInterval.ONCE}
+          />
+          {formData.recurrence === RecurrenceInterval.ONCE && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Datum für die einmalige Trainingseinheit
+            </p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="validUntil">
+            {formData.recurrence === RecurrenceInterval.ONCE ? '' : 'Gültig bis (optional)'}
+          </Label>
+          {formData.recurrence !== RecurrenceInterval.ONCE && (
+            <Input
+              id="validUntil"
+              type="date"
+              value={formData.validUntil}
+              onChange={(e) => handleChange('validUntil', e.target.value)}
+            />
+          )}
+        </div>
       </div>
 
       <div className="flex items-center space-x-2">

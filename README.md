@@ -90,8 +90,9 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Database Schema
 
 The application uses the following main entities:
-- **Athlete**: User profiles for athletes
-- **Trainer**: User profiles for trainers/admins
+- **User**: Core user identity (supports dual roles)
+- **AthleteProfile**: Athlete-specific data linked to User
+- **TrainerProfile**: Trainer-specific data linked to User
 - **RecurringTraining**: Weekly training schedule
 - **TrainingGroup**: Groups within each training
 - **TrainingSession**: Individual training instances

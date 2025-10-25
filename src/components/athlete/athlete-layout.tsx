@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   X,
+  Trophy,
 } from 'lucide-react';
 
 interface AthleteLayoutProps {
@@ -31,6 +32,7 @@ export function AthleteLayout({ children, userName }: AthleteLayoutProps) {
   const navigation = [
     { name: 'Dashboard', href: '/athlete/dashboard', icon: Home },
     { name: 'Trainingsplan', href: '/athlete/schedule', icon: Calendar },
+    { name: 'Wettkämpfe', href: '/athlete/competitions', icon: Trophy },
     { name: 'Anwesenheit', href: '/athlete/attendance', icon: ClipboardList },
     { name: 'Statistiken', href: '/athlete/statistics', icon: BarChart3 },
     { name: 'Dateien', href: '/athlete/files', icon: FileText },

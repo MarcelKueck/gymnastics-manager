@@ -18,6 +18,7 @@ import {
   LogOut,
   Menu,
   X,
+  Trophy,
 } from 'lucide-react';
 
 interface TrainerLayoutProps {
@@ -43,6 +44,7 @@ export function TrainerLayout({ children, userName, isAdmin }: TrainerLayoutProp
   const adminNavigation = isAdmin
     ? [
         { name: 'Trainings verwalten', href: '/trainer/admin/trainings', icon: Calendar },
+        { name: 'Wettkämpfe verwalten', href: '/admin/competitions', icon: Trophy },
         { name: 'Gruppen verwalten', href: '/trainer/admin/groups', icon: Users },
         { name: 'Benutzer verwalten', href: '/trainer/admin/users', icon: Users },
         { name: 'Kategorien', href: '/trainer/admin/categories', icon: FileText },

@@ -56,12 +56,14 @@ export const DAY_OF_WEEK_OPTIONS = [
 
 // Recurrence Interval
 export const RECURRENCE_INTERVAL_LABELS: Record<RecurrenceInterval, string> = {
+  [RecurrenceInterval.ONCE]: 'Einmalig',
   [RecurrenceInterval.WEEKLY]: 'Wöchentlich',
   [RecurrenceInterval.BIWEEKLY]: 'Zweiwöchentlich',
   [RecurrenceInterval.MONTHLY]: 'Monatlich',
 };
 
 export const RECURRENCE_INTERVAL_OPTIONS = [
+  { value: RecurrenceInterval.ONCE, label: RECURRENCE_INTERVAL_LABELS[RecurrenceInterval.ONCE] },
   { value: RecurrenceInterval.WEEKLY, label: RECURRENCE_INTERVAL_LABELS[RecurrenceInterval.WEEKLY] },
   { value: RecurrenceInterval.BIWEEKLY, label: RECURRENCE_INTERVAL_LABELS[RecurrenceInterval.BIWEEKLY] },
   { value: RecurrenceInterval.MONTHLY, label: RECURRENCE_INTERVAL_LABELS[RecurrenceInterval.MONTHLY] },

@@ -12,6 +12,8 @@ const updateTrainingSchema = z.object({
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
   recurrence: z.nativeEnum(RecurrenceInterval).optional(),
   isActive: z.boolean().optional(),
+  validFrom: z.string().nullable().optional(),
+  validUntil: z.string().nullable().optional(),
 });
 
 export const PUT = asyncHandler(

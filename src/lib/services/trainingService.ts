@@ -16,6 +16,8 @@ export class TrainingService {
       endTime: string;
       recurrence: RecurrenceInterval;
       isActive?: boolean;
+      validFrom?: string | null;
+      validUntil?: string | null;
     },
     createdBy: string
   ) {
@@ -26,6 +28,8 @@ export class TrainingService {
       endTime: data.endTime,
       recurrence: data.recurrence,
       isActive: data.isActive ?? true,
+      ...(data.validFrom && { validFrom: new Date(data.validFrom) }),
+      ...(data.validUntil && { validUntil: new Date(data.validUntil) }),
       createdByTrainer: {
         connect: { id: createdBy },
       },
@@ -44,9 +48,21 @@ export class TrainingService {
       endTime?: string;
       recurrence?: RecurrenceInterval;
       isActive?: boolean;
+      validFrom?: string | null;
+      validUntil?: string | null;
     }
   ) {
-    return trainingRepository.updateRecurring(id, data);
+    const updateData: any = { ...data };
+    
+    // Convert date strings to Date objects or explicitly set to null
+    if ('validFrom' in data) {
+      updateData.validFrom = data.validFrom ? new Date(data.validFrom) : null;
+    }
+    if ('validUntil' in data) {
+      updateData.validUntil = data.validUntil ? new Date(data.validUntil) : null;
+    }
+    
+    return trainingRepository.updateRecurring(id, updateData);
   }
 
   /**
@@ -244,6 +260,8 @@ export class TrainingService {
       const dates = this.calculateOccurrences(
         training.dayOfWeek,
         training.recurrence,
+        training.validFrom,
+        training.validUntil,
         today,
         daysAhead
       );
@@ -293,11 +311,29 @@ export class TrainingService {
   private calculateOccurrences(
     dayOfWeek: DayOfWeek,
     recurrence: RecurrenceInterval,
-    startDate: Date,
+    validFrom: Date | null,
+    validUntil: Date | null,
+    referenceDate: Date,
     daysAhead: number
   ): Date[] {
     const dates: Date[] = [];
-    const endDate = addDays(startDate, daysAhead);
+    
+    // For ONCE recurrence, return only the validFrom date if it's set
+    if (recurrence === RecurrenceInterval.ONCE) {
+      if (validFrom) {
+        const onceDate = new Date(validFrom);
+        onceDate.setHours(0, 0, 0, 0);
+        // Only include if it's within our generation window
+        const maxDate = addDays(referenceDate, daysAhead);
+        if (onceDate >= referenceDate && onceDate <= maxDate) {
+          dates.push(onceDate);
+        }
+      }
+      return dates;
+    }
+
+    // For recurring trainings
+    const endDate = addDays(referenceDate, daysAhead);
 
     // Map day of week to number (0 = Sunday, 1 = Monday, etc.)
     const dayMap: Record<DayOfWeek, number> = {
@@ -311,16 +347,43 @@ export class TrainingService {
     };
 
     const targetDay = dayMap[dayOfWeek];
-    let currentDate = new Date(startDate);
+    
+    // Determine the starting point
+    let currentDate = new Date(referenceDate);
+    
+    // If validFrom is set and it's after referenceDate, start from validFrom
+    if (validFrom) {
+      const validFromDate = new Date(validFrom);
+      validFromDate.setHours(0, 0, 0, 0);
+      if (validFromDate > referenceDate) {
+        currentDate = new Date(validFromDate);
+      }
+    }
 
-    // Find first occurrence
+    // Find first occurrence on the target day of week
     while (currentDate.getDay() !== targetDay) {
       currentDate = addDays(currentDate, 1);
     }
 
+    // Determine the ending point
+    let finalEndDate = endDate;
+    if (validUntil) {
+      const validUntilDate = new Date(validUntil);
+      validUntilDate.setHours(23, 59, 59, 999); // End of day
+      if (validUntilDate < finalEndDate) {
+        finalEndDate = validUntilDate;
+      }
+    }
+
     // Generate occurrences based on recurrence interval
-    while (currentDate <= endDate) {
-      dates.push(new Date(currentDate));
+    while (currentDate <= finalEndDate) {
+      // Only add if within valid date range
+      const shouldAdd = (!validFrom || currentDate >= validFrom) &&
+                       (!validUntil || currentDate <= validUntil);
+      
+      if (shouldAdd) {
+        dates.push(new Date(currentDate));
+      }
 
       switch (recurrence) {
         case RecurrenceInterval.WEEKLY:
@@ -335,6 +398,9 @@ export class TrainingService {
           while (currentDate.getDay() !== targetDay) {
             currentDate = addDays(currentDate, 1);
           }
+          break;
+        default:
+          // Should not happen, but break to avoid infinite loop
           break;
       }
     }
