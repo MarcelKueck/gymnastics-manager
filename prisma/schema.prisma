@@ -175,6 +175,8 @@ model TrainerProfile {
   cancelledSessions             TrainingSession[]                    @relation("SessionCanceller")
   acknowledgedAlerts            AbsenceAlert[]
   trainerCancellations          TrainerCancellation[]
+  trainerAttendance             TrainerAttendanceRecord[]            @relation("TrainerAttendance")
+  markedTrainerAttendance       TrainerAttendanceRecord[]            @relation("TrainerAttendanceMarker")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -288,6 +290,7 @@ model TrainingSession {
   sessionAthleteAssignments SessionAthleteAssignment[]
   cancellations             Cancellation[]
   trainerCancellations      TrainerCancellation[]
+  trainerAttendanceRecords  TrainerAttendanceRecord[]
   attendanceRecords         AttendanceRecord[]
 
   createdAt DateTime @default(now())
@@ -379,6 +382,27 @@ model TrainerCancellation {
   @@index([trainerId])
   @@index([trainingSessionId])
   @@index([isActive])
+}
+
+model TrainerAttendanceRecord {
+  id                 String           @id @default(cuid())
+  trainerId          String
+  trainer            TrainerProfile   @relation("TrainerAttendance", fields: [trainerId], references: [id], onDelete: Cascade)
+  trainingSessionId  String
+  trainingSession    TrainingSession  @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  status             AttendanceStatus
+  markedBy           String
+  markedByAdmin      TrainerProfile   @relation("TrainerAttendanceMarker", fields: [markedBy], references: [id])
+  markedAt           DateTime         @default(now())
+  lastModifiedBy     String?
+  lastModifiedAt     DateTime?
+  modificationReason String?
+  notes              String?
+
+  @@unique([trainerId, trainingSessionId])
+  @@index([trainerId])
+  @@index([trainingSessionId])
+  @@index([status])
 }
 
 model AttendanceRecord {

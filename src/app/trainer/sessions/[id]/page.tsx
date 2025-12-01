@@ -37,6 +37,8 @@ interface SessionTrainer {
   id: string;
   name: string;
   cancelled: boolean;
+  attendanceStatus: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED' | null;
+  attendanceNote?: string;
 }
 
 interface SessionDetail {
@@ -51,15 +53,23 @@ interface SessionDetail {
   trainers?: SessionTrainer[];
 }
 
+import { useSession } from 'next-auth/react';
+
 export default function SessionDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const router = useRouter();
+  const { data: authSession } = useSession();
+  const isAdmin = authSession?.user?.activeRole === 'ADMIN';
+  
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [attendanceData, setAttendanceData] = useState<Map<string, { status: string; note: string }>>(new Map());
+  const [trainerAttendanceData, setTrainerAttendanceData] = useState<Map<string, { status: string; note: string }>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingTrainers, setIsSavingTrainers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [hasTrainerChanges, setHasTrainerChanges] = useState(false);
 
   useEffect(() => {
     fetch(`/api/trainer/sessions/${id}`)
@@ -69,7 +79,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
       })
       .then((result) => {
         setSession(result.data);
-        // Initialize attendance data from fetched data
+        // Initialize athlete attendance data from fetched data
         const initialData = new Map<string, { status: string; note: string }>();
         result.data.athletes.forEach((athlete: AthleteAttendance) => {
           initialData.set(athlete.athleteId, {
@@ -78,6 +88,16 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           });
         });
         setAttendanceData(initialData);
+        
+        // Initialize trainer attendance data
+        const initialTrainerData = new Map<string, { status: string; note: string }>();
+        result.data.trainers?.forEach((trainer: SessionTrainer) => {
+          initialTrainerData.set(trainer.id, {
+            status: trainer.attendanceStatus || '',
+            note: trainer.attendanceNote || '',
+          });
+        });
+        setTrainerAttendanceData(initialTrainerData);
       })
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
@@ -136,6 +156,55 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
       setError('Fehler beim Speichern');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Trainer attendance functions (admin only)
+  const updateTrainerAttendance = (trainerId: string, status: string) => {
+    const newData = new Map(trainerAttendanceData);
+    const current = newData.get(trainerId) || { status: '', note: '' };
+    newData.set(trainerId, { ...current, status });
+    setTrainerAttendanceData(newData);
+    setHasTrainerChanges(true);
+  };
+
+  const markAllTrainersPresent = () => {
+    const newData = new Map(trainerAttendanceData);
+    session?.trainers?.forEach((trainer) => {
+      if (!trainer.cancelled) {
+        const current = newData.get(trainer.id) || { status: '', note: '' };
+        newData.set(trainer.id, { ...current, status: 'PRESENT' });
+      }
+    });
+    setTrainerAttendanceData(newData);
+    setHasTrainerChanges(true);
+  };
+
+  const saveTrainerAttendance = async () => {
+    setIsSavingTrainers(true);
+    try {
+      const attendance = Array.from(trainerAttendanceData.entries())
+        .filter(([, data]) => data.status)
+        .map(([trainerId, data]) => ({
+          trainerId,
+          status: data.status,
+          notes: data.note || undefined,
+        }));
+
+      const res = await fetch('/api/admin/trainer-attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: id, attendance }),
+      });
+
+      if (!res.ok) throw new Error('Failed to save');
+      
+      setHasTrainerChanges(false);
+      router.refresh();
+    } catch {
+      setError('Fehler beim Speichern der Trainer-Anwesenheit');
+    } finally {
+      setIsSavingTrainers(false);
     }
   };
 
@@ -241,20 +310,85 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Trainer</CardTitle>
+            {isAdmin && (
+              <CardDescription>Als Admin können Sie die Trainer-Anwesenheit markieren</CardDescription>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {session.trainers.map((trainer) => (
-                <Badge 
-                  key={trainer.id} 
-                  variant={trainer.cancelled ? "outline" : "secondary"}
-                  className={trainer.cancelled ? "line-through text-muted-foreground" : ""}
-                >
-                  {trainer.name}
-                  {trainer.cancelled && " (abgesagt)"}
-                </Badge>
-              ))}
-            </div>
+            {isAdmin ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Button onClick={markAllTrainersPresent} variant="outline" size="sm">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Alle Trainer anwesend
+                  </Button>
+                  <Button
+                    onClick={saveTrainerAttendance}
+                    disabled={!hasTrainerChanges || isSavingTrainers}
+                    size="sm"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSavingTrainers ? 'Speichern...' : 'Trainer speichern'}
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {session.trainers.map((trainer) => {
+                    const currentStatus = trainerAttendanceData.get(trainer.id)?.status || '';
+                    return (
+                      <div key={trainer.id} className="flex items-center justify-between p-3 rounded-lg border">
+                        <div className="flex items-center gap-2">
+                          <span className={trainer.cancelled ? 'line-through text-muted-foreground' : 'font-medium'}>
+                            {trainer.name}
+                          </span>
+                          {trainer.cancelled && (
+                            <Badge variant="outline" className="text-xs">Vorab abgesagt</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant={currentStatus === 'PRESENT' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => updateTrainerAttendance(trainer.id, 'PRESENT')}
+                            className={currentStatus === 'PRESENT' ? 'bg-green-600 hover:bg-green-700' : ''}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant={currentStatus === 'ABSENT_EXCUSED' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => updateTrainerAttendance(trainer.id, 'ABSENT_EXCUSED')}
+                            className={currentStatus === 'ABSENT_EXCUSED' ? 'bg-yellow-600 hover:bg-yellow-700' : ''}
+                          >
+                            <Clock className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant={currentStatus === 'ABSENT_UNEXCUSED' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => updateTrainerAttendance(trainer.id, 'ABSENT_UNEXCUSED')}
+                            className={currentStatus === 'ABSENT_UNEXCUSED' ? 'bg-red-600 hover:bg-red-700' : ''}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {session.trainers.map((trainer) => (
+                  <Badge 
+                    key={trainer.id} 
+                    variant={trainer.cancelled ? "outline" : "secondary"}
+                    className={trainer.cancelled ? "line-through text-muted-foreground" : ""}
+                  >
+                    {trainer.name}
+                    {trainer.cancelled && " (abgesagt)"}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

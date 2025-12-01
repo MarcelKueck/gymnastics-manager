@@ -71,6 +71,7 @@ export async function GET(
         },
         include: {
           attendanceRecords: true,
+          trainerAttendanceRecords: true,
           cancellations: {
             include: {
               athlete: true,
@@ -91,6 +92,7 @@ export async function GET(
           cancellationReason: null,
           notes: null,
           attendanceRecords: [],
+          trainerAttendanceRecords: [],
           cancellations: [],
         };
       }
@@ -128,6 +130,7 @@ export async function GET(
             },
           },
           attendanceRecords: true,
+          trainerAttendanceRecords: true,
           trainerCancellations: {
             where: { isActive: true },
           },
@@ -185,16 +188,27 @@ export async function GET(
       trainerCancellations.map((tc: { trainerId: string }) => tc.trainerId)
     );
 
+    // Build trainer attendance data
+    const trainerAttendanceRecords = 'trainerAttendanceRecords' in trainingSession && Array.isArray(trainingSession.trainerAttendanceRecords)
+      ? trainingSession.trainerAttendanceRecords
+      : [];
+    const trainerAttendanceMap = new Map(
+      trainerAttendanceRecords.map((r: { trainerId: string; status: string; notes?: string }) => [r.trainerId, r])
+    );
+
     // Build trainers list from groups
-    const trainerMap = new Map<string, { id: string; name: string; cancelled: boolean }>();
+    const trainerMap = new Map<string, { id: string; name: string; cancelled: boolean; attendanceStatus: string | null; attendanceNote?: string }>();
     if (recurringTraining) {
       for (const trainingGroup of recurringTraining.trainingGroups) {
         for (const assignment of (trainingGroup as { trainerAssignments?: Array<{ trainerId: string; trainer: { user: { firstName: string; lastName: string } } }> }).trainerAssignments || []) {
           if (!trainerMap.has(assignment.trainerId)) {
+            const attendance = trainerAttendanceMap.get(assignment.trainerId) as { status?: string; notes?: string } | undefined;
             trainerMap.set(assignment.trainerId, {
               id: assignment.trainerId,
               name: `${assignment.trainer.user.firstName} ${assignment.trainer.user.lastName}`,
               cancelled: trainerCancellationSet.has(assignment.trainerId),
+              attendanceStatus: attendance?.status || null,
+              attendanceNote: attendance?.notes,
             });
           }
         }

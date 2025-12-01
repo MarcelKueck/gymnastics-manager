@@ -72,6 +72,18 @@ export async function getTrainerHoursForMonth(
     });
     const cancelledSessionIds = new Set(trainerCancellations.map(c => c.trainingSessionId));
 
+    // Get trainer's attendance records for this period
+    const trainerAttendance = await prisma.trainerAttendanceRecord.findMany({
+      where: {
+        trainerId: trainer.id,
+        trainingSession: {
+          date: { gte: startDate, lte: endDate },
+        },
+      },
+      select: { trainingSessionId: true, status: true },
+    });
+    const attendanceBySession = new Map(trainerAttendance.map(a => [a.trainingSessionId, a.status]));
+
     // First, try to get sessions where trainer is directly assigned via sessionGroups
     const sessionsWithDirectAssignment = await prisma.trainingSession.findMany({
       where: {
@@ -113,13 +125,21 @@ export async function getTrainerHoursForMonth(
       },
     });
 
-    // Merge and deduplicate sessions by ID, excluding cancelled sessions
+    // Merge and deduplicate sessions by ID, excluding cancelled sessions and absent trainers
     const sessionMap = new Map<string, typeof sessionsWithDirectAssignment[0]>();
     for (const session of [...sessionsWithDirectAssignment, ...sessionsViaRecurring]) {
       // Exclude sessions where trainer cancelled
-      if (!cancelledSessionIds.has(session.id)) {
-        sessionMap.set(session.id, session);
+      if (cancelledSessionIds.has(session.id)) {
+        continue;
       }
+      
+      // If attendance was marked, only count if trainer was PRESENT
+      const attendanceStatus = attendanceBySession.get(session.id);
+      if (attendanceStatus && attendanceStatus !== 'PRESENT') {
+        continue;
+      }
+      
+      sessionMap.set(session.id, session);
     }
     const sessions = Array.from(sessionMap.values());
 
@@ -183,6 +203,18 @@ export async function getTrainerSessionDetails(
     select: { trainingSessionId: true },
   });
   const cancelledSessionIds = new Set(trainerCancellations.map(c => c.trainingSessionId));
+
+  // Get trainer's attendance records for this period
+  const trainerAttendance = await prisma.trainerAttendanceRecord.findMany({
+    where: {
+      trainerId,
+      trainingSession: {
+        date: { gte: startDate, lte: endDate },
+      },
+    },
+    select: { trainingSessionId: true, status: true },
+  });
+  const attendanceBySession = new Map(trainerAttendance.map(a => [a.trainingSessionId, a.status]));
 
   // Get sessions via direct session group assignments
   const sessionsWithDirectAssignment = await prisma.trainingSession.findMany({
@@ -250,12 +282,21 @@ export async function getTrainerSessionDetails(
     orderBy: { date: 'asc' },
   });
 
-  // Merge and deduplicate, excluding cancelled sessions
+  // Merge and deduplicate, excluding cancelled sessions and absent trainers
   const sessionMap = new Map<string, typeof sessionsWithDirectAssignment[0]>();
   for (const session of [...sessionsWithDirectAssignment, ...sessionsViaRecurring]) {
-    if (!cancelledSessionIds.has(session.id)) {
-      sessionMap.set(session.id, session);
+    // Exclude sessions where trainer cancelled
+    if (cancelledSessionIds.has(session.id)) {
+      continue;
     }
+    
+    // If attendance was marked, only count if trainer was PRESENT
+    const attendanceStatus = attendanceBySession.get(session.id);
+    if (attendanceStatus && attendanceStatus !== 'PRESENT') {
+      continue;
+    }
+    
+    sessionMap.set(session.id, session);
   }
   const sessions = Array.from(sessionMap.values()).sort(
     (a, b) => a.date.getTime() - b.date.getTime()

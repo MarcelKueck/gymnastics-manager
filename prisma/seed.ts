@@ -12,6 +12,7 @@ async function main() {
   await prisma.competition.deleteMany();
   await prisma.absenceAlert.deleteMany();
   await prisma.attendanceRecord.deleteMany();
+  await prisma.trainerAttendanceRecord.deleteMany();
   await prisma.cancellation.deleteMany();
   await prisma.trainerCancellation.deleteMany();
   await prisma.sessionAthleteAssignment.deleteMany();
