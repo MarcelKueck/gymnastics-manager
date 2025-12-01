@@ -6,17 +6,24 @@ import { Button } from '@/components/ui/button';
 import { Loading } from '@/components/ui/loading';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { PageHeader } from '@/components/shared';
 import { 
   Clock,
   Calendar,
   Save,
   CheckCircle,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface SystemSettings {
   id: string;
   cancellationDeadlineHours: number;
   sessionGenerationDaysAhead: number;
+  absenceAlertThreshold: number;
+  absenceAlertWindowDays: number;
+  absenceAlertCooldownDays: number;
+  absenceAlertEnabled: boolean;
 }
 
 export default function AdminSettingsPage() {
@@ -71,10 +78,10 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Systemeinstellungen</h1>
-        <p className="text-muted-foreground">Allgemeine Systemkonfiguration</p>
-      </div>
+      <PageHeader
+        title="Systemeinstellungen"
+        description="Allgemeine Systemkonfiguration"
+      />
 
       {error && (
         <div className="bg-destructive/10 text-destructive p-4 rounded-md">
@@ -156,6 +163,102 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Absence Alert Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <CardTitle>Abwesenheitswarnungen</CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="absenceAlertEnabled" className="text-sm">
+                {settings?.absenceAlertEnabled ? 'Aktiviert' : 'Deaktiviert'}
+              </Label>
+              <Switch
+                id="absenceAlertEnabled"
+                checked={settings?.absenceAlertEnabled ?? true}
+                onCheckedChange={(checked: boolean) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    absenceAlertEnabled: checked,
+                  } : null)
+                }
+              />
+            </div>
+          </div>
+          <CardDescription>
+            Konfigurieren Sie, wann Warnungen bei gehäuften Abwesenheiten ausgelöst werden
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="absenceThreshold">Schwellenwert</Label>
+              <Input
+                id="absenceThreshold"
+                type="number"
+                min={1}
+                max={20}
+                value={settings?.absenceAlertThreshold ?? 3}
+                onChange={(e) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    absenceAlertThreshold: parseInt(e.target.value) || 3,
+                  } : null)
+                }
+                disabled={!settings?.absenceAlertEnabled}
+              />
+              <p className="text-sm text-muted-foreground">
+                Anzahl unentschuldigter Abwesenheiten, ab der eine Warnung ausgelöst wird
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="absenceWindow">Zeitraum (Tage)</Label>
+              <Input
+                id="absenceWindow"
+                type="number"
+                min={7}
+                max={365}
+                value={settings?.absenceAlertWindowDays ?? 30}
+                onChange={(e) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    absenceAlertWindowDays: parseInt(e.target.value) || 30,
+                  } : null)
+                }
+                disabled={!settings?.absenceAlertEnabled}
+              />
+              <p className="text-sm text-muted-foreground">
+                Betrachtungszeitraum für die Abwesenheitszählung
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="absenceCooldown">Abklingzeit (Tage)</Label>
+              <Input
+                id="absenceCooldown"
+                type="number"
+                min={1}
+                max={90}
+                value={settings?.absenceAlertCooldownDays ?? 14}
+                onChange={(e) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    absenceAlertCooldownDays: parseInt(e.target.value) || 14,
+                  } : null)
+                }
+                disabled={!settings?.absenceAlertEnabled}
+              />
+              <p className="text-sm text-muted-foreground">
+                Wartezeit zwischen Warnungen für denselben Athleten
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={isSaving}>

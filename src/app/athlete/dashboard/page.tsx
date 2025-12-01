@@ -107,7 +107,7 @@ export default function AthleteDashboard() {
             <div className="text-2xl font-bold">
               {data.activeCancellations}
             </div>
-            <Link href="/athlete/cancellations">
+            <Link href="/athlete/schedule">
               <Button variant="link" className="p-0 h-auto text-xs">
                 Verwalten →
               </Button>
@@ -121,13 +121,7 @@ export default function AthleteDashboard() {
         <Link href="/athlete/schedule">
           <Button variant="outline">
             <Calendar className="h-4 w-4 mr-2" />
-            Trainingsplan anzeigen
-          </Button>
-        </Link>
-        <Link href="/athlete/cancellations">
-          <Button variant="outline">
-            <Ban className="h-4 w-4 mr-2" />
-            Training absagen
+            Trainings anzeigen
           </Button>
         </Link>
       </div>

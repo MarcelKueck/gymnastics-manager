@@ -9,7 +9,6 @@ import { RoleSwitcher } from '@/components/shared/role-switcher';
 import {
   LayoutDashboard,
   Calendar,
-  Ban,
   User,
   Trophy,
   FileText,
@@ -28,8 +27,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/athlete/dashboard', icon: LayoutDashboard },
-  { label: 'Trainingsplan', href: '/athlete/schedule', icon: Calendar },
-  { label: 'Absagen', href: '/athlete/cancellations', icon: Ban },
+  { label: 'Trainings', href: '/athlete/schedule', icon: Calendar },
   { label: 'Profil', href: '/athlete/profile', icon: User },
   { label: 'Wettkämpfe', href: '/athlete/competitions', icon: Trophy },
   { label: 'Dateien', href: '/athlete/files', icon: FileText },

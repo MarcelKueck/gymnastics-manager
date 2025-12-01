@@ -59,8 +59,8 @@ export async function getTrainerHoursForMonth(
   const summaries: TrainerHoursSummary[] = [];
 
   for (const trainer of trainers) {
-    // Get sessions where this trainer was assigned
-    const sessions = await prisma.trainingSession.findMany({
+    // First, try to get sessions where trainer is directly assigned via sessionGroups
+    const sessionsWithDirectAssignment = await prisma.trainingSession.findMany({
       where: {
         date: { gte: startDate, lte: endDate },
         isCancelled: false,
@@ -75,15 +75,37 @@ export async function getTrainerHoursForMonth(
       },
       include: {
         recurringTraining: true,
-        sessionGroups: {
-          include: {
-            trainerAssignments: {
-              where: { trainerId: trainer.id },
+      },
+    });
+
+    // Also get sessions via recurring training trainer assignments
+    // (for sessions that don't have specific session group assignments)
+    const sessionsViaRecurring = await prisma.trainingSession.findMany({
+      where: {
+        date: { gte: startDate, lte: endDate },
+        isCancelled: false,
+        isCompleted: true,
+        recurringTraining: {
+          trainingGroups: {
+            some: {
+              trainerAssignments: {
+                some: { trainerId: trainer.id },
+              },
             },
           },
         },
       },
+      include: {
+        recurringTraining: true,
+      },
     });
+
+    // Merge and deduplicate sessions by ID
+    const sessionMap = new Map<string, typeof sessionsWithDirectAssignment[0]>();
+    for (const session of [...sessionsWithDirectAssignment, ...sessionsViaRecurring]) {
+      sessionMap.set(session.id, session);
+    }
+    const sessions = Array.from(sessionMap.values());
 
     // Calculate total hours
     let calculatedHours = 0;
@@ -133,7 +155,8 @@ export async function getTrainerSessionDetails(
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
 
-  const sessions = await prisma.trainingSession.findMany({
+  // Get sessions via direct session group assignments
+  const sessionsWithDirectAssignment = await prisma.trainingSession.findMany({
     where: {
       date: { gte: startDate, lte: endDate },
       isCancelled: false,
@@ -147,13 +170,12 @@ export async function getTrainerSessionDetails(
       },
     },
     include: {
-      recurringTraining: true,
-      sessionGroups: {
-        where: {
-          trainerAssignments: {
-            some: { trainerId },
-          },
+      recurringTraining: {
+        include: {
+          trainingGroups: true,
         },
+      },
+      sessionGroups: {
         include: {
           trainingGroup: true,
         },
@@ -162,9 +184,60 @@ export async function getTrainerSessionDetails(
     orderBy: { date: 'asc' },
   });
 
+  // Also get sessions via recurring training trainer assignments
+  const sessionsViaRecurring = await prisma.trainingSession.findMany({
+    where: {
+      date: { gte: startDate, lte: endDate },
+      isCancelled: false,
+      isCompleted: true,
+      recurringTraining: {
+        trainingGroups: {
+          some: {
+            trainerAssignments: {
+              some: { trainerId },
+            },
+          },
+        },
+      },
+    },
+    include: {
+      recurringTraining: {
+        include: {
+          trainingGroups: {
+            where: {
+              trainerAssignments: {
+                some: { trainerId },
+              },
+            },
+          },
+        },
+      },
+      sessionGroups: {
+        include: {
+          trainingGroup: true,
+        },
+      },
+    },
+    orderBy: { date: 'asc' },
+  });
+
+  // Merge and deduplicate
+  const sessionMap = new Map<string, typeof sessionsWithDirectAssignment[0]>();
+  for (const session of [...sessionsWithDirectAssignment, ...sessionsViaRecurring]) {
+    sessionMap.set(session.id, session);
+  }
+  const sessions = Array.from(sessionMap.values()).sort(
+    (a, b) => a.date.getTime() - b.date.getTime()
+  );
+
   return sessions.map((session) => {
     const startTime = session.startTime || session.recurringTraining?.startTime || '00:00';
     const endTime = session.endTime || session.recurringTraining?.endTime || '00:00';
+    
+    // Get group names from session groups if available, otherwise from recurring training
+    const groupNames = session.sessionGroups.length > 0
+      ? session.sessionGroups.map((sg) => sg.trainingGroup.name)
+      : session.recurringTraining?.trainingGroups.map((g) => g.name) || [];
     
     return {
       id: session.id,
@@ -173,7 +246,7 @@ export async function getTrainerSessionDetails(
       startTime,
       endTime,
       durationHours: calculateDurationHours(startTime, endTime),
-      groupNames: session.sessionGroups.map((sg) => sg.trainingGroup.name),
+      groupNames,
     };
   });
 }

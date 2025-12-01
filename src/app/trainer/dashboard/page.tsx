@@ -156,7 +156,6 @@ export default function TrainerDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Anstehende Trainings</CardTitle>
-            <CardDescription>Diese Woche</CardDescription>
           </CardHeader>
           <CardContent>
             {data.upcomingSessions.length === 0 ? (

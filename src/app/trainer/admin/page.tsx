@@ -59,7 +59,7 @@ const adminSections = [
     color: 'text-red-500',
   },
   {
-    title: 'Massen-E-Mail',
+    title: 'E-Mails',
     description: 'E-Mails an Athleten und Trainer senden',
     href: '/trainer/admin/bulk-email',
     icon: Mail,

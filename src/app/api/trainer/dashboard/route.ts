@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { generateVirtualSessions, getVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
 export async function GET() {
   try {
@@ -14,6 +15,9 @@ export async function GET() {
     if (session.user.activeRole !== 'TRAINER' && session.user.activeRole !== 'ADMIN') {
       return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
+
+    const isAdmin = session.user.activeRole === 'ADMIN';
+    const trainerProfileId = session.user.trainerProfileId;
 
     // Get current week boundaries
     const now = new Date();
@@ -29,27 +33,109 @@ export async function GET() {
     const endOfNextWeek = new Date(endOfWeek);
     endOfNextWeek.setDate(endOfNextWeek.getDate() + 7);
 
-    const upcomingSessions = await prisma.trainingSession.findMany({
-      where: {
-        date: {
-          gte: now,
-          lte: endOfNextWeek,
-        },
-        isCancelled: false,
-      },
-      include: {
-        recurringTraining: {
-          include: {
-            trainingGroups: true,
+    // For non-admin trainers, get only their assigned training groups
+    let trainingGroupIds: string[] | null = null;
+    let recurringTrainingIds: string[] | null = null;
+
+    if (!isAdmin && trainerProfileId) {
+      const trainerAssignments = await prisma.recurringTrainingTrainerAssignment.findMany({
+        where: { trainerId: trainerProfileId },
+        include: {
+          trainingGroup: {
+            include: { recurringTraining: true },
           },
         },
-        attendanceRecords: true,
+      });
+
+      trainingGroupIds = trainerAssignments.map((a) => a.trainingGroupId);
+      recurringTrainingIds = Array.from(new Set(
+        trainerAssignments.map((a) => a.trainingGroup.recurringTrainingId)
+      ));
+
+      // If trainer has no assignments, return empty dashboard data
+      if (trainingGroupIds.length === 0) {
+        return NextResponse.json({
+          data: {
+            upcomingSessions: [],
+            pendingApprovals: 0,
+            athletesNeedingAttention: [],
+            stats: {
+              sessionsThisWeek: 0,
+              attendanceMarkedThisWeek: 0,
+            },
+          },
+        });
+      }
+    }
+
+    // Get recurring trainings with their groups (filtered for non-admin trainers)
+    const recurringTrainings = await prisma.recurringTraining.findMany({
+      where: {
+        isActive: true,
+        ...(recurringTrainingIds ? { id: { in: recurringTrainingIds } } : {}),
       },
-      orderBy: {
-        date: 'asc',
+      include: {
+        trainingGroups: {
+          ...(trainingGroupIds ? { where: { id: { in: trainingGroupIds } } } : {}),
+          include: {
+            _count: {
+              select: { athleteAssignments: true },
+            },
+          },
+        },
       },
-      take: 10,
     });
+
+    // Fetch stored sessions for date range (filtered for non-admin trainers)
+    const storedSessions = await prisma.trainingSession.findMany({
+      where: {
+        date: {
+          gte: startOfWeek,
+          lte: endOfNextWeek,
+        },
+        ...(recurringTrainingIds ? { recurringTrainingId: { in: recurringTrainingIds } } : {}),
+      },
+      include: {
+        _count: {
+          select: { attendanceRecords: true },
+        },
+      },
+    });
+
+    // Create map for easy lookup
+    const storedSessionsByKey = new Map(
+      storedSessions.map((s) => [
+        `${s.recurringTrainingId}_${s.date.toISOString().split('T')[0]}`,
+        s,
+      ])
+    );
+
+    // Generate virtual sessions for upcoming
+    const virtualSessions = generateVirtualSessions(
+      recurringTrainings,
+      storedSessions.filter((s) => s.date >= now),
+      now,
+      endOfNextWeek
+    );
+
+    // Map virtual sessions to response format
+    const upcomingSessions = virtualSessions
+      .filter((s) => !s.isCancelled)
+      .slice(0, 10)
+      .map((s) => {
+        const dateKey = `${s.recurringTrainingId}_${s.date.toISOString().split('T')[0]}`;
+        const stored = storedSessionsByKey.get(dateKey);
+        
+        return {
+          id: s.id || getVirtualSessionId(s.recurringTrainingId, s.date),
+          date: s.date.toISOString(),
+          name: s.trainingName || 'Training',
+          startTime: s.startTime,
+          endTime: s.endTime,
+          groups: s.groups.map((g) => g.name),
+          attendanceMarked: stored ? stored._count.attendanceRecords > 0 : false,
+        };
+      });
 
     // Get pending athlete approvals count
     const pendingApprovals = await prisma.athleteProfile.count({
@@ -58,71 +144,83 @@ export async function GET() {
       },
     });
 
-    // Get athletes with high absence counts (3+ in last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // Get system settings for absence thresholds
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+    });
+    const absenceThreshold = settings?.absenceAlertThreshold ?? 3;
+    const absenceWindowDays = settings?.absenceAlertWindowDays ?? 30;
 
-    const absenceAlerts = await prisma.absenceAlert.findMany({
+    // Get athletes with high absence counts based on actual attendance records
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - absenceWindowDays);
+
+    // Get all unexcused absences in the window, grouped by athlete
+    const absenceRecords = await prisma.attendanceRecord.groupBy({
+      by: ['athleteId'],
       where: {
-        createdAt: {
-          gte: thirtyDaysAgo,
-        },
-        acknowledged: false,
+        status: 'ABSENT_UNEXCUSED',
+        markedAt: { gte: thirtyDaysAgo },
       },
-      include: {
-        athlete: {
-          include: {
-            user: true,
+      _count: {
+        athleteId: true,
+      },
+      having: {
+        athleteId: {
+          _count: {
+            gte: absenceThreshold,
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 5,
     });
 
-    // Stats for this week
-    const sessionsThisWeek = await prisma.trainingSession.count({
-      where: {
-        date: {
-          gte: startOfWeek,
-          lte: now,
+    // Get athlete details for those exceeding threshold
+    const athleteIdsWithHighAbsence = absenceRecords.map((r) => r.athleteId);
+    
+    let athletesNeedingAttention: { id: string; name: string; absenceCount: number; alertDate: string }[] = [];
+    
+    if (athleteIdsWithHighAbsence.length > 0) {
+      const athleteDetails = await prisma.athleteProfile.findMany({
+        where: {
+          id: { in: athleteIdsWithHighAbsence },
         },
-        isCancelled: false,
-      },
-    });
+        include: {
+          user: true,
+        },
+      });
 
-    const attendanceMarkedThisWeek = await prisma.trainingSession.count({
-      where: {
-        date: {
-          gte: startOfWeek,
-          lte: now,
-        },
-        isCancelled: false,
-        attendanceRecords: {
-          some: {},
-        },
-      },
-    });
+      athletesNeedingAttention = absenceRecords.map((record) => {
+        const athlete = athleteDetails.find((a) => a.id === record.athleteId);
+        return {
+          id: record.athleteId,
+          name: athlete ? `${athlete.user.firstName} ${athlete.user.lastName}` : 'Unbekannt',
+          absenceCount: record._count.athleteId,
+          alertDate: new Date().toISOString(), // Current date since this is real-time calculation
+        };
+      }).slice(0, 5);
+    }
+
+    // Count sessions this week using virtual sessions
+    const virtualSessionsThisWeek = generateVirtualSessions(
+      recurringTrainings,
+      storedSessions.filter((s) => s.date >= startOfWeek && s.date <= now),
+      startOfWeek,
+      now
+    );
+    const sessionsThisWeek = virtualSessionsThisWeek.filter((s) => !s.isCancelled).length;
+
+    // Count how many of those have attendance marked
+    const attendanceMarkedThisWeek = virtualSessionsThisWeek.filter((s) => {
+      if (s.isCancelled) return false;
+      const dateKey = `${s.recurringTrainingId}_${s.date.toISOString().split('T')[0]}`;
+      const stored = storedSessionsByKey.get(dateKey);
+      return stored ? stored._count.attendanceRecords > 0 : false;
+    }).length;
 
     const data = {
-      upcomingSessions: upcomingSessions.map((session) => ({
-        id: session.id,
-        date: session.date.toISOString(),
-        name: session.recurringTraining?.name || 'Training',
-        startTime: session.recurringTraining?.startTime || '',
-        endTime: session.recurringTraining?.endTime || '',
-        groups: session.recurringTraining?.trainingGroups.map((g) => g.name) || [],
-        attendanceMarked: session.attendanceRecords.length > 0,
-      })),
+      upcomingSessions,
       pendingApprovals,
-      athletesNeedingAttention: absenceAlerts.map((alert) => ({
-        id: alert.athlete.id,
-        name: `${alert.athlete.user.firstName} ${alert.athlete.user.lastName}`,
-        absenceCount: alert.absenceCount,
-        alertDate: alert.createdAt.toISOString(),
-      })),
+      athletesNeedingAttention,
       stats: {
         sessionsThisWeek,
         attendanceMarkedThisWeek,

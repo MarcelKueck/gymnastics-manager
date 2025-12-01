@@ -18,6 +18,10 @@ export async function GET() {
         id: 'default',
         cancellationDeadlineHours: 2,
         sessionGenerationDaysAhead: 56,
+        absenceAlertThreshold: 3,
+        absenceAlertWindowDays: 30,
+        absenceAlertCooldownDays: 14,
+        absenceAlertEnabled: true,
       },
     });
   }
@@ -37,11 +41,19 @@ export async function PUT(request: NextRequest) {
     update: {
       cancellationDeadlineHours: body.cancellationDeadlineHours,
       sessionGenerationDaysAhead: body.sessionGenerationDaysAhead,
+      absenceAlertThreshold: body.absenceAlertThreshold,
+      absenceAlertWindowDays: body.absenceAlertWindowDays,
+      absenceAlertCooldownDays: body.absenceAlertCooldownDays,
+      absenceAlertEnabled: body.absenceAlertEnabled,
     },
     create: {
       id: 'default',
       cancellationDeadlineHours: body.cancellationDeadlineHours ?? 2,
       sessionGenerationDaysAhead: body.sessionGenerationDaysAhead ?? 56,
+      absenceAlertThreshold: body.absenceAlertThreshold ?? 3,
+      absenceAlertWindowDays: body.absenceAlertWindowDays ?? 30,
+      absenceAlertCooldownDays: body.absenceAlertCooldownDays ?? 14,
+      absenceAlertEnabled: body.absenceAlertEnabled ?? true,
     },
   });
 

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAthlete } from '@/lib/api/auth';
 import { prisma } from '@/lib/prisma';
-import { startOfMonth, endOfMonth } from 'date-fns';
+import { startOfMonth, endOfMonth, addDays } from 'date-fns';
+import { generateVirtualSessions, getVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
 export async function GET() {
   const { session, error } = await requireAthlete();
@@ -16,7 +17,11 @@ export async function GET() {
     // Get athlete's training group IDs via their assignments
     const assignments = await prisma.recurringTrainingAthleteAssignment.findMany({
       where: { athleteId },
-      select: { trainingGroupId: true },
+      include: {
+        trainingGroup: {
+          include: { recurringTraining: true },
+        },
+      },
     });
     const groupIds = assignments.map((a) => a.trainingGroupId);
 
@@ -35,26 +40,82 @@ export async function GET() {
       });
     }
 
-    // Upcoming sessions for the athlete's groups
-    const upcomingSessions = await prisma.trainingSession.findMany({
+    // Get recurring training IDs for this athlete
+    const recurringTrainingIds = Array.from(new Set(
+      assignments.map((a) => a.trainingGroup.recurringTrainingId)
+    ));
+
+    // Get recurring trainings for the athlete's groups
+    const recurringTrainings = await prisma.recurringTraining.findMany({
       where: {
-        date: { gte: now },
-        isCancelled: false,
-        recurringTraining: {
-          trainingGroups: {
-            some: { id: { in: groupIds } },
+        id: { in: recurringTrainingIds },
+        isActive: true,
+      },
+      include: {
+        trainingGroups: {
+          where: { id: { in: groupIds } },
+          include: {
+            _count: {
+              select: { athleteAssignments: true },
+            },
           },
         },
       },
+    });
+
+    // Generate virtual sessions for the next 14 days
+    const endDate = addDays(now, 14);
+
+    // Fetch stored sessions in date range
+    const storedSessions = await prisma.trainingSession.findMany({
+      where: {
+        date: { gte: now, lte: endDate },
+        recurringTrainingId: { in: recurringTrainingIds },
+      },
       include: {
-        recurringTraining: true,
+        _count: {
+          select: { attendanceRecords: true },
+        },
         cancellations: {
           where: { athleteId, isActive: true },
         },
       },
-      orderBy: { date: 'asc' },
-      take: 5,
     });
+
+    // Generate virtual sessions
+    const virtualSessions = generateVirtualSessions(
+      recurringTrainings,
+      storedSessions,
+      now,
+      endDate
+    );
+
+    // Create a map to check for athlete cancellations
+    const storedSessionsByKey = new Map(
+      storedSessions.map((s) => [
+        `${s.recurringTrainingId}_${s.date.toISOString().split('T')[0]}`,
+        s,
+      ])
+    );
+
+    // Filter out cancelled sessions and map to response format
+    const upcomingSessions = virtualSessions
+      .filter((s) => !s.isCancelled)
+      .slice(0, 5)
+      .map((s) => {
+        const dateKey = `${s.recurringTrainingId}_${s.date.toISOString().split('T')[0]}`;
+        const stored = storedSessionsByKey.get(dateKey);
+        const hasCancellation = stored?.cancellations && stored.cancellations.length > 0;
+
+        return {
+          id: s.id || getVirtualSessionId(s.recurringTrainingId, s.date),
+          date: s.date.toISOString(),
+          name: s.trainingName || 'Training',
+          startTime: s.startTime,
+          endTime: s.endTime,
+          isCancelled: hasCancellation || false,
+        };
+      });
 
     // Monthly attendance stats
     const attendanceRecords = await prisma.attendanceRecord.findMany({
@@ -85,14 +146,7 @@ export async function GET() {
 
     return NextResponse.json({
       data: {
-        upcomingSessions: upcomingSessions.map((s) => ({
-          id: s.id,
-          date: s.date.toISOString(),
-          name: s.recurringTraining?.name || 'Training',
-          startTime: s.startTime || s.recurringTraining?.startTime || '00:00',
-          endTime: s.endTime || s.recurringTraining?.endTime || '00:00',
-          isCancelled: s.cancellations.length > 0,
-        })),
+        upcomingSessions,
         monthlyStats: {
           totalSessions,
           presentCount,

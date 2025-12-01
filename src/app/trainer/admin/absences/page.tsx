@@ -11,15 +11,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { Loading } from '@/components/ui/loading';
 import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/shared';
 import {
   AlertTriangle,
   Check,
   User,
   Calendar,
   Bell,
+  Settings,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import Link from 'next/link';
 
 interface AbsenceAlert {
   id: string;
@@ -38,8 +41,31 @@ interface AbsenceAlert {
   };
 }
 
+interface CalculatedWarning {
+  athleteId: string;
+  absenceCount: number;
+  period: number;
+  athlete: {
+    id: string;
+    user: {
+      firstName: string;
+      lastName: string;
+      email: string;
+    };
+  };
+}
+
+interface AbsenceSettings {
+  threshold: number;
+  windowDays: number;
+  cooldownDays: number;
+  isEnabled: boolean;
+}
+
 export default function AdminAbsencesPage() {
   const [alerts, setAlerts] = useState<AbsenceAlert[]>([]);
+  const [calculatedWarnings, setCalculatedWarnings] = useState<CalculatedWarning[]>([]);
+  const [settings, setSettings] = useState<AbsenceSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [acknowledging, setAcknowledging] = useState<string | null>(null);
 
@@ -49,6 +75,8 @@ export default function AdminAbsencesPage() {
       if (res.ok) {
         const result = await res.json();
         setAlerts(result.data || []);
+        setCalculatedWarnings(result.calculatedWarnings || []);
+        setSettings(result.settings || null);
       }
     } catch (error) {
       console.error('Error fetching alerts:', error);
@@ -69,7 +97,6 @@ export default function AdminAbsencesPage() {
       });
 
       if (res.ok) {
-        // Remove from list
         setAlerts((prev) => prev.filter((a) => a.id !== alertId));
       } else {
         const result = await res.json();
@@ -89,33 +116,114 @@ export default function AdminAbsencesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Abwesenheitswarnungen</h1>
-        <p className="text-muted-foreground">
-          Athleten mit auffällig vielen unentschuldigten Abwesenheiten
-        </p>
-      </div>
+      <PageHeader
+        title="Abwesenheitswarnungen"
+        description="Athleten mit auffällig vielen unentschuldigten Abwesenheiten"
+      />
 
-      {alerts.length === 0 ? (
+      {/* Current Settings Card */}
+      {settings && (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Bell className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium">Keine offenen Warnungen</h3>
-            <p className="text-muted-foreground text-center max-w-md">
-              Alle Warnungen wurden bereits bearbeitet oder es gibt aktuell keine
-              Athleten mit auffällig vielen Abwesenheiten.
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Aktuelle Einstellungen
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="text-sm text-muted-foreground">Status</p>
+                <p className="font-medium">
+                  {settings.isEnabled ? (
+                    <Badge variant="default">Aktiviert</Badge>
+                  ) : (
+                    <Badge variant="secondary">Deaktiviert</Badge>
+                  )}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="text-sm text-muted-foreground">Schwellenwert</p>
+                <p className="font-medium">{settings.threshold} Abwesenheiten</p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="text-sm text-muted-foreground">Zeitraum</p>
+                <p className="font-medium">{settings.windowDays} Tage</p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="text-sm text-muted-foreground">Abklingzeit</p>
+                <p className="font-medium">{settings.cooldownDays} Tage</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mt-4">
+              Einstellungen können unter{' '}
+              <Link href="/trainer/admin/settings" className="font-medium text-primary hover:underline">
+                Administration → Einstellungen
+              </Link>{' '}
+              angepasst werden.
             </p>
           </CardContent>
         </Card>
-      ) : (
+      )}
+
+      {/* Calculated Warnings (Real-time) */}
+      {calculatedWarnings.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Offene Warnungen
+              Aktuelle Auffälligkeiten
             </CardTitle>
             <CardDescription>
-              {alerts.length} Warnung(en) erfordern Ihre Aufmerksamkeit
+              {calculatedWarnings.length} Athlet(en) mit erhöhten Abwesenheiten (in Echtzeit berechnet)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {calculatedWarnings.map((warning) => (
+                <div
+                  key={warning.athleteId}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-amber-50 border-amber-200"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                      <User className="h-5 w-5 text-amber-700" />
+                    </div>
+                    <div>
+                      <p className="font-medium">
+                        {warning.athlete.user.firstName} {warning.athlete.user.lastName}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {warning.athlete.user.email}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <Badge variant="destructive">
+                          {warning.absenceCount} unentschuldigte Abwesenheiten
+                        </Badge>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          in den letzten {warning.period} Tagen
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stored Alerts (to be acknowledged) */}
+      {alerts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-orange-500" />
+              Offene Warnungen zur Bestätigung
+            </CardTitle>
+            <CardDescription>
+              {alerts.length} gespeicherte Warnung(en) erfordern Ihre Aufmerksamkeit
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -123,11 +231,11 @@ export default function AdminAbsencesPage() {
               {alerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-amber-50 border-amber-200"
+                  className="flex items-center justify-between p-4 rounded-lg border bg-orange-50 border-orange-200"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                      <User className="h-5 w-5 text-amber-700" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+                      <User className="h-5 w-5 text-orange-700" />
                     </div>
                     <div>
                       <p className="font-medium">
@@ -168,23 +276,19 @@ export default function AdminAbsencesPage() {
         </Card>
       )}
 
-      {/* Info Card about settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Warnungseinstellungen</CardTitle>
-          <CardDescription>
-            Die Konfiguration erfolgt in den Systemeinstellungen
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Warnungen werden automatisch generiert, wenn ein Athlet die konfigurierte
-            Anzahl an unentschuldigten Abwesenheiten innerhalb des festgelegten
-            Zeitraums überschreitet. Die Einstellungen können unter{' '}
-            <span className="font-medium">Administration → Einstellungen</span> angepasst werden.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Empty State */}
+      {alerts.length === 0 && calculatedWarnings.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Bell className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">Keine Auffälligkeiten</h3>
+            <p className="text-muted-foreground text-center max-w-md">
+              Aktuell gibt es keine Athleten mit auffällig vielen unentschuldigten
+              Abwesenheiten im konfigurierten Zeitraum.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

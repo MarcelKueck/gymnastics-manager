@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <rect width="512" height="512" fill="#171717" rx="64" />
+    <g fill="white">
+        <!-- Stylized gymnast silhouette -->
+        <circle cx="256" cy="120" r="45" />
+        <path
+            d="M256 180c-35 0-65 25-65 60v80c0 15 12 27 27 27h76c15 0 27-12 27-27v-80c0-35-30-60-65-60z" />
+        <path d="M150 260l-50 90c-5 9 1 20 12 20h40c8 0 15-5 18-12l35-63-55-35z" />
+        <path d="M362 260l50 90c5 9-1 20-12 20h-40c-8 0-15-5-18-12l-35-63 55-35z" />
+        <rect x="180" y="345" width="20" height="100" rx="10" />
+        <rect x="312" y="345" width="20" height="100" rx="10" />
+    </g>
+    <text x="256" y="480" text-anchor="middle" fill="white" font-family="Arial, sans-serif"
+        font-size="48" font-weight="bold">SVE</text>
+</svg>

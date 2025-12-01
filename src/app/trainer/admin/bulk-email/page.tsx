@@ -207,7 +207,7 @@ export default function AdminBulkEmailPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Massen-E-Mail"
+        title="E-Mails"
         description="Senden Sie E-Mails an alle oder ausgewählte Mitglieder"
       />
 

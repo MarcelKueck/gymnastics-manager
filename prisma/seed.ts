@@ -489,18 +489,35 @@ async function main() {
 
   // Add attendance records for completed sessions
   console.log('✅ Adding attendance records...');
+  
+  // Track which athletes should have high absences for testing the warning feature
+  // First athlete (Lena) will have many unexcused absences
+  const firstAthleteId = athletes[0]?.id;
+  
   for (const session of createdSessions) {
     for (const group of session.recurringTraining?.trainingGroups || []) {
       for (const assignment of group.athleteAssignments) {
-        // Randomly assign attendance status (85% present, 10% excused, 5% absent)
-        const rand = Math.random();
         let status: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED';
-        if (rand < 0.85) {
-          status = 'PRESENT';
-        } else if (rand < 0.95) {
-          status = 'ABSENT_EXCUSED';
+        
+        // Make the first athlete (Lena) have mostly unexcused absences for testing
+        if (assignment.athleteId === firstAthleteId) {
+          // 70% chance of unexcused absence for this athlete
+          const rand = Math.random();
+          if (rand < 0.70) {
+            status = 'ABSENT_UNEXCUSED';
+          } else {
+            status = 'PRESENT';
+          }
         } else {
-          status = 'ABSENT_UNEXCUSED';
+          // Normal distribution for other athletes (85% present, 10% excused, 5% absent)
+          const rand = Math.random();
+          if (rand < 0.85) {
+            status = 'PRESENT';
+          } else if (rand < 0.95) {
+            status = 'ABSENT_EXCUSED';
+          } else {
+            status = 'ABSENT_UNEXCUSED';
+          }
         }
 
         await prisma.attendanceRecord.create({

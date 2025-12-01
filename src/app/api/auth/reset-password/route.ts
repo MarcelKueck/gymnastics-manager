@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     
     const validation = resetPasswordSchema.safeParse(body);
     if (!validation.success) {
-      console.log('[Reset Password] Validation errors:', validation.error.errors);
-      const errorMessage = validation.error.errors[0]?.message || 'Ungültige Eingabe';
+      console.log('[Reset Password] Validation errors:', validation.error.issues);
+      const errorMessage = validation.error.issues[0]?.message || 'Ungültige Eingabe';
       return NextResponse.json(
         { error: errorMessage },
         { status: 400 }

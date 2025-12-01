@@ -33,11 +33,43 @@ export async function GET(request: NextRequest) {
     const startDate = startDateParam ? new Date(startDateParam) : defaultStart;
     const endDate = endDateParam ? new Date(endDateParam) : defaultEnd;
 
-    // Fetch recurring trainings with their groups
+    const isAdmin = session.user.activeRole === 'ADMIN';
+    const trainerProfileId = session.user.trainerProfileId;
+
+    // For non-admin trainers, get only their assigned training groups
+    let trainingGroupIds: string[] | null = null;
+    let recurringTrainingIds: string[] | null = null;
+
+    if (!isAdmin && trainerProfileId) {
+      const trainerAssignments = await prisma.recurringTrainingTrainerAssignment.findMany({
+        where: { trainerId: trainerProfileId },
+        include: {
+          trainingGroup: {
+            include: { recurringTraining: true },
+          },
+        },
+      });
+
+      trainingGroupIds = trainerAssignments.map((a) => a.trainingGroupId);
+      recurringTrainingIds = Array.from(new Set(
+        trainerAssignments.map((a) => a.trainingGroup.recurringTrainingId)
+      ));
+
+      // If trainer has no assignments, return empty data
+      if (trainingGroupIds.length === 0) {
+        return NextResponse.json({ data: [] });
+      }
+    }
+
+    // Fetch recurring trainings with their groups (filtered for non-admin trainers)
     const recurringTrainings = await prisma.recurringTraining.findMany({
-      where: { isActive: true },
+      where: { 
+        isActive: true,
+        ...(recurringTrainingIds ? { id: { in: recurringTrainingIds } } : {}),
+      },
       include: {
         trainingGroups: {
+          ...(trainingGroupIds ? { where: { id: { in: trainingGroupIds } } } : {}),
           include: {
             _count: {
               select: { athleteAssignments: true },
@@ -54,6 +86,7 @@ export async function GET(request: NextRequest) {
           gte: startDate,
           lte: endDate,
         },
+        ...(recurringTrainingIds ? { recurringTrainingId: { in: recurringTrainingIds } } : {}),
       },
       include: {
         _count: {

@@ -10,10 +10,24 @@ export async function GET(request: NextRequest) {
 
   const athleteId = session!.user.athleteProfileId!;
   const searchParams = request.nextUrl.searchParams;
+  
+  // Support both weeks-based and date-range queries
+  const startDateParam = searchParams.get('startDate');
+  const endDateParam = searchParams.get('endDate');
   const weeksAhead = parseInt(searchParams.get('weeks') || '4');
 
-  const startDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
-  const endDate = addDays(startDate, weeksAhead * 7);
+  let startDate: Date;
+  let endDate: Date;
+
+  if (startDateParam && endDateParam) {
+    startDate = new Date(startDateParam);
+    endDate = new Date(endDateParam);
+    // Ensure end of day for endDate
+    endDate.setHours(23, 59, 59, 999);
+  } else {
+    startDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday
+    endDate = addDays(startDate, weeksAhead * 7);
+  }
 
   try {
     // Get athlete's assigned training groups
@@ -94,6 +108,7 @@ export async function GET(request: NextRequest) {
       data: virtualSessions.map((vs) => {
         const dateKey = `${vs.recurringTrainingId}_${vs.date.toISOString().split('T')[0]}`;
         const stored = storedSessionsByKey.get(dateKey);
+        const athleteCancellation = stored?.cancellations?.find((c) => c.isActive);
         
         return {
           id: vs.id || getVirtualSessionId(vs.recurringTrainingId, vs.date),
@@ -103,8 +118,9 @@ export async function GET(request: NextRequest) {
           endTime: vs.endTime,
           isCancelled: vs.isCancelled,
           cancellationReason: vs.cancellationReason,
-          athleteCancelled: stored?.cancellations?.length ? stored.cancellations.length > 0 : false,
-          athleteCancellationReason: stored?.cancellations?.[0]?.reason,
+          athleteCancelled: !!athleteCancellation,
+          athleteCancellationId: athleteCancellation?.id,
+          athleteCancellationReason: athleteCancellation?.reason,
           isCompleted: stored?.isCompleted || false,
           attendanceStatus: stored?.attendanceRecords?.[0]?.status,
         };
