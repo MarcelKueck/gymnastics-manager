@@ -11,6 +11,7 @@ import {
   FolderOpen,
   AlertTriangle,
   ChevronRight,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +57,13 @@ const adminSections = [
     href: '/trainer/admin/absences',
     icon: AlertTriangle,
     color: 'text-red-500',
+  },
+  {
+    title: 'Massen-E-Mail',
+    description: 'E-Mails an Athleten und Trainer senden',
+    href: '/trainer/admin/bulk-email',
+    icon: Mail,
+    color: 'text-cyan-500',
   },
   {
     title: 'Systemeinstellungen',

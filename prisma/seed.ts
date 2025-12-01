@@ -1,10 +1,10 @@
-import { PrismaClient, DayOfWeek, YouthCategory } from '@prisma/client';
+import { PrismaClient, DayOfWeek, YouthCategory, Gender } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting seed...');
+  console.log('🌱 Starting seed for production...');
 
   // Clean up existing data (in reverse order of dependencies)
   console.log('🧹 Cleaning up existing data...');
@@ -33,146 +33,183 @@ async function main() {
       id: 'default',
       cancellationDeadlineHours: 2,
       sessionGenerationDaysAhead: 56, // 8 weeks
+      absenceAlertThreshold: 3,
+      absenceAlertWindowDays: 30,
+      absenceAlertCooldownDays: 14,
+      adminNotificationEmail: 'vroni@raumonline.de',
+      absenceAlertEnabled: true,
     },
   });
 
-  // Hash password (same for all test users)
-  const hashedPassword = await bcrypt.hash('password123', 10);
+  // Hash password (same for all users - should be changed after first login)
+  const hashedPassword = await bcrypt.hash('Turnen2024!', 10);
 
-  // Create Admin user (with all three roles: Admin, Trainer, Athlete)
-  console.log('👤 Creating admin user...');
-  const admin = await prisma.user.create({
+  // ============================================================================
+  // PRIMARY ADMIN: Veronika Raum (Admin + Trainer + Athlete)
+  // ============================================================================
+  console.log('👤 Creating primary admin: Veronika Raum...');
+  const veronika = await prisma.user.create({
     data: {
-      email: 'admin@svesting.de',
+      email: 'vroni@raumonline.de',
       passwordHash: hashedPassword,
-      firstName: 'Anna',
-      lastName: 'Admin',
+      firstName: 'Veronika',
+      lastName: 'Raum',
       phone: '+49 170 1234567',
-      birthDate: new Date('1990-01-15'),
+      birthDate: new Date('1985-06-15'),
+      gender: Gender.FEMALE,
       isAthlete: true,
       isTrainer: true,
     },
   });
 
-  const adminTrainerProfile = await prisma.trainerProfile.create({
+  const veronikaTrainerProfile = await prisma.trainerProfile.create({
     data: {
-      userId: admin.id,
+      userId: veronika.id,
       role: 'ADMIN',
     },
   });
 
-  const adminAthleteProfile = await prisma.athleteProfile.create({
+  const veronikaAthleteProfile = await prisma.athleteProfile.create({
     data: {
-      userId: admin.id,
-      youthCategory: YouthCategory.F, // Adult
+      userId: veronika.id,
+      youthCategory: YouthCategory.D,
       status: 'ACTIVE',
-      approvedBy: adminTrainerProfile.id,
+      isApproved: true,
+      approvedBy: veronikaTrainerProfile.id,
       approvedAt: new Date(),
+      hasDtbId: true,
+      competitionParticipation: true,
     },
   });
 
-  // Create additional Admin users for testing email notifications
-  console.log('👤 Creating additional admin users (Marcel)...');
-  const adminMarcel1 = await prisma.user.create({
+  // ============================================================================
+  // TEST TRAINER: Sarah Schulz
+  // ============================================================================
+  console.log('👤 Creating test trainer: Sarah Schulz...');
+  const sarah = await prisma.user.create({
     data: {
-      email: 'kueck.marcel@gmail.com',
+      email: 'sarah.schulz@example.com',
       passwordHash: hashedPassword,
-      firstName: 'Marcel',
-      lastName: 'Kück',
-      phone: '+49 173 1111111',
-      isAthlete: false,
-      isTrainer: true,
-    },
-  });
-
-  await prisma.trainerProfile.create({
-    data: {
-      userId: adminMarcel1.id,
-      role: 'ADMIN',
-    },
-  });
-
-  const adminMarcel2 = await prisma.user.create({
-    data: {
-      email: 'marcel.kueck@shareyourspace.com',
-      passwordHash: hashedPassword,
-      firstName: 'Marcel',
-      lastName: 'Kück (SYS)',
-      phone: '+49 173 2222222',
-      isAthlete: false,
-      isTrainer: true,
-    },
-  });
-
-  await prisma.trainerProfile.create({
-    data: {
-      userId: adminMarcel2.id,
-      role: 'ADMIN',
-    },
-  });
-
-  // Create Trainer user
-  console.log('👤 Creating trainer user...');
-  const trainer = await prisma.user.create({
-    data: {
-      email: 'trainer@svesting.de',
-      passwordHash: hashedPassword,
-      firstName: 'Thomas',
-      lastName: 'Trainer',
+      firstName: 'Sarah',
+      lastName: 'Schulz',
       phone: '+49 171 2345678',
+      birthDate: new Date('1992-03-20'),
+      gender: Gender.FEMALE,
       isAthlete: false,
       isTrainer: true,
     },
   });
 
-  const trainerProfile = await prisma.trainerProfile.create({
+  const sarahTrainerProfile = await prisma.trainerProfile.create({
     data: {
-      userId: trainer.id,
+      userId: sarah.id,
       role: 'TRAINER',
     },
   });
 
-  // Create a dual-role user (athlete + trainer)
-  console.log('👤 Creating dual-role user...');
-  const dualRole = await prisma.user.create({
+  // ============================================================================
+  // TEST DUAL-ROLE: Tim Berger (Trainer + Athlete)
+  // ============================================================================
+  console.log('👤 Creating dual-role user: Tim Berger...');
+  const tim = await prisma.user.create({
     data: {
-      email: 'lisa@svesting.de',
+      email: 'tim.berger@example.com',
       passwordHash: hashedPassword,
-      firstName: 'Lisa',
-      lastName: 'Leitung',
+      firstName: 'Tim',
+      lastName: 'Berger',
       phone: '+49 172 3456789',
-      birthDate: new Date('1995-03-15'),
+      birthDate: new Date('1998-08-10'),
+      gender: Gender.MALE,
       isAthlete: true,
       isTrainer: true,
     },
   });
 
-  const dualRoleTrainerProfile = await prisma.trainerProfile.create({
+  const timTrainerProfile = await prisma.trainerProfile.create({
     data: {
-      userId: dualRole.id,
+      userId: tim.id,
       role: 'TRAINER',
     },
   });
 
   await prisma.athleteProfile.create({
     data: {
-      userId: dualRole.id,
-      youthCategory: YouthCategory.F, // Adult, using F as placeholder
+      userId: tim.id,
+      youthCategory: YouthCategory.D,
       status: 'ACTIVE',
-      approvedBy: trainerProfile.id,
+      isApproved: true,
+      approvedBy: veronikaTrainerProfile.id,
       approvedAt: new Date(),
+      hasDtbId: true,
+      competitionParticipation: true,
     },
   });
 
-  // Create Athletes
-  console.log('👤 Creating athlete users...');
+  // ============================================================================
+  // TEST ATHLETES
+  // ============================================================================
+  console.log('👤 Creating test athletes...');
   const athleteData = [
-    { email: 'max@example.com', firstName: 'Max', lastName: 'Mustermann', birthDate: new Date('2010-05-20'), category: YouthCategory.D },
-    { email: 'emma@example.com', firstName: 'Emma', lastName: 'Schmidt', birthDate: new Date('2012-08-10'), category: YouthCategory.E },
-    { email: 'leon@example.com', firstName: 'Leon', lastName: 'Weber', birthDate: new Date('2011-02-28'), category: YouthCategory.D },
-    { email: 'mia@example.com', firstName: 'Mia', lastName: 'Fischer', birthDate: new Date('2015-11-15'), category: YouthCategory.F },
-    { email: 'paul@example.com', firstName: 'Paul', lastName: 'Meyer', birthDate: new Date('2013-07-03'), category: YouthCategory.E },
-    { email: 'sophie@example.com', firstName: 'Sophie', lastName: 'Wagner', birthDate: new Date('2014-04-22'), category: YouthCategory.F },
+    { 
+      email: 'lena.mueller@example.com', 
+      firstName: 'Lena', 
+      lastName: 'Müller', 
+      birthDate: new Date('2014-05-20'), 
+      gender: Gender.FEMALE,
+      category: YouthCategory.E,
+      hasDtbId: true,
+      competition: true,
+    },
+    { 
+      email: 'marie.schmidt@example.com', 
+      firstName: 'Marie', 
+      lastName: 'Schmidt', 
+      birthDate: new Date('2015-08-10'), 
+      gender: Gender.FEMALE,
+      category: YouthCategory.F,
+      hasDtbId: false,
+      competition: false,
+    },
+    { 
+      email: 'laura.weber@example.com', 
+      firstName: 'Laura', 
+      lastName: 'Weber', 
+      birthDate: new Date('2013-02-28'), 
+      gender: Gender.FEMALE,
+      category: YouthCategory.D,
+      hasDtbId: true,
+      competition: true,
+    },
+    { 
+      email: 'anna.fischer@example.com', 
+      firstName: 'Anna', 
+      lastName: 'Fischer', 
+      birthDate: new Date('2016-11-15'), 
+      gender: Gender.FEMALE,
+      category: YouthCategory.F,
+      hasDtbId: false,
+      competition: false,
+    },
+    { 
+      email: 'emily.meyer@example.com', 
+      firstName: 'Emily', 
+      lastName: 'Meyer', 
+      birthDate: new Date('2014-07-03'), 
+      gender: Gender.FEMALE,
+      category: YouthCategory.E,
+      hasDtbId: true,
+      competition: true,
+    },
+    { 
+      email: 'sophie.wagner@example.com', 
+      firstName: 'Sophie', 
+      lastName: 'Wagner', 
+      birthDate: new Date('2015-04-22'), 
+      gender: Gender.FEMALE,
+      category: YouthCategory.F,
+      hasDtbId: false,
+      competition: false,
+    },
   ];
 
   const athletes: { id: string; category: YouthCategory }[] = [];
@@ -186,6 +223,7 @@ async function main() {
         lastName: data.lastName,
         phone: '',
         birthDate: data.birthDate,
+        gender: data.gender,
         isAthlete: true,
         isTrainer: false,
       },
@@ -196,24 +234,28 @@ async function main() {
         userId: user.id,
         youthCategory: data.category,
         status: 'ACTIVE',
-        approvedBy: trainerProfile.id,
+        isApproved: true,
+        approvedBy: veronikaTrainerProfile.id,
         approvedAt: new Date(),
+        hasDtbId: data.hasDtbId,
+        competitionParticipation: data.competition,
       },
     });
 
     athletes.push({ id: athleteProfile.id, category: data.category });
   }
 
-  // Create a pending (unapproved) athlete
+  // Create a pending (unapproved) athlete for testing approval flow
   console.log('👤 Creating pending athlete...');
   const pendingUser = await prisma.user.create({
     data: {
-      email: 'pending@example.com',
+      email: 'julia.neu@example.com',
       passwordHash: hashedPassword,
-      firstName: 'Peter',
-      lastName: 'Pending',
-      phone: '',
-      birthDate: new Date('2011-09-10'),
+      firstName: 'Julia',
+      lastName: 'Neu',
+      phone: '+49 175 9876543',
+      birthDate: new Date('2014-09-10'),
+      gender: Gender.FEMALE,
       isAthlete: true,
       isTrainer: false,
     },
@@ -222,13 +264,19 @@ async function main() {
   await prisma.athleteProfile.create({
     data: {
       userId: pendingUser.id,
-      youthCategory: YouthCategory.D,
+      youthCategory: YouthCategory.E,
       status: 'PENDING',
+      guardianName: 'Markus Neu',
+      guardianEmail: 'markus.neu@example.com',
+      guardianPhone: '+49 175 1234567',
     },
   });
 
-  // Create Recurring Trainings
+  // ============================================================================
+  // RECURRING TRAININGS
+  // ============================================================================
   console.log('🏋️ Creating recurring trainings...');
+  
   const mondayTraining = await prisma.recurringTraining.create({
     data: {
       name: 'Anfänger Training',
@@ -236,7 +284,7 @@ async function main() {
       startTime: '16:00',
       endTime: '17:30',
       isActive: true,
-      createdBy: trainerProfile.id,
+      createdBy: veronikaTrainerProfile.id,
     },
   });
 
@@ -247,7 +295,7 @@ async function main() {
       startTime: '17:00',
       endTime: '19:00',
       isActive: true,
-      createdBy: trainerProfile.id,
+      createdBy: veronikaTrainerProfile.id,
     },
   });
 
@@ -258,42 +306,48 @@ async function main() {
       startTime: '16:30',
       endTime: '18:30',
       isActive: true,
-      createdBy: trainerProfile.id,
+      createdBy: veronikaTrainerProfile.id,
     },
   });
 
-  // Create Training Groups
+  // ============================================================================
+  // TRAINING GROUPS
+  // ============================================================================
   console.log('👥 Creating training groups...');
+  
   const anfaengerGroup = await prisma.trainingGroup.create({
     data: {
-      name: 'Anfänger F',
+      name: 'F-Jugend',
       recurringTrainingId: mondayTraining.id,
     },
   });
 
   const fortgeschritteneGroup = await prisma.trainingGroup.create({
     data: {
-      name: 'Fortgeschrittene D-E',
+      name: 'D/E-Jugend',
       recurringTrainingId: wednesdayTraining.id,
     },
   });
 
   const wettkampfGroup = await prisma.trainingGroup.create({
     data: {
-      name: 'Wettkampf alle',
+      name: 'Wettkampf',
       recurringTrainingId: fridayTraining.id,
     },
   });
 
-  // Assign athletes to groups based on category
+  // ============================================================================
+  // ASSIGN ATHLETES TO GROUPS
+  // ============================================================================
   console.log('📝 Assigning athletes to groups...');
+  
   for (const athlete of athletes) {
     if (athlete.category === YouthCategory.F) {
       await prisma.recurringTrainingAthleteAssignment.create({
         data: {
           athleteId: athlete.id,
           trainingGroupId: anfaengerGroup.id,
-          assignedBy: trainerProfile.id,
+          assignedBy: veronikaTrainerProfile.id,
         },
       });
     } else if (athlete.category === YouthCategory.D || athlete.category === YouthCategory.E) {
@@ -301,59 +355,70 @@ async function main() {
         data: {
           athleteId: athlete.id,
           trainingGroupId: fortgeschritteneGroup.id,
-          assignedBy: trainerProfile.id,
+          assignedBy: veronikaTrainerProfile.id,
         },
       });
     }
-    
-    // Also assign all athletes to wettkampf group
+  }
+
+  // Assign competition athletes to wettkampf group
+  const competitionAthletes = athletes.filter((_, i) => athleteData[i].competition);
+  for (const athlete of competitionAthletes) {
     await prisma.recurringTrainingAthleteAssignment.create({
       data: {
         athleteId: athlete.id,
         trainingGroupId: wettkampfGroup.id,
-        assignedBy: trainerProfile.id,
+        assignedBy: veronikaTrainerProfile.id,
       },
     });
   }
 
-  // Also assign admin athlete to wettkampf group
+  // Also add Veronika to wettkampf group
   await prisma.recurringTrainingAthleteAssignment.create({
     data: {
-      athleteId: adminAthleteProfile.id,
+      athleteId: veronikaAthleteProfile.id,
       trainingGroupId: wettkampfGroup.id,
-      assignedBy: adminTrainerProfile.id,
+      assignedBy: veronikaTrainerProfile.id,
     },
   });
 
-  // Assign trainers to groups
+  // ============================================================================
+  // ASSIGN TRAINERS TO GROUPS
+  // ============================================================================
+  console.log('📝 Assigning trainers to groups...');
+  
   await prisma.recurringTrainingTrainerAssignment.create({
     data: {
-      trainerId: trainerProfile.id,
+      trainerId: sarahTrainerProfile.id,
       trainingGroupId: anfaengerGroup.id,
       isPrimary: true,
-      assignedBy: adminTrainerProfile.id,
+      assignedBy: veronikaTrainerProfile.id,
     },
   });
 
   await prisma.recurringTrainingTrainerAssignment.create({
     data: {
-      trainerId: trainerProfile.id,
+      trainerId: timTrainerProfile.id,
       trainingGroupId: fortgeschritteneGroup.id,
       isPrimary: true,
-      assignedBy: adminTrainerProfile.id,
+      assignedBy: veronikaTrainerProfile.id,
     },
   });
 
   await prisma.recurringTrainingTrainerAssignment.create({
     data: {
-      trainerId: dualRoleTrainerProfile.id,
+      trainerId: veronikaTrainerProfile.id,
       trainingGroupId: wettkampfGroup.id,
       isPrimary: true,
-      assignedBy: adminTrainerProfile.id,
+      assignedBy: veronikaTrainerProfile.id,
     },
   });
 
-  // Helper to get number from DayOfWeek enum
+  // ============================================================================
+  // CREATE PAST SESSIONS WITH ATTENDANCE (for history)
+  // ============================================================================
+  console.log('📅 Creating past sessions with attendance...');
+  
   const getDayNumber = (day: DayOfWeek): number => {
     const dayMap: Record<DayOfWeek, number> = {
       [DayOfWeek.SUNDAY]: 0,
@@ -367,12 +432,6 @@ async function main() {
     return dayMap[day];
   };
 
-  // NOTE: With virtual sessions, we don't pre-generate future sessions.
-  // They are calculated on-the-fly from RecurringTraining definitions.
-  // We only create past sessions that have attendance data for history.
-
-  // Create past sessions with attendance for realistic history
-  console.log('📅 Creating past sessions with attendance...');
   const today = new Date();
   const sessionsToCreate: {
     recurringTrainingId: string;
@@ -433,10 +492,10 @@ async function main() {
   for (const session of createdSessions) {
     for (const group of session.recurringTraining?.trainingGroups || []) {
       for (const assignment of group.athleteAssignments) {
-        // Randomly assign attendance status (80% present, 15% excused, 5% absent)
+        // Randomly assign attendance status (85% present, 10% excused, 5% absent)
         const rand = Math.random();
         let status: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED';
-        if (rand < 0.8) {
+        if (rand < 0.85) {
           status = 'PRESENT';
         } else if (rand < 0.95) {
           status = 'ABSENT_EXCUSED';
@@ -449,22 +508,83 @@ async function main() {
             athleteId: assignment.athleteId,
             trainingSessionId: session.id,
             status,
-            markedBy: trainerProfile.id,
+            markedBy: veronikaTrainerProfile.id,
           },
         });
       }
     }
   }
 
+  // ============================================================================
+  // CREATE SAMPLE COMPETITION
+  // ============================================================================
+  console.log('🏆 Creating sample competition...');
+  
+  const nextMonth = new Date();
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  nextMonth.setDate(15);
+  
+  const competition = await prisma.competition.create({
+    data: {
+      name: 'Kreismeisterschaft 2024',
+      date: nextMonth,
+      location: 'Sporthalle Esting',
+      description: 'Jährliche Kreismeisterschaft im Geräteturnen',
+      minYouthCategory: YouthCategory.E,
+      maxYouthCategory: YouthCategory.D,
+      registrationDeadline: new Date(nextMonth.getTime() - 14 * 24 * 60 * 60 * 1000), // 2 weeks before
+      maxParticipants: 20,
+      requiresDtbId: true,
+      entryFee: 15.00,
+      isPublished: true,
+      createdBy: veronikaTrainerProfile.id,
+    },
+  });
+
+  // Register some athletes for the competition
+  const eligibleAthletes = athletes.filter((_, i) => 
+    athleteData[i].hasDtbId && 
+    (athleteData[i].category === YouthCategory.D || athleteData[i].category === YouthCategory.E)
+  );
+  
+  for (const athlete of eligibleAthletes) {
+    await prisma.competitionRegistration.create({
+      data: {
+        competitionId: competition.id,
+        athleteId: athlete.id,
+      },
+    });
+  }
+
+  // ============================================================================
+  // SUMMARY
+  // ============================================================================
+  console.log('');
   console.log('✨ Seed completed successfully!');
   console.log('');
-  console.log('📧 Test accounts (all use password: password123):');
-  console.log('   Admin:    admin@svesting.de');
-  console.log('   Trainer:  trainer@svesting.de');
-  console.log('   Dual:     lisa@svesting.de (athlete + trainer)');
-  console.log('   Athletes: max@example.com, emma@example.com, leon@example.com,');
-  console.log('             mia@example.com, paul@example.com, sophie@example.com');
-  console.log('   Pending:  pending@example.com (not approved yet)');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('📧 User Accounts (Password for all: Turnen2024!)');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('');
+  console.log('🔑 PRIMARY ADMIN (Admin + Trainer + Athlete):');
+  console.log('   vroni@raumonline.de (Veronika Raum)');
+  console.log('');
+  console.log('👩‍🏫 TRAINERS:');
+  console.log('   sarah.schulz@example.com (Sarah Schulz - Trainer only)');
+  console.log('   tim.berger@example.com (Tim Berger - Trainer + Athlete)');
+  console.log('');
+  console.log('🏃 ATHLETES:');
+  console.log('   lena.mueller@example.com (Lena Müller - E-Jugend, DTB-ID)');
+  console.log('   marie.schmidt@example.com (Marie Schmidt - F-Jugend)');
+  console.log('   laura.weber@example.com (Laura Weber - D-Jugend, DTB-ID)');
+  console.log('   anna.fischer@example.com (Anna Fischer - F-Jugend)');
+  console.log('   emily.meyer@example.com (Emily Meyer - E-Jugend, DTB-ID)');
+  console.log('   sophie.wagner@example.com (Sophie Wagner - F-Jugend)');
+  console.log('');
+  console.log('⏳ PENDING (for testing approval):');
+  console.log('   julia.neu@example.com (Julia Neu - awaiting approval)');
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════════════');
 }
 
 main()
