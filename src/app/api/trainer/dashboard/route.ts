@@ -129,7 +129,11 @@ export async function GET() {
       },
     };
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    });
   } catch (error) {
     console.error('Dashboard API error:', error);
     return NextResponse.json(

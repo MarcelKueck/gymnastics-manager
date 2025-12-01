@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loading } from '@/components/ui/loading';
 import { PageHeader } from '@/components/shared';
-import { User, Mail, Phone, Save, Check } from 'lucide-react';
+import { User, Mail, Phone, Save, Check, Lock } from 'lucide-react';
 
 interface ProfileData {
   firstName: string;
@@ -24,6 +24,8 @@ export default function TrainerProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [isRequestingPasswordReset, setIsRequestingPasswordReset] = useState(false);
+  const [passwordResetSent, setPasswordResetSent] = useState(false);
 
   useEffect(() => {
     fetch('/api/user/profile')
@@ -172,11 +174,35 @@ export default function TrainerProfilePage() {
             <div>
               <p className="font-medium">Passwort ändern</p>
               <p className="text-sm text-muted-foreground">
-                Aktualisiere dein Passwort für mehr Sicherheit
+                {passwordResetSent 
+                  ? 'E-Mail gesendet! Überprüfe dein Postfach.'
+                  : 'Fordere einen Link zum Zurücksetzen an'}
               </p>
             </div>
-            <Button variant="outline" disabled>
-              Demnächst verfügbar
+            <Button 
+              variant="outline" 
+              disabled={isRequestingPasswordReset || passwordResetSent}
+              onClick={async () => {
+                if (!profile?.email) return;
+                setIsRequestingPasswordReset(true);
+                try {
+                  const res = await fetch('/api/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: profile.email }),
+                  });
+                  if (res.ok) {
+                    setPasswordResetSent(true);
+                  }
+                } catch {
+                  // Ignore errors
+                } finally {
+                  setIsRequestingPasswordReset(false);
+                }
+              }}
+            >
+              <Lock className="h-4 w-4 mr-2" />
+              {isRequestingPasswordReset ? 'Wird gesendet...' : passwordResetSent ? 'Gesendet' : 'Link anfordern'}
             </Button>
           </div>
         </CardContent>

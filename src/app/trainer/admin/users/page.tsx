@@ -14,7 +14,21 @@ import {
   Shield,
   Mail,
   Phone,
+  MoreVertical,
+  KeyRound,
+  UserPlus,
+  UserMinus,
+  ShieldPlus,
+  ShieldMinus,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 interface UserProfile {
   id: string;
@@ -43,6 +57,73 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
+  const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleResetPassword = async (userId: string, email: string) => {
+    setResettingPasswordFor(userId);
+    setSuccessMessage(null);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Fehler beim Senden');
+      }
+      
+      setSuccessMessage(`Link zum Zurücksetzen wurde an ${email} gesendet.`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setResettingPasswordFor(null);
+    }
+  };
+
+  const handleRoleUpdate = async (
+    userId: string, 
+    action: 'add-trainer' | 'remove-trainer' | 'make-admin' | 'remove-admin',
+    userName: string
+  ) => {
+    setUpdatingRoleFor(userId);
+    setSuccessMessage(null);
+    setError(null);
+    
+    const actionLabels = {
+      'add-trainer': 'Trainer-Rolle hinzugefügt',
+      'remove-trainer': 'Trainer-Rolle entfernt',
+      'make-admin': 'Zum Admin befördert',
+      'remove-admin': 'Admin-Rolle entfernt',
+    };
+
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Fehler beim Aktualisieren');
+      }
+      
+      // Update user in local state
+      setUsers(users.map(u => u.id === userId ? data.data : u));
+      setSuccessMessage(`${userName}: ${actionLabels[action]}`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUpdatingRoleFor(null);
+    }
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -136,6 +217,12 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      {successMessage && (
+        <div className="bg-green-500/10 text-green-600 p-4 rounded-md">
+          {successMessage}
+        </div>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="all" className="flex items-center gap-2">
@@ -202,6 +289,68 @@ export default function AdminUsersPage() {
                         {user.isAthlete && user.isTrainer && (
                           <Badge variant="outline">Dual</Badge>
                         )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              disabled={resettingPasswordFor === user.id || updatingRoleFor === user.id}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => handleResetPassword(user.id, user.email)}
+                              disabled={resettingPasswordFor === user.id}
+                            >
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              {resettingPasswordFor === user.id ? 'Wird gesendet...' : 'Passwort zurücksetzen'}
+                            </DropdownMenuItem>
+                            
+                            <DropdownMenuSeparator />
+                            
+                            {/* Trainer role management */}
+                            {!user.isTrainer ? (
+                              <DropdownMenuItem 
+                                onClick={() => handleRoleUpdate(user.id, 'add-trainer', `${user.firstName} ${user.lastName}`)}
+                                disabled={updatingRoleFor === user.id}
+                              >
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Zum Trainer machen
+                              </DropdownMenuItem>
+                            ) : user.trainerProfile?.role !== 'ADMIN' && (
+                              <DropdownMenuItem 
+                                onClick={() => handleRoleUpdate(user.id, 'remove-trainer', `${user.firstName} ${user.lastName}`)}
+                                disabled={updatingRoleFor === user.id}
+                                className="text-destructive"
+                              >
+                                <UserMinus className="h-4 w-4 mr-2" />
+                                Trainer-Rolle entfernen
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {/* Admin role management */}
+                            {user.trainerProfile?.role === 'ADMIN' ? (
+                              <DropdownMenuItem 
+                                onClick={() => handleRoleUpdate(user.id, 'remove-admin', `${user.firstName} ${user.lastName}`)}
+                                disabled={updatingRoleFor === user.id}
+                                className="text-destructive"
+                              >
+                                <ShieldMinus className="h-4 w-4 mr-2" />
+                                Admin-Rolle entfernen
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem 
+                                onClick={() => handleRoleUpdate(user.id, 'make-admin', `${user.firstName} ${user.lastName}`)}
+                                disabled={updatingRoleFor === user.id}
+                              >
+                                <ShieldPlus className="h-4 w-4 mr-2" />
+                                Zum Admin machen
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   ))}

@@ -360,3 +360,72 @@ export async function sendSessionCancellation(
     ...template,
   });
 }
+
+// ============================================================================
+// PASSWORD RESET EMAIL
+// ============================================================================
+
+export function getPasswordResetTemplate(
+  resetUrl: string,
+  firstName: string
+): { subject: string; html: string } {
+  return {
+    subject: 'Passwort zurücksetzen - SV Esting Turnen',
+    html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background-color: #1a365d; color: white; padding: 20px; text-align: center; }
+    .content { padding: 20px; background-color: #f8f9fa; }
+    .button { display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+    .warning { background-color: #fef3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 5px; margin: 15px 0; }
+    .footer { text-align: center; padding: 20px; color: #718096; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>SV Esting Turnen</h1>
+    </div>
+    <div class="content">
+      <h2>Passwort zurücksetzen</h2>
+      <p>Hallo ${firstName},</p>
+      <p>du hast angefordert, dein Passwort zurückzusetzen. Klicke auf den folgenden Button, um ein neues Passwort zu wählen:</p>
+      
+      <p style="text-align: center;">
+        <a href="${resetUrl}" class="button">Passwort zurücksetzen</a>
+      </p>
+      
+      <div class="warning">
+        <strong>Hinweis:</strong> Dieser Link ist nur 1 Stunde gültig. Falls du kein neues Passwort angefordert hast, kannst du diese E-Mail ignorieren.
+      </div>
+      
+      <p>Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:</p>
+      <p style="word-break: break-all; font-size: 12px; color: #666;">${resetUrl}</p>
+    </div>
+    <div class="footer">
+      <p>SV Esting Turnen</p>
+      <p>Diese E-Mail wurde automatisch versendet. Bitte antworte nicht darauf.</p>
+    </div>
+  </div>
+</body>
+</html>
+    `,
+  };
+}
+
+export async function sendPasswordResetEmail(
+  email: string,
+  resetUrl: string,
+  firstName: string
+) {
+  const template = getPasswordResetTemplate(resetUrl, firstName);
+  return sendEmail({
+    to: email,
+    ...template,
+  });
+}

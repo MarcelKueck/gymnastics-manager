@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loading } from '@/components/ui/loading';
-import { User, Mail, Phone, Calendar, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Mail, Phone, Calendar, AlertCircle, CheckCircle, Lock } from 'lucide-react';
 
 interface ProfileData {
   firstName: string;
@@ -28,6 +28,8 @@ export default function AthleteProfile() {
 
   // Edit form state
   const [editData, setEditData] = useState<Partial<ProfileData>>({});
+  const [isRequestingPasswordReset, setIsRequestingPasswordReset] = useState(false);
+  const [passwordResetSent, setPasswordResetSent] = useState(false);
 
   useEffect(() => {
     fetch('/api/athlete/profile')
@@ -235,6 +237,45 @@ export default function AthleteProfile() {
                 <p className="text-sm text-muted-foreground">Angemeldet als</p>
                 <p className="font-medium">{session?.user?.email}</p>
               </div>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-3">
+                <Lock className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Passwort</p>
+                  <p className="font-medium">
+                    {passwordResetSent 
+                      ? 'E-Mail gesendet!'
+                      : 'Passwort ändern'}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={isRequestingPasswordReset || passwordResetSent}
+                onClick={async () => {
+                  if (!profile?.email) return;
+                  setIsRequestingPasswordReset(true);
+                  try {
+                    const res = await fetch('/api/auth/forgot-password', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: profile.email }),
+                    });
+                    if (res.ok) {
+                      setPasswordResetSent(true);
+                    }
+                  } catch {
+                    // Ignore errors
+                  } finally {
+                    setIsRequestingPasswordReset(false);
+                  }
+                }}
+              >
+                {isRequestingPasswordReset ? 'Wird gesendet...' : passwordResetSent ? 'Gesendet' : 'Link anfordern'}
+              </Button>
             </div>
           </div>
         </CardContent>
