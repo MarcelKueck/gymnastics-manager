@@ -43,6 +43,17 @@ export async function GET(
                   },
                 },
               },
+              trainerAssignments: {
+                include: {
+                  trainer: {
+                    include: {
+                      user: {
+                        select: { firstName: true, lastName: true },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -101,11 +112,25 @@ export async function GET(
                       },
                     },
                   },
+                  trainerAssignments: {
+                    include: {
+                      trainer: {
+                        include: {
+                          user: {
+                            select: { firstName: true, lastName: true },
+                          },
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
           },
           attendanceRecords: true,
+          trainerCancellations: {
+            where: { isActive: true },
+          },
           cancellations: {
             include: {
               athlete: true,
@@ -152,6 +177,31 @@ export async function GET(
       trainingSession.cancellations.map((c: { athleteId: string }) => [c.athleteId, c])
     );
 
+    // Build trainer cancellation data
+    const trainerCancellations = 'trainerCancellations' in trainingSession && Array.isArray(trainingSession.trainerCancellations)
+      ? trainingSession.trainerCancellations
+      : [];
+    const trainerCancellationSet = new Set(
+      trainerCancellations.map((tc: { trainerId: string }) => tc.trainerId)
+    );
+
+    // Build trainers list from groups
+    const trainerMap = new Map<string, { id: string; name: string; cancelled: boolean }>();
+    if (recurringTraining) {
+      for (const trainingGroup of recurringTraining.trainingGroups) {
+        for (const assignment of (trainingGroup as { trainerAssignments?: Array<{ trainerId: string; trainer: { user: { firstName: string; lastName: string } } }> }).trainerAssignments || []) {
+          if (!trainerMap.has(assignment.trainerId)) {
+            trainerMap.set(assignment.trainerId, {
+              id: assignment.trainerId,
+              name: `${assignment.trainer.user.firstName} ${assignment.trainer.user.lastName}`,
+              cancelled: trainerCancellationSet.has(assignment.trainerId),
+            });
+          }
+        }
+      }
+    }
+    const trainers = Array.from(trainerMap.values());
+
     const athletes = Array.from(athleteMap.values()).map((athlete) => {
       const attendance = attendanceMap.get(athlete.athleteId) as { status?: string; notes?: string } | undefined;
       const cancellation = cancellationMap.get(athlete.athleteId) as { reason?: string } | undefined;
@@ -185,6 +235,7 @@ export async function GET(
       isCancelled: trainingSession.isCancelled,
       isVirtual: id.startsWith('virtual_'),
       athletes,
+      trainers,
     };
 
     return NextResponse.json({ data });

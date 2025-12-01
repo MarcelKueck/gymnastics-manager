@@ -21,9 +21,16 @@ import {
   ChevronLeft,
   ChevronRight,
   List,
+  Users,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+
+interface SessionTrainer {
+  id: string;
+  name: string;
+  cancelled: boolean;
+}
 
 interface ScheduleSession {
   id: string;
@@ -38,6 +45,7 @@ interface ScheduleSession {
   athleteCancellationId?: string;
   isCompleted: boolean;
   attendanceStatus?: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED';
+  trainers?: SessionTrainer[];
 }
 
 type ViewMode = 'list' | 'calendar';
@@ -486,6 +494,21 @@ export default function AthleteSchedule() {
                         <p className="text-sm text-muted-foreground">
                           {formatDate(session.date)} • {session.startTime} - {session.endTime}
                         </p>
+                        {session.trainers && session.trainers.length > 0 && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <Users className="h-3 w-3" />
+                            <span>
+                              {session.trainers.map((t, idx) => (
+                                <span key={t.id}>
+                                  <span className={t.cancelled ? 'line-through' : ''}>
+                                    {t.name}
+                                  </span>
+                                  {idx < (session.trainers?.length ?? 0) - 1 && ', '}
+                                </span>
+                              ))}
+                            </span>
+                          </div>
+                        )}
                         {session.athleteCancelled && session.athleteCancellationReason && editingSessionId !== session.id && (
                           <p className="text-xs text-muted-foreground mt-1">
                             Grund: {session.athleteCancellationReason}
@@ -560,6 +583,14 @@ export default function AthleteSchedule() {
                           <Clock className="h-3 w-3" />
                           {session.startTime}
                         </div>
+                        {session.trainers && session.trainers.length > 0 && (
+                          <div className="flex items-center gap-1 text-[10px] opacity-70 mt-0.5">
+                            <Users className="h-3 w-3" />
+                            <span className="truncate">
+                              {session.trainers.map(t => t.name.split(' ')[0]).join(', ')}
+                            </span>
+                          </div>
+                        )}
                         {session.athleteCancelled && (
                           <div className="text-[10px] mt-1">Abgemeldet</div>
                         )}

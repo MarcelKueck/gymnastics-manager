@@ -59,6 +59,19 @@ export async function getTrainerHoursForMonth(
   const summaries: TrainerHoursSummary[] = [];
 
   for (const trainer of trainers) {
+    // Get trainer's cancellations for this period
+    const trainerCancellations = await prisma.trainerCancellation.findMany({
+      where: {
+        trainerId: trainer.id,
+        isActive: true,
+        trainingSession: {
+          date: { gte: startDate, lte: endDate },
+        },
+      },
+      select: { trainingSessionId: true },
+    });
+    const cancelledSessionIds = new Set(trainerCancellations.map(c => c.trainingSessionId));
+
     // First, try to get sessions where trainer is directly assigned via sessionGroups
     const sessionsWithDirectAssignment = await prisma.trainingSession.findMany({
       where: {
@@ -100,10 +113,13 @@ export async function getTrainerHoursForMonth(
       },
     });
 
-    // Merge and deduplicate sessions by ID
+    // Merge and deduplicate sessions by ID, excluding cancelled sessions
     const sessionMap = new Map<string, typeof sessionsWithDirectAssignment[0]>();
     for (const session of [...sessionsWithDirectAssignment, ...sessionsViaRecurring]) {
-      sessionMap.set(session.id, session);
+      // Exclude sessions where trainer cancelled
+      if (!cancelledSessionIds.has(session.id)) {
+        sessionMap.set(session.id, session);
+      }
     }
     const sessions = Array.from(sessionMap.values());
 
@@ -154,6 +170,19 @@ export async function getTrainerSessionDetails(
 ): Promise<SessionDetail[]> {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
+
+  // Get trainer's cancellations for this period
+  const trainerCancellations = await prisma.trainerCancellation.findMany({
+    where: {
+      trainerId,
+      isActive: true,
+      trainingSession: {
+        date: { gte: startDate, lte: endDate },
+      },
+    },
+    select: { trainingSessionId: true },
+  });
+  const cancelledSessionIds = new Set(trainerCancellations.map(c => c.trainingSessionId));
 
   // Get sessions via direct session group assignments
   const sessionsWithDirectAssignment = await prisma.trainingSession.findMany({
@@ -221,10 +250,12 @@ export async function getTrainerSessionDetails(
     orderBy: { date: 'asc' },
   });
 
-  // Merge and deduplicate
+  // Merge and deduplicate, excluding cancelled sessions
   const sessionMap = new Map<string, typeof sessionsWithDirectAssignment[0]>();
   for (const session of [...sessionsWithDirectAssignment, ...sessionsViaRecurring]) {
-    sessionMap.set(session.id, session);
+    if (!cancelledSessionIds.has(session.id)) {
+      sessionMap.set(session.id, session);
+    }
   }
   const sessions = Array.from(sessionMap.values()).sort(
     (a, b) => a.date.getTime() - b.date.getTime()

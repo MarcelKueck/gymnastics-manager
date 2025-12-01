@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       assignments.map((a) => a.trainingGroup.recurringTrainingId)
     ));
 
-    // Fetch recurring trainings with their groups
+    // Fetch recurring trainings with their groups and trainer assignments
     const recurringTrainings = await prisma.recurringTraining.findMany({
       where: { 
         id: { in: recurringTrainingIds },
@@ -63,6 +63,17 @@ export async function GET(request: NextRequest) {
           include: {
             _count: {
               select: { athleteAssignments: true },
+            },
+            trainerAssignments: {
+              include: {
+                trainer: {
+                  include: {
+                    user: {
+                      select: { firstName: true, lastName: true },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -81,6 +92,9 @@ export async function GET(request: NextRequest) {
         },
         cancellations: {
           where: { athleteId, isActive: true },
+        },
+        trainerCancellations: {
+          where: { isActive: true },
         },
         attendanceRecords: {
           where: { athleteId },
@@ -104,11 +118,40 @@ export async function GET(request: NextRequest) {
       endDate
     );
 
+    // Create a map of recurring training ID to trainers
+    const trainersByRecurringId = new Map<string, { id: string; name: string; cancelled: boolean }[]>();
+    for (const rt of recurringTrainings) {
+      const trainers: { id: string; name: string; cancelled: boolean }[] = [];
+      for (const group of rt.trainingGroups) {
+        for (const assignment of group.trainerAssignments) {
+          const trainerId = assignment.trainerId;
+          if (!trainers.find(t => t.id === trainerId)) {
+            trainers.push({
+              id: trainerId,
+              name: `${assignment.trainer.user.firstName} ${assignment.trainer.user.lastName}`,
+              cancelled: false, // Will be updated per session
+            });
+          }
+        }
+      }
+      trainersByRecurringId.set(rt.id, trainers);
+    }
+
     return NextResponse.json({
       data: virtualSessions.map((vs) => {
         const dateKey = `${vs.recurringTrainingId}_${vs.date.toISOString().split('T')[0]}`;
         const stored = storedSessionsByKey.get(dateKey);
         const athleteCancellation = stored?.cancellations?.find((c) => c.isActive);
+        
+        // Get trainers for this session with their cancellation status
+        const baseTrainers = trainersByRecurringId.get(vs.recurringTrainingId) || [];
+        const trainerCancellationIds = new Set(
+          stored?.trainerCancellations?.map(tc => tc.trainerId) || []
+        );
+        const trainers = baseTrainers.map(t => ({
+          ...t,
+          cancelled: trainerCancellationIds.has(t.id),
+        }));
         
         return {
           id: vs.id || getVirtualSessionId(vs.recurringTrainingId, vs.date),
@@ -123,6 +166,7 @@ export async function GET(request: NextRequest) {
           athleteCancellationReason: athleteCancellation?.reason,
           isCompleted: stored?.isCompleted || false,
           attendanceStatus: stored?.attendanceRecords?.[0]?.status,
+          trainers,
         };
       }),
     });

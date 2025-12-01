@@ -33,6 +33,12 @@ interface AthleteAttendance {
   note?: string;
 }
 
+interface SessionTrainer {
+  id: string;
+  name: string;
+  cancelled: boolean;
+}
+
 interface SessionDetail {
   id: string;
   date: string;
@@ -42,6 +48,7 @@ interface SessionDetail {
   groups: string[];
   isCancelled: boolean;
   athletes: AthleteAttendance[];
+  trainers?: SessionTrainer[];
 }
 
 export default function SessionDetailPage({ params }: { params: { id: string } }) {
@@ -228,6 +235,29 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           </CardContent>
         </Card>
       </div>
+
+      {/* Trainers */}
+      {session.trainers && session.trainers.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Trainer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {session.trainers.map((trainer) => (
+                <Badge 
+                  key={trainer.id} 
+                  variant={trainer.cancelled ? "outline" : "secondary"}
+                  className={trainer.cancelled ? "line-through text-muted-foreground" : ""}
+                >
+                  {trainer.name}
+                  {trainer.cancelled && " (abgesagt)"}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {!session.isCancelled && (
         <>

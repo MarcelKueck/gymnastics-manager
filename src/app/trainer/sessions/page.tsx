@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,8 +14,16 @@ import {
   ChevronLeft, 
   ChevronRight,
   Users,
+  Ban,
+  Undo2,
 } from 'lucide-react';
 import Link from 'next/link';
+
+interface SessionTrainer {
+  id: string;
+  name: string;
+  cancelled: boolean;
+}
 
 interface TrainingSession {
   id: string;
@@ -28,6 +36,9 @@ interface TrainingSession {
   isCancelled: boolean;
   expectedAthletes: number;
   presentCount: number;
+  trainers?: SessionTrainer[];
+  trainerCancelled?: boolean;
+  trainerCancellationId?: string;
 }
 
 export default function TrainerSessionsPage() {
@@ -37,7 +48,17 @@ export default function TrainerSessionsPage() {
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [view, setView] = useState<'list' | 'calendar'>('list');
 
-  useEffect(() => {
+  const getWeekStart = useCallback((offset: number) => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to Monday
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff + offset * 7);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  }, []);
+
+  const fetchSessions = useCallback(() => {
     setIsLoading(true);
     const startDate = getWeekStart(currentWeekOffset);
     const endDate = new Date(startDate);
@@ -51,17 +72,11 @@ export default function TrainerSessionsPage() {
       .then((result) => setSessions(result.data))
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
-  }, [currentWeekOffset]);
+  }, [currentWeekOffset, getWeekStart]);
 
-  const getWeekStart = (offset: number) => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to Monday
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + diff + offset * 7);
-    monday.setHours(0, 0, 0, 0);
-    return monday;
-  };
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const getWeekDays = () => {
     const start = getWeekStart(currentWeekOffset);
@@ -154,7 +169,7 @@ export default function TrainerSessionsPage() {
           ) : (
             <div className="space-y-3">
               {sessions.map((session) => (
-                <SessionCard key={session.id} session={session} />
+                <SessionCard key={session.id} session={session} onRefresh={fetchSessions} />
               ))}
             </div>
           )}
@@ -213,15 +228,62 @@ export default function TrainerSessionsPage() {
   );
 }
 
-function SessionCard({ session }: { session: TrainingSession }) {
+function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefresh: () => void }) {
   const sessionDate = new Date(session.date);
   const isPast = sessionDate < new Date();
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
+
+  const handleCancelAttendance = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsCancelling(true);
+    try {
+      const res = await fetch('/api/trainer/cancellations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.id,
+          reason: 'Vom Trainer abgesagt',
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Fehler beim Absagen');
+      }
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleUndoCancellation = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!session.trainerCancellationId) return;
+    setIsUndoing(true);
+    try {
+      const res = await fetch(`/api/trainer/cancellations/${session.trainerCancellationId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        throw new Error('Fehler beim Zurücknehmen');
+      }
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUndoing(false);
+    }
+  };
 
   return (
     <Link href={`/trainer/sessions/${session.id}`}>
       <Card
         className={`hover:border-primary transition-colors ${
-          session.isCancelled ? 'opacity-60' : ''
+          session.isCancelled || session.trainerCancelled ? 'opacity-60' : ''
         }`}
       >
         <CardContent className="p-4">
@@ -242,6 +304,9 @@ function SessionCard({ session }: { session: TrainingSession }) {
                   {session.isCancelled && (
                     <Badge variant="destructive">Abgesagt</Badge>
                   )}
+                  {session.trainerCancelled && !session.isCancelled && (
+                    <Badge variant="secondary">Abgemeldet</Badge>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {session.startTime} - {session.endTime}
@@ -253,11 +318,49 @@ function SessionCard({ session }: { session: TrainingSession }) {
                     </Badge>
                   ))}
                 </div>
+                {session.trainers && session.trainers.length > 0 && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                    <Users className="h-3 w-3" />
+                    <span>
+                      {session.trainers.map((t, idx) => (
+                        <span key={t.id}>
+                          <span className={t.cancelled ? 'line-through' : ''}>
+                            {t.name}
+                          </span>
+                          {idx < (session.trainers?.length ?? 0) - 1 && ', '}
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-4">
               {!session.isCancelled && (
                 <>
+                  {!session.trainerCancelled && !isPast && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelAttendance}
+                      disabled={isCancelling}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Ban className="h-4 w-4 mr-1" />
+                      {isCancelling ? 'Wird abgesagt...' : 'Absagen'}
+                    </Button>
+                  )}
+                  {session.trainerCancelled && !isPast && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleUndoCancellation}
+                      disabled={isUndoing}
+                    >
+                      <Undo2 className="h-4 w-4 mr-1" />
+                      {isUndoing ? 'Wird zurückgenommen...' : 'Zurücknehmen'}
+                    </Button>
+                  )}
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <Users className="h-4 w-4" />
                     <span className="text-sm">
