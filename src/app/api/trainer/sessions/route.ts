@@ -178,6 +178,7 @@ export async function GET(request: NextRequest) {
         expectedAthletes,
         presentCount: 0, // Will be filled from stored session if exists
         isVirtual: vs.id === null, // Flag to indicate if this is a calculated session
+        equipment: stored?.equipment || null,
         trainers,
         trainerCancelled,
         trainerCancellationId: trainerCancellation?.id,

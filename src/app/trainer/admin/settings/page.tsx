@@ -14,7 +14,15 @@ import {
   Save,
   CheckCircle,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface SystemSettings {
   id: string;
@@ -24,6 +32,7 @@ interface SystemSettings {
   absenceAlertWindowDays: number;
   absenceAlertCooldownDays: number;
   absenceAlertEnabled: boolean;
+  attendanceConfirmationMode: string;
 }
 
 export default function AdminSettingsPage() {
@@ -130,6 +139,51 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Teilnahmebestätigung</CardTitle>
+            </div>
+            <CardDescription>
+              Wie sollen Athleten und Trainer ihre Teilnahme an Trainings bestätigen?
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="attendanceMode">Bestätigungsmodus</Label>
+              <Select
+                value={settings?.attendanceConfirmationMode ?? 'AUTO_CONFIRM'}
+                onValueChange={(value) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    attendanceConfirmationMode: value,
+                  } : null)
+                }
+              >
+                <SelectTrigger id="attendanceMode">
+                  <SelectValue placeholder="Modus auswählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AUTO_CONFIRM">
+                    Automatisch bestätigt (Absage erforderlich)
+                  </SelectItem>
+                  <SelectItem value="REQUIRE_CONFIRMATION">
+                    Aktive Bestätigung erforderlich
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {settings?.attendanceConfirmationMode === 'REQUIRE_CONFIRMATION'
+                  ? 'Athleten und Trainer müssen jede Trainingseinheit aktiv bestätigen.'
+                  : 'Athleten und Trainer sind automatisch als teilnehmend markiert und müssen nur bei Abwesenheit absagen.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">

@@ -30,6 +30,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Get system settings for confirmation mode
+    const settings = await prisma.systemSettings.findFirst({
+      where: { id: 'default' },
+    });
+    const confirmationMode = settings?.attendanceConfirmationMode || 'AUTO_CONFIRM';
+
     // Get athlete's assigned training groups
     const assignments = await prisma.recurringTrainingAthleteAssignment.findMany({
       where: { athleteId },
@@ -99,6 +105,9 @@ export async function GET(request: NextRequest) {
         attendanceRecords: {
           where: { athleteId },
         },
+        sessionConfirmations: {
+          where: { athleteId },
+        },
       },
     });
 
@@ -138,10 +147,12 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
+      confirmationMode,
       data: virtualSessions.map((vs) => {
         const dateKey = `${vs.recurringTrainingId}_${vs.date.toISOString().split('T')[0]}`;
         const stored = storedSessionsByKey.get(dateKey);
         const athleteCancellation = stored?.cancellations?.find((c) => c.isActive);
+        const confirmation = stored?.sessionConfirmations?.[0];
         
         // Get trainers for this session with their cancellation status
         const baseTrainers = trainersByRecurringId.get(vs.recurringTrainingId) || [];
@@ -166,7 +177,11 @@ export async function GET(request: NextRequest) {
           athleteCancellationReason: athleteCancellation?.reason,
           isCompleted: stored?.isCompleted || false,
           attendanceStatus: stored?.attendanceRecords?.[0]?.status,
+          equipment: stored?.equipment || null,
           trainers,
+          // Confirmation data (for REQUIRE_CONFIRMATION mode)
+          confirmed: confirmation?.confirmed ?? null,
+          confirmedAt: confirmation?.confirmedAt?.toISOString() ?? null,
         };
       }),
     });

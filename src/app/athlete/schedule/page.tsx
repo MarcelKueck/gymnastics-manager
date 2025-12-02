@@ -22,6 +22,9 @@ import {
   ChevronRight,
   List,
   Users,
+  Dumbbell,
+  Check,
+  HelpCircle,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -45,13 +48,19 @@ interface ScheduleSession {
   athleteCancellationId?: string;
   isCompleted: boolean;
   attendanceStatus?: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED';
+  equipment?: string | null;
   trainers?: SessionTrainer[];
+  // Confirmation fields
+  confirmed?: boolean | null;
+  confirmedAt?: string | null;
 }
 
 type ViewMode = 'list' | 'calendar';
+type ConfirmationMode = 'AUTO_CONFIRM' | 'REQUIRE_CONFIRMATION';
 
 export default function AthleteSchedule() {
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
+  const [confirmationMode, setConfirmationMode] = useState<ConfirmationMode>('AUTO_CONFIRM');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -61,6 +70,7 @@ export default function AthleteSchedule() {
   const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmingSessionId, setConfirmingSessionId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   
   // Edit state
@@ -94,6 +104,7 @@ export default function AthleteSchedule() {
       if (!res.ok) throw new Error('Failed to fetch');
       const result = await res.json();
       setSessions(result.data);
+      setConfirmationMode(result.confirmationMode || 'AUTO_CONFIRM');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -197,6 +208,31 @@ export default function AthleteSchedule() {
     }
   };
 
+  // Handle session confirmation (for REQUIRE_CONFIRMATION mode)
+  const handleConfirmSession = async (sessionId: string, confirmed: boolean) => {
+    setConfirmingSessionId(sessionId);
+    setFormError(null);
+
+    try {
+      const res = await fetch('/api/session-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, confirmed }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Fehler beim Bestätigen');
+      }
+
+      await loadData();
+    } catch (err) {
+      setFormError((err as Error).message);
+    } finally {
+      setConfirmingSessionId(null);
+    }
+  };
   if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
 
   const getStatusBadge = (session: ScheduleSession) => {
@@ -397,7 +433,85 @@ export default function AthleteSchedule() {
       );
     }
 
-    // Session can be cancelled
+    // Check if we're in REQUIRE_CONFIRMATION mode
+    const sessionDate = new Date(session.date);
+    const isPastSession = sessionDate < new Date();
+    
+    if (confirmationMode === 'REQUIRE_CONFIRMATION' && !isPastSession) {
+      // Show confirmation buttons
+      const isConfirming = confirmingSessionId === session.id;
+      
+      if (session.confirmed === true) {
+        // Already confirmed - show undo option
+        return (
+          <div className="flex gap-2">
+            <Badge className="bg-green-500 gap-1">
+              <Check className="h-3 w-3" />
+              Zugesagt
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleConfirmSession(session.id, false)}
+              disabled={isConfirming}
+              title="Absagen"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      } else if (session.confirmed === false) {
+        // Declined - show change option
+        return (
+          <div className="flex gap-2">
+            <Badge variant="secondary" className="gap-1">
+              <XCircle className="h-3 w-3" />
+              Abgesagt
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleConfirmSession(session.id, true)}
+              disabled={isConfirming}
+              title="Doch zusagen"
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      } else {
+        // Not yet confirmed - show both buttons
+        return (
+          <div className="flex gap-2">
+            <Badge variant="outline" className="gap-1 text-amber-600 border-amber-300">
+              <HelpCircle className="h-3 w-3" />
+              Bitte bestätigen
+            </Badge>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => handleConfirmSession(session.id, true)}
+              disabled={isConfirming}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Check className="h-4 w-4 mr-1" />
+              Zusagen
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleConfirmSession(session.id, false)}
+              disabled={isConfirming}
+            >
+              <XCircle className="h-4 w-4 mr-1" />
+              Absagen
+            </Button>
+          </div>
+        );
+      }
+    }
+
+    // Session can be cancelled (AUTO_CONFIRM mode or fallback)
     return (
       <Button
         variant="outline"
@@ -509,6 +623,18 @@ export default function AthleteSchedule() {
                             </span>
                           </div>
                         )}
+                        {session.equipment && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Dumbbell className="h-3 w-3 text-muted-foreground" />
+                            <div className="flex flex-wrap gap-1">
+                              {session.equipment.split(',').map((item, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950">
+                                  {item.trim()}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {session.athleteCancelled && session.athleteCancellationReason && editingSessionId !== session.id && (
                           <p className="text-xs text-muted-foreground mt-1">
                             Grund: {session.athleteCancellationReason}
@@ -588,6 +714,14 @@ export default function AthleteSchedule() {
                             <Users className="h-3 w-3" />
                             <span className="truncate">
                               {session.trainers.map(t => t.name.split(' ')[0]).join(', ')}
+                            </span>
+                          </div>
+                        )}
+                        {session.equipment && (
+                          <div className="flex items-center gap-1 text-[10px] opacity-70 mt-0.5">
+                            <Dumbbell className="h-3 w-3" />
+                            <span className="truncate">
+                              {session.equipment.split(',').map(i => i.trim()).join(', ')}
                             </span>
                           </div>
                         )}

@@ -141,6 +141,8 @@ model AthleteProfile {
   attendanceRecords            AttendanceRecord[]
   absenceAlerts                AbsenceAlert[]
   competitionRegistrations     CompetitionRegistration[]
+  sessionConfirmations         SessionConfirmation[]
+  absencePeriods               AbsencePeriod[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -177,6 +179,9 @@ model TrainerProfile {
   trainerCancellations          TrainerCancellation[]
   trainerAttendance             TrainerAttendanceRecord[]            @relation("TrainerAttendance")
   markedTrainerAttendance       TrainerAttendanceRecord[]            @relation("TrainerAttendanceMarker")
+  sessionConfirmations          SessionConfirmation[]
+  absencePeriods                AbsencePeriod[]
+  createdAbsencePeriods         AbsencePeriod[]                      @relation("AbsencePeriodCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -278,6 +283,7 @@ model TrainingSession {
   recurringTrainingId String?
   recurringTraining   RecurringTraining? @relation(fields: [recurringTrainingId], references: [id], onDelete: SetNull)
   notes               String?
+  equipment           String? // Comma-separated list of equipment/apparatus for this session
   isCompleted         Boolean            @default(false)
   isCancelled         Boolean            @default(false)
   cancelledBy         String?
@@ -292,6 +298,7 @@ model TrainingSession {
   trainerCancellations      TrainerCancellation[]
   trainerAttendanceRecords  TrainerAttendanceRecord[]
   attendanceRecords         AttendanceRecord[]
+  sessionConfirmations      SessionConfirmation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -349,6 +356,54 @@ model SessionAthleteAssignment {
 // ============================================================================
 // ATTENDANCE MODELS
 // ============================================================================
+
+// Session confirmation - when user actively confirms they will attend
+model SessionConfirmation {
+  id                String          @id @default(cuid())
+  trainingSessionId String
+  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+
+  // Either athleteId or trainerId must be set
+  athleteId String?
+  athlete   AthleteProfile? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  trainerId String?
+  trainer   TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  confirmed   Boolean  @default(true) // true = coming, false = not coming
+  confirmedAt DateTime @default(now())
+
+  @@unique([trainingSessionId, athleteId])
+  @@unique([trainingSessionId, trainerId])
+  @@index([trainingSessionId])
+  @@index([athleteId])
+  @@index([trainerId])
+}
+
+// Absence periods - for injuries, holidays, etc.
+model AbsencePeriod {
+  id String @id @default(cuid())
+
+  // Either athleteId or trainerId must be set
+  athleteId String?
+  athlete   AthleteProfile? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  trainerId String?
+  trainer   TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+  reason    String // e.g., "Verletzt", "Urlaub", etc.
+  notes     String?
+
+  createdBy      String
+  createdByAdmin TrainerProfile @relation("AbsencePeriodCreator", fields: [createdBy], references: [id])
+  createdAt      DateTime       @default(now())
+  isActive       Boolean        @default(true)
+
+  @@index([athleteId])
+  @@index([trainerId])
+  @@index([startDate, endDate])
+  @@index([isActive])
+}
 
 model Cancellation {
   id                String          @id @default(cuid())
@@ -527,6 +582,11 @@ model SystemSettings {
   absenceAlertEnabled        Boolean @default(true)
   maxUploadSizeMB            Int     @default(10)
   sessionGenerationDaysAhead Int     @default(90)
+
+  // Attendance confirmation mode: 
+  // AUTO_CONFIRM = athletes/trainers auto-confirmed, need to cancel if not coming
+  // REQUIRE_CONFIRMATION = athletes/trainers must actively confirm each session
+  attendanceConfirmationMode String @default("AUTO_CONFIRM")
 
   lastModifiedBy        String?
   lastModifiedByTrainer TrainerProfile? @relation(fields: [lastModifiedBy], references: [id])

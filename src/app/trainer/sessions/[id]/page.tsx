@@ -16,6 +16,7 @@ import {
   Calendar,
   Users,
   MessageSquare,
+  Dumbbell,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
@@ -49,6 +50,7 @@ interface SessionDetail {
   endTime: string;
   groups: string[];
   isCancelled: boolean;
+  equipment?: string | null;
   athletes: AthleteAttendance[];
   trainers?: SessionTrainer[];
 }
@@ -64,9 +66,11 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [attendanceData, setAttendanceData] = useState<Map<string, { status: string; note: string }>>(new Map());
   const [trainerAttendanceData, setTrainerAttendanceData] = useState<Map<string, { status: string; note: string }>>(new Map());
+  const [equipment, setEquipment] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingTrainers, setIsSavingTrainers] = useState(false);
+  const [isSavingEquipment, setIsSavingEquipment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [hasTrainerChanges, setHasTrainerChanges] = useState(false);
@@ -79,6 +83,8 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
       })
       .then((result) => {
         setSession(result.data);
+        // Initialize equipment
+        setEquipment(result.data.equipment || '');
         // Initialize athlete attendance data from fetched data
         const initialData = new Map<string, { status: string; note: string }>();
         result.data.athletes.forEach((athlete: AthleteAttendance) => {
@@ -208,6 +214,28 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
     }
   };
 
+  const saveEquipment = async () => {
+    setIsSavingEquipment(true);
+    try {
+      const res = await fetch(`/api/trainer/sessions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ equipment }),
+      });
+
+      if (!res.ok) throw new Error('Failed to save');
+      
+      // Update session state with new equipment
+      if (session) {
+        setSession({ ...session, equipment });
+      }
+    } catch {
+      setError('Fehler beim Speichern der Geräte');
+    } finally {
+      setIsSavingEquipment(false);
+    }
+  };
+
   if (isLoading) return <Loading />;
   if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
   if (!session) return <div>Trainingseinheit nicht gefunden</div>;
@@ -304,6 +332,46 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           </CardContent>
         </Card>
       </div>
+
+      {/* Equipment / Geräte */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Dumbbell className="h-4 w-4" />
+            Geräte
+          </CardTitle>
+          <CardDescription>Kommagetrennte Liste der Geräte für diese Trainingseinheit</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="z.B. Boden, Reck, Barren, Schwebebalken"
+                value={equipment}
+                onChange={(e) => setEquipment(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                onClick={saveEquipment}
+                disabled={isSavingEquipment || equipment === (session.equipment || '')}
+                size="sm"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isSavingEquipment ? 'Speichern...' : 'Speichern'}
+              </Button>
+            </div>
+            {session.equipment && (
+              <div className="flex flex-wrap gap-2">
+                {session.equipment.split(',').map((item, idx) => (
+                  <Badge key={idx} variant="outline" className="bg-blue-50 dark:bg-blue-950">
+                    {item.trim()}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Trainers */}
       {session.trainers && session.trainers.length > 0 && (

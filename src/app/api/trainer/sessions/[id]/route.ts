@@ -252,6 +252,7 @@ export async function GET(
       groups: recurringTraining?.trainingGroups.map((g: { name: string }) => g.name) || [],
       isCancelled: trainingSession.isCancelled,
       isVirtual: id.startsWith('virtual_'),
+      equipment: (trainingSession as { equipment?: string | null }).equipment || null,
       athletes,
       trainers,
     };
@@ -261,6 +262,93 @@ export async function GET(
     console.error('Session detail API error:', error);
     return NextResponse.json(
       { error: 'Fehler beim Laden der Trainingseinheit' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH - Update session details (equipment)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 });
+    }
+
+    if (session.user.activeRole !== 'TRAINER' && session.user.activeRole !== 'ADMIN') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const { equipment } = body;
+
+    let sessionId = id;
+
+    // Handle virtual session IDs - create the actual session first
+    const virtualInfo = parseVirtualSessionId(id);
+    if (virtualInfo) {
+      // Check if session already exists
+      const existingSession = await prisma.trainingSession.findFirst({
+        where: {
+          recurringTrainingId: virtualInfo.recurringTrainingId,
+          date: virtualInfo.date,
+        },
+      });
+
+      if (existingSession) {
+        sessionId = existingSession.id;
+      } else {
+        // Get recurring training details
+        const recurringTraining = await prisma.recurringTraining.findUnique({
+          where: { id: virtualInfo.recurringTrainingId },
+        });
+
+        if (!recurringTraining) {
+          return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
+        }
+
+        // Create the session
+        const newSession = await prisma.trainingSession.create({
+          data: {
+            recurringTrainingId: virtualInfo.recurringTrainingId,
+            date: virtualInfo.date,
+            dayOfWeek: recurringTraining.dayOfWeek,
+            startTime: recurringTraining.startTime,
+            endTime: recurringTraining.endTime,
+            equipment: equipment || null,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: 'Geräte gespeichert',
+          data: { id: newSession.id, equipment: newSession.equipment },
+        });
+      }
+    }
+
+    // Update existing session
+    const updatedSession = await prisma.trainingSession.update({
+      where: { id: sessionId },
+      data: {
+        equipment: equipment || null,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Geräte gespeichert',
+      data: { id: updatedSession.id, equipment: updatedSession.equipment },
+    });
+  } catch (error) {
+    console.error('Session update API error:', error);
+    return NextResponse.json(
+      { error: 'Fehler beim Speichern der Geräte' },
       { status: 500 }
     );
   }

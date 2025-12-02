@@ -16,6 +16,7 @@ import {
   Users,
   Ban,
   Undo2,
+  Dumbbell,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,6 +37,7 @@ interface TrainingSession {
   isCancelled: boolean;
   expectedAthletes: number;
   presentCount: number;
+  equipment?: string | null;
   trainers?: SessionTrainer[];
   trainerCancelled?: boolean;
   trainerCancellationId?: string;
@@ -331,6 +333,18 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                         </span>
                       ))}
                     </span>
+                  </div>
+                )}
+                {session.equipment && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <Dumbbell className="h-3 w-3 text-muted-foreground" />
+                    <div className="flex flex-wrap gap-1">
+                      {session.equipment.split(',').map((item, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950">
+                          {item.trim()}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

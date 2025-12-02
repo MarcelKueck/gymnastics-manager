@@ -31,6 +31,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import { BulkCancelDialog } from '@/components/admin/BulkCancelDialog';
 
 const DAY_LABELS: Record<string, string> = {
   MONDAY: 'Montag',
@@ -163,12 +164,15 @@ export default function AdminTrainingsPage() {
           </p>
         </div>
         
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Neues Training
-            </Button>
+        <div className="flex items-center gap-2">
+          <BulkCancelDialog />
+          
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Neues Training
+              </Button>
             </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -251,6 +255,7 @@ export default function AdminTrainingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {error && (

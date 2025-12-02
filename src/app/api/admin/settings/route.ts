@@ -45,6 +45,7 @@ export async function PUT(request: NextRequest) {
       absenceAlertWindowDays: body.absenceAlertWindowDays,
       absenceAlertCooldownDays: body.absenceAlertCooldownDays,
       absenceAlertEnabled: body.absenceAlertEnabled,
+      attendanceConfirmationMode: body.attendanceConfirmationMode,
     },
     create: {
       id: 'default',
@@ -54,6 +55,7 @@ export async function PUT(request: NextRequest) {
       absenceAlertWindowDays: body.absenceAlertWindowDays ?? 30,
       absenceAlertCooldownDays: body.absenceAlertCooldownDays ?? 14,
       absenceAlertEnabled: body.absenceAlertEnabled ?? true,
+      attendanceConfirmationMode: body.attendanceConfirmationMode ?? 'AUTO_CONFIRM',
     },
   });
 
