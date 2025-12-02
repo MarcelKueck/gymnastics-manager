@@ -193,7 +193,7 @@ export async function GET(
       ? trainingSession.trainerAttendanceRecords
       : [];
     const trainerAttendanceMap = new Map(
-      trainerAttendanceRecords.map((r: { trainerId: string; status: string; notes?: string }) => [r.trainerId, r])
+      trainerAttendanceRecords.map((r: { trainerId: string; status: string; notes: string | null }) => [r.trainerId, r])
     );
 
     // Build trainers list from groups
