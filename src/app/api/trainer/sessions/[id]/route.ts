@@ -72,6 +72,9 @@ export async function GET(
         include: {
           attendanceRecords: true,
           trainerAttendanceRecords: true,
+          trainerCancellations: {
+            where: { isActive: true },
+          },
           cancellations: {
             include: {
               athlete: true,
@@ -93,6 +96,7 @@ export async function GET(
           notes: null,
           attendanceRecords: [],
           trainerAttendanceRecords: [],
+          trainerCancellations: [],
           cancellations: [],
         };
       }

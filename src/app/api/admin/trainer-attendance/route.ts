@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parseVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
 // POST - Mark trainer attendance (admin only)
 export async function POST(request: NextRequest) {
@@ -18,19 +19,64 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { sessionId, attendance } = body;
+    let { sessionId } = body;
+    const { attendance } = body;
 
     if (!sessionId || !attendance || !Array.isArray(attendance)) {
       return NextResponse.json({ error: 'Ungültige Anfrage' }, { status: 400 });
     }
 
-    // Get admin's trainer profile
-    const adminProfile = await prisma.trainerProfile.findFirst({
+    // Get admin's trainer profile (they might have ADMIN role or just be a TRAINER with admin activeRole)
+    let adminProfile = await prisma.trainerProfile.findFirst({
       where: { userId: session.user.id, role: 'ADMIN' },
     });
 
+    // If not found with ADMIN role, try to find any trainer profile for this user
     if (!adminProfile) {
-      return NextResponse.json({ error: 'Admin-Profil nicht gefunden' }, { status: 404 });
+      adminProfile = await prisma.trainerProfile.findFirst({
+        where: { userId: session.user.id },
+      });
+    }
+
+    if (!adminProfile) {
+      return NextResponse.json({ error: 'Trainer-Profil nicht gefunden. Bitte wenden Sie sich an den Administrator.' }, { status: 404 });
+    }
+
+    // Handle virtual session IDs - create the actual session first
+    const virtualInfo = parseVirtualSessionId(sessionId);
+    if (virtualInfo) {
+      // Check if session already exists
+      const existingSession = await prisma.trainingSession.findFirst({
+        where: {
+          recurringTrainingId: virtualInfo.recurringTrainingId,
+          date: virtualInfo.date,
+        },
+      });
+
+      if (existingSession) {
+        sessionId = existingSession.id;
+      } else {
+        // Get recurring training details
+        const recurringTraining = await prisma.recurringTraining.findUnique({
+          where: { id: virtualInfo.recurringTrainingId },
+        });
+
+        if (!recurringTraining) {
+          return NextResponse.json({ error: 'Wiederkehrendes Training nicht gefunden' }, { status: 404 });
+        }
+
+        // Create the session
+        const newSession = await prisma.trainingSession.create({
+          data: {
+            recurringTrainingId: virtualInfo.recurringTrainingId,
+            date: virtualInfo.date,
+            dayOfWeek: recurringTraining.dayOfWeek,
+            startTime: recurringTraining.startTime,
+            endTime: recurringTraining.endTime,
+          },
+        });
+        sessionId = newSession.id;
+      }
     }
 
     // Upsert attendance records for each trainer
