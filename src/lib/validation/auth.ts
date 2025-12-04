@@ -36,3 +36,29 @@ export const changePasswordSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegistrationInput = z.infer<typeof registrationSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+// Schema for admin creating users directly
+export const adminCreateUserSchema = z.object({
+  email: z.string().email('Ungültige E-Mail-Adresse'),
+  firstName: z.string().min(1, 'Vorname erforderlich'),
+  lastName: z.string().min(1, 'Nachname erforderlich'),
+  phone: z.string().min(1, 'Telefonnummer erforderlich'),
+  birthDate: z.string().optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+  // Role selection
+  isAthlete: z.boolean().default(false),
+  isTrainer: z.boolean().default(false),
+  // Trainer-specific
+  trainerRole: z.enum(['TRAINER', 'ADMIN']).optional(),
+  // Athlete-specific (youthCategory is now auto-calculated from birthDate)
+  guardianName: z.string().optional(),
+  guardianEmail: z.string().email().optional().or(z.literal('')),
+  guardianPhone: z.string().optional(),
+  emergencyContactName: z.string().optional(),
+  emergencyContactPhone: z.string().optional(),
+}).refine((data) => data.isAthlete || data.isTrainer, {
+  message: 'Mindestens eine Rolle muss ausgewählt werden',
+  path: ['isAthlete'],
+});
+
+export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;

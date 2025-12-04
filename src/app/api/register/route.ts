@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { registrationSchema } from '@/lib/validation/auth';
 import { sendRegistrationNotification } from '@/lib/email';
+import { calculateYouthCategory } from '@/lib/utils/youthCategory';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,10 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await bcrypt.hash(data.password, 10);
 
+    // Calculate youth category from birth date
+    const birthDate = data.birthDate ? new Date(data.birthDate) : null;
+    const youthCategory = calculateYouthCategory(birthDate);
+
     // Create user with athlete profile
     const user = await prisma.user.create({
       data: {
@@ -42,7 +47,7 @@ export async function POST(request: NextRequest) {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
-        birthDate: data.birthDate ? new Date(data.birthDate) : null,
+        birthDate: birthDate,
         gender: data.gender,
         isAthlete: true,
         athleteProfile: {
@@ -52,6 +57,7 @@ export async function POST(request: NextRequest) {
             guardianPhone: data.guardianPhone || null,
             emergencyContactName: data.emergencyContactName || null,
             emergencyContactPhone: data.emergencyContactPhone || null,
+            youthCategory: youthCategory || 'F', // Default to F if not calculable
             isApproved: false, // Requires trainer approval
           },
         },

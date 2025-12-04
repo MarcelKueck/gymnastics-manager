@@ -27,9 +27,13 @@ enum Gender {
 }
 
 enum YouthCategory {
-  F
-  E
-  D
+  F // 6-7 years
+  E // 8-9 years
+  D // 10-11 years
+  C // 12-13 years
+  B // 14-15 years
+  A // 16-17 years
+  ADULT // 18+ years (Turnerinnen)
 }
 
 enum DayOfWeek {

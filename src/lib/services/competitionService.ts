@@ -1,12 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { YouthCategory, Prisma } from '@prisma/client';
-
-// Youth category order for comparison
-const YOUTH_CATEGORY_ORDER: Record<YouthCategory, number> = {
-  F: 1,
-  E: 2,
-  D: 3,
-};
+import { YOUTH_CATEGORY_ORDER } from '@/lib/utils/youthCategory';
 
 export const competitionService = {
   /**

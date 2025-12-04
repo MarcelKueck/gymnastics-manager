@@ -3,6 +3,21 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// Calculate youth category based on DTB rules
+function calculateYouthCategory(birthDate: Date): YouthCategory {
+  const currentYear = new Date().getFullYear();
+  const birthYear = birthDate.getFullYear();
+  const ageThisYear = currentYear - birthYear;
+
+  if (ageThisYear >= 18) return YouthCategory.ADULT;
+  if (ageThisYear >= 16) return YouthCategory.A;
+  if (ageThisYear >= 14) return YouthCategory.B;
+  if (ageThisYear >= 12) return YouthCategory.C;
+  if (ageThisYear >= 10) return YouthCategory.D;
+  if (ageThisYear >= 8) return YouthCategory.E;
+  return YouthCategory.F;
+}
+
 async function main() {
   console.log('🌱 Starting seed for production...');
 
@@ -54,6 +69,7 @@ async function main() {
   // PRIMARY ADMIN: Veronika Raum (Admin + Trainer + Athlete)
   // ============================================================================
   console.log('👤 Creating primary admin: Veronika Raum...');
+  const veronikaBirthDate = new Date('1985-06-15');
   const veronika = await prisma.user.create({
     data: {
       email: 'vroni@raumonline.de',
@@ -61,7 +77,7 @@ async function main() {
       firstName: 'Veronika',
       lastName: 'Raum',
       phone: '+49 170 1234567',
-      birthDate: new Date('1985-06-15'),
+      birthDate: veronikaBirthDate,
       gender: Gender.FEMALE,
       isAthlete: true,
       isTrainer: true,
@@ -78,7 +94,7 @@ async function main() {
   await prisma.athleteProfile.create({
     data: {
       userId: veronika.id,
-      youthCategory: YouthCategory.D,
+      youthCategory: calculateYouthCategory(veronikaBirthDate), // Auto-calculated
       status: 'ACTIVE',
       isApproved: true,
       approvedBy: veronikaTrainerProfile.id,

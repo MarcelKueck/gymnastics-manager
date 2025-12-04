@@ -9,11 +9,26 @@ export const DAY_OF_WEEK_LABELS = {
   SUNDAY: "Sonntag",
 } as const;
 
-// Youth category labels (German Gymnastics Federation)
+// Youth category labels (German Gymnastics Federation - DTB)
 export const YOUTH_CATEGORY_LABELS = {
   F: "F-Jugend",
   E: "E-Jugend",
   D: "D-Jugend",
+  C: "C-Jugend",
+  B: "B-Jugend",
+  A: "A-Jugend",
+  ADULT: "Turnerinnen",
+} as const;
+
+// Youth category age ranges for display
+export const YOUTH_CATEGORY_AGE_RANGES = {
+  F: "6-7 Jahre",
+  E: "8-9 Jahre",
+  D: "10-11 Jahre",
+  C: "12-13 Jahre",
+  B: "14-15 Jahre",
+  A: "16-17 Jahre",
+  ADULT: "18+ Jahre",
 } as const;
 
 // Attendance status labels (German)

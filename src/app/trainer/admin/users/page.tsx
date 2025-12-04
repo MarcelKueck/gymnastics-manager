@@ -20,6 +20,7 @@ import {
   UserMinus,
   ShieldPlus,
   ShieldMinus,
+  Plus,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
 
 interface UserProfile {
   id: string;
@@ -60,6 +62,15 @@ export default function AdminUsersPage() {
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
   const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  const handleUserCreated = (newUser: UserProfile) => {
+    setUsers((prev) => [...prev, newUser].sort((a, b) => 
+      a.lastName.localeCompare(b.lastName)
+    ));
+    setSuccessMessage(`Benutzer ${newUser.firstName} ${newUser.lastName} wurde erstellt.`);
+    setTimeout(() => setSuccessMessage(null), 5000);
+  };
 
   const handleResetPassword = async (userId: string, email: string) => {
     setResettingPasswordFor(userId);
@@ -200,16 +211,29 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-bold">Benutzer verwalten</h1>
           <p className="text-muted-foreground">Athleten und Trainer verwalten</p>
         </div>
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Benutzer suchen..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Benutzer suchen..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Benutzer anlegen</span>
+            <span className="sm:hidden">Neu</span>
+          </Button>
         </div>
       </div>
+
+      <CreateUserDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onUserCreated={handleUserCreated}
+      />
 
       {error && (
         <div className="bg-destructive/10 text-destructive p-4 rounded-md">
