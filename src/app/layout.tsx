@@ -18,9 +18,13 @@ const geistMono = localFont({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: '#171717',
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#171717' },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -52,11 +56,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144x144.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="SV Esting" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="SV Esting Turnen" />
+        <meta name="msapplication-TileColor" content="#171717" />
+        <meta name="msapplication-tap-highlight" content="no" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

@@ -72,7 +72,36 @@
   * {
     @apply border-border;
   }
+  
+  html {
+    /* Support for iOS safe areas (notch, home indicator) */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  
   body {
     @apply bg-background text-foreground;
+    /* Prevent pull-to-refresh on mobile */
+    overscroll-behavior-y: contain;
+    /* Smoother scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  /* Improve tap highlighting */
+  a, button {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Prevent zoom on input focus on iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px;
   }
 }
