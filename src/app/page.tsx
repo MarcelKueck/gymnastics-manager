@@ -10,17 +10,17 @@ import {
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center space-y-2">
+          <CardTitle className="text-2xl font-semibold">
             SV Esting Turnen
           </CardTitle>
           <CardDescription>
             Trainingsmanagement für Athleten und Trainer
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-3">
           <Link href="/login" className="w-full">
             <Button className="w-full" size="lg">
               Anmelden

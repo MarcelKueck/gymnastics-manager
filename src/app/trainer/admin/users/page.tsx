@@ -218,7 +218,7 @@ export default function AdminUsersPage() {
       )}
 
       {successMessage && (
-        <div className="bg-green-500/10 text-green-600 p-4 rounded-md">
+        <div className="bg-emerald-500/10 text-emerald-600 p-4 rounded-lg">
           {successMessage}
         </div>
       )}

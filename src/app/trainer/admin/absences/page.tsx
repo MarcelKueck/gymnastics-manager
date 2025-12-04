@@ -219,7 +219,7 @@ export default function AdminAbsencesPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-orange-500" />
+              <Bell className="h-5 w-5 text-amber-500" />
               Offene Warnungen zur Bestätigung
             </CardTitle>
             <CardDescription>
@@ -231,11 +231,11 @@ export default function AdminAbsencesPage() {
               {alerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-orange-50 border-orange-200"
+                  className="flex items-center justify-between p-4 rounded-lg border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
-                      <User className="h-5 w-5 text-orange-700" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900">
+                      <User className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                     </div>
                     <div>
                       <p className="font-medium">

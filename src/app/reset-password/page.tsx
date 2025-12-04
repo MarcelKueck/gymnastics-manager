@@ -82,12 +82,12 @@ function ResetPasswordContent() {
 
   if (isValidating) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+        <Card className="w-full max-w-sm">
           <CardContent className="pt-6">
-            <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="text-muted-foreground">Link wird überprüft...</p>
+            <div className="flex flex-col items-center gap-4 py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted-foreground border-t-transparent"></div>
+              <p className="text-sm text-muted-foreground">Link wird überprüft...</p>
             </div>
           </CardContent>
         </Card>
@@ -97,13 +97,13 @@ function ResetPasswordContent() {
 
   if (tokenError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <div className="mx-auto w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="space-y-3 text-center">
+            <div className="mx-auto w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center">
               <AlertCircle className="h-6 w-6 text-destructive" />
             </div>
-            <CardTitle className="text-2xl">Link ungültig</CardTitle>
+            <CardTitle className="text-xl font-semibold">Link ungültig</CardTitle>
             <CardDescription>{tokenError}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -130,13 +130,13 @@ function ResetPasswordContent() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="space-y-3 text-center">
+            <div className="mx-auto w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+              <CheckCircle className="h-6 w-6 text-emerald-600" />
             </div>
-            <CardTitle className="text-2xl">Passwort geändert</CardTitle>
+            <CardTitle className="text-xl font-semibold">Passwort geändert</CardTitle>
             <CardDescription>
               Dein Passwort wurde erfolgreich geändert.
             </CardDescription>
@@ -154,13 +154,13 @@ function ResetPasswordContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-            <Lock className="h-6 w-6 text-blue-600" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="space-y-3 text-center">
+          <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+            <Lock className="h-6 w-6 text-muted-foreground" />
           </div>
-          <CardTitle className="text-2xl">Neues Passwort</CardTitle>
+          <CardTitle className="text-xl font-semibold">Neues Passwort</CardTitle>
           <CardDescription>
             Gib dein neues Passwort ein.
           </CardDescription>
@@ -169,7 +169,7 @@ function ResetPasswordContent() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 {error}
               </div>
             )}
@@ -184,7 +184,7 @@ function ResetPasswordContent() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isLoading}
-                  className="pr-10"
+                  className="pr-12"
                 />
                 <Button
                   type="button"
@@ -225,12 +225,12 @@ function ResetPasswordContent() {
 
 function LoadingFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+      <Card className="w-full max-w-sm">
         <CardContent className="pt-6">
-          <div className="flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            <p className="text-muted-foreground">Laden...</p>
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted-foreground border-t-transparent"></div>
+            <p className="text-sm text-muted-foreground">Laden...</p>
           </div>
         </CardContent>
       </Card>

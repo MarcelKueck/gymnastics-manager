@@ -267,7 +267,7 @@ export default function AthleteSchedule() {
     }
   };
 
-  if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
+  if (error) return <div className="text-destructive text-sm p-4 bg-destructive/10 rounded-lg">Fehler beim Laden: {error}</div>;
 
   const getStatusBadge = (session: ScheduleSession) => {
     if (session.isCancelled) {
@@ -279,7 +279,7 @@ export default function AthleteSchedule() {
     if (session.isCompleted) {
       switch (session.attendanceStatus) {
         case 'PRESENT':
-          return <Badge className="bg-green-500">Anwesend</Badge>;
+          return <Badge className="bg-emerald-500">Anwesend</Badge>;
         case 'ABSENT_UNEXCUSED':
           return <Badge variant="destructive">Abwesend</Badge>;
         case 'ABSENT_EXCUSED':
@@ -299,7 +299,7 @@ export default function AthleteSchedule() {
       return <Ban className="h-5 w-5 text-muted-foreground" />;
     }
     if (session.isCompleted && session.attendanceStatus === 'PRESENT') {
-      return <CheckCircle className="h-5 w-5 text-green-500" />;
+      return <CheckCircle className="h-5 w-5 text-emerald-500" />;
     }
     if (session.isCompleted && (session.attendanceStatus === 'ABSENT_UNEXCUSED' || session.attendanceStatus === 'ABSENT_EXCUSED')) {
       return <XCircle className="h-5 w-5 text-destructive" />;
@@ -479,7 +479,7 @@ export default function AthleteSchedule() {
       if (isConfirmed) {
         return (
           <div className="flex items-center gap-2">
-            <Badge className="bg-green-500">
+            <Badge className="bg-emerald-500">
               <Check className="h-3 w-3 mr-1" />
               Zugesagt
             </Badge>
@@ -513,7 +513,7 @@ export default function AthleteSchedule() {
                 disabled={isLoading}
                 title="Doch zusagen"
               >
-                <Check className="h-4 w-4 text-green-500" />
+                <Check className="h-4 w-4 text-emerald-500" />
               </Button>
             )}
           </div>
@@ -536,7 +536,7 @@ export default function AthleteSchedule() {
             size="sm"
             onClick={() => handleConfirmSession(session.id, true)}
             disabled={isLoading}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-emerald-600 hover:bg-emerald-700"
           >
             {isLoading ? '...' : (
               <>
@@ -570,7 +570,7 @@ export default function AthleteSchedule() {
     if (!canModify) {
       // Past deadline - show current status as read-only
       return (
-        <Badge className={effectiveConfirmed ? "bg-green-500" : "bg-muted"}>
+        <Badge className={effectiveConfirmed ? "bg-emerald-500" : "bg-muted"}>
           {effectiveConfirmed ? (
             <>
               <Check className="h-3 w-3 mr-1" />
@@ -593,7 +593,7 @@ export default function AthleteSchedule() {
           size="sm"
           onClick={() => handleConfirmSession(session.id, true)}
           disabled={isLoading || effectiveConfirmed}
-          className={effectiveConfirmed ? "bg-green-600 hover:bg-green-700" : ""}
+          className={effectiveConfirmed ? "bg-emerald-600 hover:bg-emerald-700" : ""}
         >
           <Check className="h-4 w-4" />
         </Button>
@@ -612,8 +612,8 @@ export default function AthleteSchedule() {
   return (
     <div className="space-y-6">
       {/* Header with week navigation */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Trainings</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold sm:text-2xl">Trainings</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -625,7 +625,7 @@ export default function AthleteSchedule() {
           <Button
             variant="outline"
             onClick={() => setCurrentWeekOffset(0)}
-            className="min-w-[200px]"
+            className="min-w-[180px] sm:min-w-[200px] text-sm"
           >
             {formatWeekRange()}
           </Button>
@@ -663,29 +663,29 @@ export default function AthleteSchedule() {
         <Loading />
       ) : sessions.length === 0 ? (
         <EmptyState
-          icon={<Calendar className="h-10 w-10" />}
+          icon={<Calendar className="h-12 w-12" />}
           title="Keine Trainings in dieser Woche"
           description="Navigiere zu einer anderen Woche oder du bist noch keiner Trainingsgruppe zugewiesen."
         />
       ) : viewMode === 'list' ? (
         /* List View */
         <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="space-y-3">
               {sessions.map((session) => (
                 <div
                   key={session.id}
                   className={cn(
-                    'p-4 rounded-lg border',
+                    'p-3 sm:p-4 rounded-lg border',
                     session.isCancelled && 'bg-destructive/5 border-destructive/20',
                     session.athleteCancelled && 'bg-muted/50',
                     !session.isCancelled && !session.athleteCancelled && !session.isCompleted && 'bg-card'
                   )}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
                       {getStatusIcon(session)}
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium">{session.name}</p>
                         <p className="text-sm text-muted-foreground">
                           {formatDate(session.date)} • {session.startTime} - {session.endTime}
@@ -737,13 +737,13 @@ export default function AthleteSchedule() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 ml-8 sm:ml-0">
                       {getStatusBadge(session)}
                       {cancellingSessionId !== session.id && editingSessionId !== session.id && renderSessionActions(session)}
                     </div>
                   </div>
                   {(cancellingSessionId === session.id || editingSessionId === session.id) && (
-                    <div className="mt-3 ml-9">
+                    <div className="mt-3 ml-8">
                       {renderSessionActions(session)}
                     </div>
                   )}
@@ -790,7 +790,7 @@ export default function AthleteSchedule() {
                             : session.athleteCancelled
                             ? 'bg-muted text-muted-foreground'
                             : session.isCompleted
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
                             : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
                         )}
                       >

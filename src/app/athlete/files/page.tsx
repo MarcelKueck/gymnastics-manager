@@ -94,7 +94,7 @@ export default function AthleteFilesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Dateien</h1>
+      <h1 className="text-xl font-semibold sm:text-2xl">Dateien</h1>
 
       {files.length === 0 ? (
         <Card>

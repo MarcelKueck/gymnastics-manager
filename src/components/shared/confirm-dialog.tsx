@@ -37,27 +37,28 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-4">
             {variant === "destructive" && (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>
             )}
-            <div>
+            <div className="space-y-1.5">
               <DialogTitle>{title}</DialogTitle>
-              <DialogDescription className="mt-1">
+              <DialogDescription>
                 {description}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
-        <DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
             {cancelLabel}
           </Button>
@@ -65,6 +66,7 @@ export function ConfirmDialog({
             variant={variant === "destructive" ? "destructive" : "default"}
             onClick={onConfirm}
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
             {isLoading && <ButtonLoading className="mr-2" />}
             {confirmLabel}

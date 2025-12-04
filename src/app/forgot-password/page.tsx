@@ -42,13 +42,13 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="space-y-3 text-center">
+            <div className="mx-auto w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center">
+              <CheckCircle className="h-6 w-6 text-emerald-600" />
             </div>
-            <CardTitle className="text-2xl">E-Mail gesendet</CardTitle>
+            <CardTitle className="text-xl font-semibold">E-Mail gesendet</CardTitle>
             <CardDescription>
               Falls ein Konto mit dieser E-Mail existiert, wurde ein Link zum Zurücksetzen des Passworts gesendet.
             </CardDescription>
@@ -71,13 +71,13 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-            <Mail className="h-6 w-6 text-blue-600" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="space-y-3 text-center">
+          <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+            <Mail className="h-6 w-6 text-muted-foreground" />
           </div>
-          <CardTitle className="text-2xl">Passwort vergessen</CardTitle>
+          <CardTitle className="text-xl font-semibold">Passwort vergessen</CardTitle>
           <CardDescription>
             Gib deine E-Mail-Adresse ein, um einen Link zum Zurücksetzen deines Passworts zu erhalten.
           </CardDescription>
@@ -86,7 +86,7 @@ export default function ForgotPasswordPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 {error}
               </div>
             )}

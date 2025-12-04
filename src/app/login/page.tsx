@@ -68,18 +68,18 @@ function LoginForm() {
   // Show loading while checking session or redirecting
   if (status === "loading" || status === "authenticated") {
     return (
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-sm">
         <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Anmelden</CardTitle>
+    <Card className="w-full max-w-sm">
+      <CardHeader className="text-center space-y-1">
+        <CardTitle className="text-xl font-semibold">Anmelden</CardTitle>
         <CardDescription>
           Melden Sie sich mit Ihrer E-Mail-Adresse an
         </CardDescription>
@@ -106,7 +106,15 @@ function LoginForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Passwort</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Passwort</Label>
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-primary"
+              >
+                Passwort vergessen?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
@@ -123,18 +131,10 @@ function LoginForm() {
             Anmelden
           </Button>
         </form>
-        <div className="mt-4 text-center text-sm">
+        <div className="mt-6 text-center text-sm">
           <span className="text-muted-foreground">Noch kein Konto? </span>
-          <Link href="/register" className="text-primary hover:underline">
+          <Link href="/register" className="text-primary font-medium hover:underline">
             Registrieren
-          </Link>
-        </div>
-        <div className="mt-2 text-center">
-          <Link
-            href="/"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            Zurück zur Startseite
           </Link>
         </div>
       </CardContent>
@@ -144,15 +144,12 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
       <Suspense
         fallback={
-          <Card className="w-full max-w-md">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Anmelden</CardTitle>
-            </CardHeader>
-            <CardContent className="flex justify-center">
-              <Loader2 className="h-6 w-6 animate-spin" />
+          <Card className="w-full max-w-sm">
+            <CardContent className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </CardContent>
           </Card>
         }

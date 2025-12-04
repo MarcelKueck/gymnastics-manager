@@ -266,7 +266,7 @@ export default function AbsencePeriodsPage() {
       )}
 
       {successMessage && (
-        <div className="bg-green-100 text-green-800 p-4 rounded-md flex items-center gap-2">
+        <div className="bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-400 p-4 rounded-lg flex items-center gap-2">
           <CheckCircle className="h-5 w-5" />
           {successMessage}
         </div>

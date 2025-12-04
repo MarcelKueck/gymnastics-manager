@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loading } from '@/components/ui/loading';
-import { PageHeader } from '@/components/shared/page-header';
 import { User, Mail, Phone, Save, Check, Lock } from 'lucide-react';
 
 interface ProfileData {
@@ -64,14 +63,11 @@ export default function AthleteProfile() {
   };
 
   if (isLoading) return <Loading />;
-  if (!profile) return <div className="text-destructive">Profil konnte nicht geladen werden</div>;
+  if (!profile) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Profil konnte nicht geladen werden</div>;
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      <PageHeader
-        title="Mein Profil"
-        description="Verwalte deine persönlichen Daten"
-      />
+    <div className="space-y-6">
+      <h1 className="text-xl font-semibold sm:text-2xl">Mein Profil</h1>
 
       <Card>
         <CardHeader>
@@ -134,7 +130,7 @@ export default function AthleteProfile() {
             </div>
 
             {error && (
-              <div className="text-destructive text-sm">{error}</div>
+              <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
             )}
 
             <div className="flex justify-end">

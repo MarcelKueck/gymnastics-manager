@@ -87,13 +87,13 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center space-y-3">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+              <CheckCircle className="h-6 w-6 text-emerald-600" />
             </div>
-            <CardTitle className="text-2xl">Registrierung erfolgreich!</CardTitle>
+            <CardTitle className="text-xl font-semibold">Registrierung erfolgreich!</CardTitle>
             <CardDescription>
               Ihr Konto wurde erstellt. Ein Trainer wird Ihre Registrierung prüfen
               und freischalten.
@@ -113,10 +113,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted p-4">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Registrieren</CardTitle>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-background to-muted/50 p-4 py-8">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center space-y-1">
+          <CardTitle className="text-xl font-semibold">Registrieren</CardTitle>
           <CardDescription>
             Erstellen Sie ein neues Athleten-Konto
           </CardDescription>

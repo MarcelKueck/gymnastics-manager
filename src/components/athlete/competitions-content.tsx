@@ -134,7 +134,7 @@ export function CompetitionsContent() {
   }
 
   return (
-    <div className="container py-8 space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Wettkämpfe"
         description="Verfügbare Wettkämpfe und deine Anmeldungen"
@@ -142,7 +142,7 @@ export function CompetitionsContent() {
 
       {/* Upcoming Competitions */}
       <section>
-        <h2 className="text-xl font-semibold mb-4">
+        <h2 className="text-lg font-semibold mb-4 sm:text-xl">
           Anstehende Wettkämpfe ({upcomingCompetitions.length})
         </h2>
         {upcomingCompetitions.length === 0 ? (
@@ -165,7 +165,7 @@ export function CompetitionsContent() {
                       </CardDescription>
                     </div>
                     {competition.isRegistered && (
-                      <Badge variant="default" className="bg-green-600">
+                      <Badge variant="default" className="bg-emerald-600">
                         <Check className="h-3 w-3 mr-1" />
                         Angemeldet
                       </Badge>
@@ -270,7 +270,7 @@ export function CompetitionsContent() {
 
       {/* Past Competitions */}
       <section>
-        <h2 className="text-xl font-semibold mb-4">
+        <h2 className="text-lg font-semibold mb-4 sm:text-xl">
           Meine Ergebnisse ({pastCompetitions.filter(c => c.registrations && c.registrations.length > 0).length})
         </h2>
         {pastCompetitions.filter(c => c.registrations && c.registrations.length > 0).length === 0 ? (
@@ -304,12 +304,12 @@ export function CompetitionsContent() {
                         <div className="pt-2 space-y-2">
                           {registration.attended ? (
                             <>
-                              <Badge variant="default" className="bg-green-600">
+                              <Badge variant="default" className="bg-emerald-600">
                                 Teilgenommen
                               </Badge>
                               {registration.placement && (
                                 <div className="flex items-center gap-2">
-                                  <Trophy className="h-5 w-5 text-yellow-500" />
+                                  <Trophy className="h-5 w-5 text-amber-500" />
                                   <span className="font-semibold text-lg">
                                     Platz {registration.placement}
                                   </span>

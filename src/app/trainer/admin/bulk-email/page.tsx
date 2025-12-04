@@ -250,14 +250,14 @@ export default function AdminBulkEmailPage() {
 
       {/* Result Message */}
       {result && (
-        <Card className={result.success ? 'border-green-500' : 'border-red-500'}>
+        <Card className={result.success ? 'border-emerald-500' : 'border-red-500'}>
           <CardContent className="py-4 flex items-center gap-3">
             {result.success ? (
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <CheckCircle className="h-5 w-5 text-emerald-500" />
             ) : (
               <AlertCircle className="h-5 w-5 text-red-500" />
             )}
-            <span className={result.success ? 'text-green-700' : 'text-red-700'}>
+            <span className={result.success ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>
               {result.message}
             </span>
           </CardContent>

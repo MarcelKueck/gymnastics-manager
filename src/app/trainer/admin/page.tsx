@@ -28,14 +28,14 @@ const adminSections = [
     description: 'Athleten und Trainer verwalten',
     href: '/trainer/admin/users',
     icon: Users,
-    color: 'text-green-500',
+    color: 'text-emerald-500',
   },
   {
     title: 'Wettkämpfe',
     description: 'Wettkämpfe erstellen und Anmeldungen verwalten',
     href: '/trainer/admin/competitions',
     icon: Trophy,
-    color: 'text-yellow-500',
+    color: 'text-amber-500',
   },
   {
     title: 'Trainerstunden',
@@ -49,7 +49,7 @@ const adminSections = [
     description: 'Kategorien für Dateien verwalten',
     href: '/trainer/admin/file-categories',
     icon: FolderOpen,
-    color: 'text-orange-500',
+    color: 'text-amber-500',
   },
   {
     title: 'Abwesenheitswarnungen',
@@ -78,13 +78,13 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Administration</h1>
+        <h1 className="text-xl font-semibold sm:text-2xl">Administration</h1>
         <p className="text-muted-foreground">
           Systemverwaltung und Konfiguration
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {adminSections.map((section) => {
           const Icon = section.icon;
           return (

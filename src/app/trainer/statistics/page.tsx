@@ -56,8 +56,8 @@ export default function TrainerStatisticsPage() {
   }, []);
 
   if (isLoading) return <Loading />;
-  if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
-  if (!stats) return <div>Keine Statistiken verfügbar</div>;
+  if (error) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Fehler beim Laden: {error}</div>;
+  if (!stats) return <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">Keine Statistiken verfügbar</div>;
 
   const totalAttendance = stats.attendance.present + stats.attendance.absentExcused + stats.attendance.absentUnexcused;
 
@@ -69,11 +69,11 @@ export default function TrainerStatisticsPage() {
       />
 
       {/* Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Aktive Athleten</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.overview.activeAthletes}</div>
@@ -86,7 +86,7 @@ export default function TrainerStatisticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Trainingseinheiten</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Calendar className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.overview.totalSessions}</div>
@@ -97,12 +97,12 @@ export default function TrainerStatisticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Ø Anwesenheit</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${
-              stats.overview.averageAttendance >= 80 ? 'text-green-600' :
-              stats.overview.averageAttendance >= 60 ? 'text-yellow-600' : 'text-red-600'
+              stats.overview.averageAttendance >= 80 ? 'text-emerald-600' :
+              stats.overview.averageAttendance >= 60 ? 'text-amber-600' : 'text-red-600'
             }`}>
               {stats.overview.averageAttendance}%
             </div>
@@ -113,7 +113,7 @@ export default function TrainerStatisticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Anwesenheiten</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <BarChart3 className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalAttendance}</div>
@@ -142,13 +142,13 @@ export default function TrainerStatisticsPage() {
                   {totalAttendance > 0 ? (
                     <>
                       <div
-                        className="bg-green-500 flex items-center justify-center text-white text-sm font-medium"
+                        className="bg-emerald-500 flex items-center justify-center text-white text-sm font-medium"
                         style={{ width: `${(stats.attendance.present / totalAttendance) * 100}%` }}
                       >
                         {Math.round((stats.attendance.present / totalAttendance) * 100)}%
                       </div>
                       <div
-                        className="bg-yellow-500 flex items-center justify-center text-white text-sm font-medium"
+                        className="bg-amber-500 flex items-center justify-center text-white text-sm font-medium"
                         style={{ width: `${(stats.attendance.absentExcused / totalAttendance) * 100}%` }}
                       >
                         {stats.attendance.absentExcused > 0 && `${Math.round((stats.attendance.absentExcused / totalAttendance) * 100)}%`}
@@ -168,16 +168,16 @@ export default function TrainerStatisticsPage() {
                 </div>
 
                 {/* Legend */}
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="flex items-center gap-3 p-4 rounded-lg border">
-                    <CheckCircle className="h-8 w-8 text-green-500" />
+                    <CheckCircle className="h-8 w-8 text-emerald-500" />
                     <div>
                       <p className="text-2xl font-bold">{stats.attendance.present}</p>
                       <p className="text-sm text-muted-foreground">Anwesend</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 p-4 rounded-lg border">
-                    <Clock className="h-8 w-8 text-yellow-500" />
+                    <Clock className="h-8 w-8 text-amber-500" />
                     <div>
                       <p className="text-2xl font-bold">{stats.attendance.absentExcused}</p>
                       <p className="text-sm text-muted-foreground">Entschuldigt</p>
@@ -225,8 +225,8 @@ export default function TrainerStatisticsPage() {
                       </div>
                       <div className="text-right">
                         <p className={`text-2xl font-bold ${
-                          group.attendanceRate >= 80 ? 'text-green-600' :
-                          group.attendanceRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                          group.attendanceRate >= 80 ? 'text-emerald-600' :
+                          group.attendanceRate >= 60 ? 'text-amber-600' : 'text-red-600'
                         }`}>
                           {group.attendanceRate}%
                         </p>
@@ -268,15 +268,15 @@ export default function TrainerStatisticsPage() {
                         <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
                           <div
                             className={`h-full ${
-                              week.attendanceRate >= 80 ? 'bg-green-500' :
-                              week.attendanceRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                              week.attendanceRate >= 80 ? 'bg-emerald-500' :
+                              week.attendanceRate >= 60 ? 'bg-amber-500' : 'bg-red-500'
                             }`}
                             style={{ width: `${week.attendanceRate}%` }}
                           />
                         </div>
                         <span className={`font-medium min-w-[3rem] text-right ${
-                          week.attendanceRate >= 80 ? 'text-green-600' :
-                          week.attendanceRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                          week.attendanceRate >= 80 ? 'text-emerald-600' :
+                          week.attendanceRate >= 60 ? 'text-amber-600' : 'text-red-600'
                         }`}>
                           {week.attendanceRate}%
                         </span>

@@ -210,8 +210,8 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
   };
 
   if (isLoading) return <Loading />;
-  if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
-  if (!session) return <div>Trainingseinheit nicht gefunden</div>;
+  if (error) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Fehler beim Laden: {error}</div>;
+  if (!session) return <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">Trainingseinheit nicht gefunden</div>;
 
   // Group athletes by their group
   const athletesByGroup = session.athletes.reduce((acc, athlete) => {
@@ -233,7 +233,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/trainer/sessions">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="h-10 w-10">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
@@ -244,21 +244,21 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
       </div>
 
       {session.isCancelled && (
-        <div className="bg-destructive/20 text-destructive p-4 rounded-lg flex items-center gap-2">
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg flex items-center gap-2">
           <AlertTriangle className="h-5 w-5" />
           <span>Diese Trainingseinheit wurde abgesagt</span>
         </div>
       )}
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Datum</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Calendar className="h-5 w-5 text-muted-foreground" />
               <span className="font-medium">{formatDate(session.date)}</span>
             </div>
           </CardContent>
@@ -285,7 +285,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <Users className="h-5 w-5 text-muted-foreground" />
               <span className="text-2xl font-bold">
                 {presentCount}/{session.athletes.length}
               </span>
@@ -299,7 +299,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-muted-foreground" />
+              <XCircle className="h-5 w-5 text-muted-foreground" />
               <span className="text-2xl font-bold">{absentCount}</span>
             </div>
           </CardContent>
@@ -350,7 +350,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                             variant={currentStatus === 'PRESENT' ? 'default' : 'outline'}
                             size="sm"
                             onClick={() => updateTrainerAttendance(trainer.id, 'PRESENT')}
-                            className={currentStatus === 'PRESENT' ? 'bg-green-600 hover:bg-green-700' : ''}
+                            className={currentStatus === 'PRESENT' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
                           >
                             <CheckCircle className="h-4 w-4" />
                           </Button>
@@ -358,7 +358,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                             variant={currentStatus === 'ABSENT_EXCUSED' ? 'default' : 'outline'}
                             size="sm"
                             onClick={() => updateTrainerAttendance(trainer.id, 'ABSENT_EXCUSED')}
-                            className={currentStatus === 'ABSENT_EXCUSED' ? 'bg-yellow-600 hover:bg-yellow-700' : ''}
+                            className={currentStatus === 'ABSENT_EXCUSED' ? 'bg-amber-600 hover:bg-amber-700' : ''}
                           >
                             <Clock className="h-4 w-4" />
                           </Button>
@@ -398,13 +398,14 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
         <>
           {/* Quick Actions */}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={markAllPresent} variant="outline">
+            <Button onClick={markAllPresent} variant="outline" className="h-10">
               <CheckCircle className="h-4 w-4 mr-2" />
               Alle anwesend
             </Button>
             <Button
               onClick={saveAttendance}
               disabled={!hasChanges || isSaving}
+              className="h-10"
             >
               <Save className="h-4 w-4 mr-2" />
               {isSaving ? 'Speichern...' : 'Speichern'}
@@ -430,15 +431,15 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                       return (
                         <div
                           key={athlete.athleteId}
-                          className={`flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border gap-3 ${
-                            athlete.hasCancellation ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''
+                          className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border ${
+                            athlete.hasCancellation ? 'bg-amber-50 dark:bg-amber-900/20' : ''
                           }`}
                         >
                           <div className="flex items-center gap-3">
                             <div>
                               <p className="font-medium">{athlete.name}</p>
                               {athlete.hasCancellation && (
-                                <div className="flex items-center gap-1 text-sm text-yellow-600 dark:text-yellow-400">
+                                <div className="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400">
                                   <AlertTriangle className="h-3 w-3" />
                                   <span>Abgemeldet</span>
                                   {athlete.cancellationNote && (
@@ -456,7 +457,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                               <Button
                                 size="sm"
                                 variant={currentData.status === 'PRESENT' ? 'default' : 'outline'}
-                                className={currentData.status === 'PRESENT' ? 'bg-green-600 hover:bg-green-700' : ''}
+                                className={currentData.status === 'PRESENT' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
                                 onClick={() => updateAttendance(athlete.athleteId, 'PRESENT')}
                               >
                                 <CheckCircle className="h-4 w-4" />
@@ -464,7 +465,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                               <Button
                                 size="sm"
                                 variant={currentData.status === 'ABSENT_EXCUSED' ? 'default' : 'outline'}
-                                className={currentData.status === 'ABSENT_EXCUSED' ? 'bg-yellow-600 hover:bg-yellow-700' : ''}
+                                className={currentData.status === 'ABSENT_EXCUSED' ? 'bg-amber-600 hover:bg-amber-700' : ''}
                                 onClick={() => updateAttendance(athlete.athleteId, 'ABSENT_EXCUSED')}
                                 title="Entschuldigt abwesend"
                               >
@@ -501,11 +502,11 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
 
           {/* Save Button (sticky at bottom for mobile) */}
           {hasChanges && (
-            <div className="fixed bottom-4 left-4 right-4 md:static md:flex md:justify-end">
+            <div className="fixed bottom-4 left-4 right-4 sm:static sm:flex sm:justify-end">
               <Button
                 onClick={saveAttendance}
                 disabled={isSaving}
-                className="w-full md:w-auto"
+                className="w-full sm:w-auto h-12"
                 size="lg"
               >
                 <Save className="h-4 w-4 mr-2" />

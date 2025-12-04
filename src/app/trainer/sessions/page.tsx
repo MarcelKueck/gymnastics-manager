@@ -130,16 +130,17 @@ export default function TrainerSessionsPage() {
     return date < today;
   };
 
-  if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
+  if (error) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Fehler beim Laden: {error}</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Trainingseinheiten</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold sm:text-2xl">Trainingseinheiten</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="icon"
+            className="h-10 w-10"
             onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -147,13 +148,14 @@ export default function TrainerSessionsPage() {
           <Button
             variant="outline"
             onClick={() => setCurrentWeekOffset(0)}
-            className="min-w-[200px]"
+            className="min-w-[180px] sm:min-w-[200px] h-10"
           >
             {formatWeekRange()}
           </Button>
           <Button
             variant="outline"
             size="icon"
+            className="h-10 w-10"
             onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
           >
             <ChevronRight className="h-4 w-4" />
@@ -225,7 +227,7 @@ export default function TrainerSessionsPage() {
                             session.isCancelled
                               ? 'bg-destructive/20 text-destructive'
                               : session.attendanceMarked
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
                               : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
                           }`}
                         >
@@ -424,9 +426,9 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                     <span>
                       {session.trainers.map((t, idx) => (
                         <span key={t.id}>
-                          <span className={t.cancelled ? 'line-through text-muted-foreground' : t.confirmed ? 'text-green-600' : ''}>
+                          <span className={t.cancelled ? 'line-through text-muted-foreground' : t.confirmed ? 'text-emerald-600' : ''}>
                             {t.name}
-                            {t.confirmed && !t.cancelled && <Check className="h-3 w-3 inline ml-0.5 text-green-600" />}
+                            {t.confirmed && !t.cancelled && <Check className="h-3 w-3 inline ml-0.5 text-emerald-600" />}
                           </span>
                           {idx < (session.trainers?.length ?? 0) - 1 && ', '}
                         </span>
@@ -503,7 +505,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                         size="sm"
                         onClick={(e) => handleConfirmTrainer(e, true)}
                         disabled={isConfirming || isTrainerConfirmed}
-                        className={isTrainerConfirmed ? "bg-green-600 hover:bg-green-700" : ""}
+                        className={isTrainerConfirmed ? "bg-emerald-600 hover:bg-emerald-700" : ""}
                       >
                         <Check className="h-4 w-4" />
                       </Button>
@@ -540,14 +542,14 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                       </span>
                     </div>
                     {confirmedTrainers.length > 0 && (
-                      <span className="text-xs text-green-600">
+                      <span className="text-xs text-emerald-600">
                         {confirmedTrainers.length} Trainer bestätigt
                       </span>
                     )}
                   </div>
                   {isPast ? (
                     session.attendanceMarked ? (
-                      <CheckCircle className="h-6 w-6 text-green-500" />
+                      <CheckCircle className="h-6 w-6 text-emerald-500" />
                     ) : (
                       <Badge variant="destructive">
                         <Clock className="h-3 w-3 mr-1" />

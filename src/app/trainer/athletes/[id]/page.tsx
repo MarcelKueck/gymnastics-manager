@@ -85,15 +85,15 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
   };
 
   if (isLoading) return <Loading />;
-  if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
-  if (!athlete) return <div>Athlet nicht gefunden</div>;
+  if (error) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Fehler beim Laden: {error}</div>;
+  if (!athlete) return <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">Athlet nicht gefunden</div>;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ACTIVE':
-        return <Badge className="bg-green-600">Aktiv</Badge>;
+        return <Badge className="bg-emerald-600">Aktiv</Badge>;
       case 'PENDING':
-        return <Badge className="bg-yellow-600">Ausstehend</Badge>;
+        return <Badge className="bg-amber-600">Ausstehend</Badge>;
       case 'INACTIVE':
         return <Badge variant="secondary">Inaktiv</Badge>;
       default:
@@ -104,9 +104,9 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
   const getAttendanceIcon = (status: string) => {
     switch (status) {
       case 'PRESENT':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-emerald-500" />;
       case 'ABSENT_EXCUSED':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
+        return <Clock className="h-4 w-4 text-amber-500" />;
       case 'ABSENT_UNEXCUSED':
         return <XCircle className="h-4 w-4 text-red-500" />;
       default:
@@ -131,12 +131,12 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/trainer/athletes">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="h-10 w-10">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">{athlete.name}</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">{athlete.name}</h1>
           <div className="flex items-center gap-2 mt-1">
             {getStatusBadge(athlete.status)}
             {athlete.youthCategory && (
@@ -148,9 +148,9 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
 
       {/* Alerts */}
       {athlete.alerts.filter((a) => !a.acknowledged).length > 0 && (
-        <Card className="border-orange-500">
+        <Card className="border-amber-500">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-600">
+            <CardTitle className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="h-5 w-5" />
               Fehlzeiten-Warnungen
             </CardTitle>
@@ -161,7 +161,7 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
               .map((alert) => (
                 <div
                   key={alert.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20"
+                  className="flex items-center justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20"
                 >
                   <div>
                     <p className="font-medium">
@@ -174,6 +174,7 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-10"
                     onClick={() => acknowledgeAlert(alert.id)}
                   >
                     Zur Kenntnis genommen
@@ -185,7 +186,7 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
       )}
 
       {/* Info Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">E-Mail</CardTitle>
@@ -265,15 +266,15 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
         </TabsList>
 
         <TabsContent value="stats">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Anwesenheitsrate</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className={`text-3xl font-bold ${
-                  athlete.stats.attendanceRate >= 80 ? 'text-green-600' :
-                  athlete.stats.attendanceRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                  athlete.stats.attendanceRate >= 80 ? 'text-emerald-600' :
+                  athlete.stats.attendanceRate >= 60 ? 'text-amber-600' : 'text-red-600'
                 }`}>
                   {athlete.stats.attendanceRate}%
                 </div>
@@ -283,7 +284,7 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <CheckCircle className="h-4 w-4 text-emerald-500" />
                   Anwesend
                 </CardTitle>
               </CardHeader>
@@ -298,7 +299,7 @@ export default function AthleteDetailPage({ params }: { params: { id: string } }
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-yellow-500" />
+                  <Clock className="h-4 w-4 text-amber-500" />
                   Entschuldigt
                 </CardTitle>
               </CardHeader>

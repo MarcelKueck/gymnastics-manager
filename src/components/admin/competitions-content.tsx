@@ -157,14 +157,14 @@ export function CompetitionsContent() {
   }
 
   return (
-    <div className="container py-8 space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Wettkämpfe"
         description="Wettkämpfe verwalten und Ergebnisse eintragen"
         actions={
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="h-10">
                 <Plus className="h-4 w-4 mr-2" />
                 Neuer Wettkampf
               </Button>
@@ -190,7 +190,7 @@ export function CompetitionsContent() {
 
       {/* Upcoming Competitions */}
       <section>
-        <h2 className="text-xl font-semibold mb-4">
+        <h2 className="text-lg font-semibold mb-4 sm:text-xl">
           Anstehende Wettkämpfe ({upcomingCompetitions.length})
         </h2>
         {upcomingCompetitions.length === 0 ? (
@@ -287,7 +287,7 @@ export function CompetitionsContent() {
 
       {/* Past Competitions */}
       <section>
-        <h2 className="text-xl font-semibold mb-4">
+        <h2 className="text-lg font-semibold mb-4 sm:text-xl">
           Vergangene Wettkämpfe ({pastCompetitions.length})
         </h2>
         {pastCompetitions.length === 0 ? (

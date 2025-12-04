@@ -27,14 +27,14 @@ interface MonthlyStats {
   rate: number;
 }
 
-export default function AthleteHistory() {
+export default function TrainerHistoryPage() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<MonthlyStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/athlete/history')
+    fetch('/api/trainer/history')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch');
         return res.json();
@@ -90,7 +90,7 @@ export default function AthleteHistory() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-3">
               {stats.slice(0, 3).map((stat) => (
                 <div
                   key={stat.month}
@@ -119,16 +119,16 @@ export default function AthleteHistory() {
         <CardContent>
           {records.length === 0 ? (
             <EmptyState
-              icon={<History className="h-10 w-10" />}
+              icon={<History className="h-12 w-12" />}
               title="Noch keine Historie"
-              description="Sobald du an Trainings teilnimmst, erscheint hier dein Verlauf."
+              description="Sobald deine Anwesenheit bei Trainings erfasst wird, erscheint hier dein Verlauf."
             />
           ) : (
             <div className="space-y-3">
               {records.map((record) => (
                 <div
                   key={record.id}
-                  className="flex items-center justify-between p-4 rounded-lg border"
+                  className="flex flex-col gap-2 p-4 rounded-lg border sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-4">
                     {getStatusIcon(record.status)}

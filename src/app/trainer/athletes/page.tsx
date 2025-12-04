@@ -109,13 +109,13 @@ export default function TrainerAthletesPage() {
   const activeCount = athletes.filter((a) => a.status === 'ACTIVE').length;
   const inactiveCount = athletes.filter((a) => a.status === 'INACTIVE').length;
 
-  if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
+  if (error) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Fehler beim Laden: {error}</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Athleten</h1>
-        <div className="relative w-full md:w-80">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold sm:text-2xl">Athleten</h1>
+        <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Athleten suchen..."
@@ -245,8 +245,8 @@ function AthleteCard({ athlete }: { athlete: Athlete }) {
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Anwesenheit</p>
                   <p className={`font-medium ${
-                    athlete.attendanceRate >= 80 ? 'text-green-600' :
-                    athlete.attendanceRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                    athlete.attendanceRate >= 80 ? 'text-emerald-600' :
+                    athlete.attendanceRate >= 60 ? 'text-amber-600' : 'text-red-600'
                   }`}>
                     {athlete.attendanceRate}%
                   </p>
@@ -273,12 +273,12 @@ function PendingAthleteCard({
   isProcessing: boolean;
 }) {
   return (
-    <Card className="border-yellow-500">
+    <Card className="border-amber-500">
       <CardContent className="p-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-yellow-600" />
+            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-amber-600" />
             </div>
             <div>
               <p className="font-medium">{athlete.name}</p>
@@ -294,7 +294,7 @@ function PendingAthleteCard({
               size="sm"
               onClick={onReject}
               disabled={isProcessing}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="h-10 text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <X className="h-4 w-4 mr-1" />
               Ablehnen
@@ -303,7 +303,7 @@ function PendingAthleteCard({
               size="sm"
               onClick={onApprove}
               disabled={isProcessing}
-              className="bg-green-600 hover:bg-green-700"
+              className="h-10 bg-emerald-600 hover:bg-emerald-700"
             >
               <Check className="h-4 w-4 mr-1" />
               Freigeben

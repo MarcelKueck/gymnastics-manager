@@ -17,6 +17,7 @@ import {
   Menu,
   LogOut,
   Shield,
+  History,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Athleten', href: '/trainer/athletes', icon: Users },
   { label: 'Statistiken', href: '/trainer/statistics', icon: BarChart3 },
   { label: 'Dateien', href: '/trainer/files', icon: FileText },
+  { label: 'Verlauf', href: '/trainer/history', icon: History },
   { label: 'Profil', href: '/trainer/profile', icon: User },
   { label: 'Admin', href: '/trainer/admin', icon: Shield, adminOnly: true },
 ];
@@ -95,13 +97,14 @@ export function TrainerNavigation({ user }: TrainerNavigationProps) {
             href={item.href}
             onClick={() => mobile && setOpen(false)}
             className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors relative',
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative touch-manipulation',
+              mobile ? 'min-h-[44px]' : '',
               isActive
                 ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent'
             )}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-5 w-5" />
             {item.label}
             {showBadge && (
               <Badge 
@@ -119,29 +122,33 @@ export function TrainerNavigation({ user }: TrainerNavigationProps) {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center">
+      <div className="container flex h-14 items-center px-4">
         {/* Mobile menu */}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild className="md:hidden">
-            <Button variant="ghost" size="icon" className="mr-2">
+            <Button variant="ghost" size="icon" className="mr-2 h-10 w-10">
               <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle menu</span>
+              <span className="sr-only">Menü öffnen</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64">
-            <div className="flex flex-col gap-4">
-              <div className="font-semibold">SV Esting Turnen</div>
-              <Badge variant="outline" className="w-fit">
-                {isAdmin ? 'Administrator' : 'Trainer'}
-              </Badge>
-              <NavLinks mobile />
-              <div className="pt-4 border-t">
+          <SheetContent side="left" className="w-72 p-0">
+            <div className="flex flex-col h-full">
+              <div className="p-4 border-b">
+                <div className="font-semibold text-lg">SV Esting Turnen</div>
+                <Badge variant="outline" className="mt-1.5">
+                  {isAdmin ? 'Administrator' : 'Trainer'}
+                </Badge>
+              </div>
+              <div className="flex-1 p-3 overflow-y-auto">
+                <NavLinks mobile />
+              </div>
+              <div className="p-3 border-t">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start"
+                  className="w-full justify-start h-11"
                   onClick={() => signOut({ callbackUrl: '/login' })}
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
+                  <LogOut className="h-5 w-5 mr-2.5" />
                   Abmelden
                 </Button>
               </div>
@@ -163,7 +170,7 @@ export function TrainerNavigation({ user }: TrainerNavigationProps) {
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-4 ml-auto">
+        <div className="flex items-center gap-3 ml-auto">
           <RoleSwitcher />
           <div className="hidden sm:block text-sm text-muted-foreground">
             {user.name || user.email}
@@ -172,9 +179,9 @@ export function TrainerNavigation({ user }: TrainerNavigationProps) {
             variant="ghost"
             size="icon"
             onClick={() => signOut({ callbackUrl: '/login' })}
-            className="hidden md:flex"
+            className="hidden md:flex h-10 w-10"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-5 w-5" />
             <span className="sr-only">Abmelden</span>
           </Button>
         </div>

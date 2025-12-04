@@ -22,7 +22,7 @@ export default async function TrainerLayout({
   return (
     <div className="min-h-screen bg-background">
       <TrainerNavigation user={session.user} />
-      <main className="container py-6">{children}</main>
+      <main className="container px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }

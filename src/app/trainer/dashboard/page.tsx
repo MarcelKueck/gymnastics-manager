@@ -57,16 +57,16 @@ export default function TrainerDashboard() {
   }, []);
 
   if (isLoading) return <Loading />;
-  if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
-  if (!data) return <div>Keine Daten verfügbar</div>;
+  if (error) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Fehler beim Laden: {error}</div>;
+  if (!data) return <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">Keine Daten verfügbar</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Trainer Dashboard</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold sm:text-2xl">Trainer Dashboard</h1>
         <div className="flex gap-2">
           <Link href="/trainer/sessions">
-            <Button>
+            <Button className="h-10">
               <Calendar className="h-4 w-4 mr-2" />
               Trainings verwalten
             </Button>
@@ -75,13 +75,13 @@ export default function TrainerDashboard() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
               Trainings diese Woche
             </CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Calendar className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.stats.sessionsThisWeek}</div>
@@ -94,7 +94,7 @@ export default function TrainerDashboard() {
             <CardTitle className="text-sm font-medium">
               Anwesenheit erfasst
             </CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CheckCircle className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.stats.attendanceMarkedThisWeek}</div>
@@ -102,12 +102,12 @@ export default function TrainerDashboard() {
           </CardContent>
         </Card>
 
-        <Card className={data.pendingApprovals > 0 ? 'border-yellow-500' : ''}>
+        <Card className={data.pendingApprovals > 0 ? 'border-amber-500' : ''}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
               Ausstehende Freigaben
             </CardTitle>
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
+            <UserPlus className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.pendingApprovals}</div>
@@ -121,12 +121,12 @@ export default function TrainerDashboard() {
           </CardContent>
         </Card>
 
-        <Card className={data.athletesNeedingAttention.length > 0 ? 'border-orange-500' : ''}>
+        <Card className={data.athletesNeedingAttention.length > 0 ? 'border-amber-500' : ''}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
               Fehlzeiten-Warnungen
             </CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data.athletesNeedingAttention.length}</div>
@@ -138,20 +138,20 @@ export default function TrainerDashboard() {
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-2">
         <Link href="/trainer/sessions">
-          <Button variant="outline">
+          <Button variant="outline" className="h-10">
             <ClipboardList className="h-4 w-4 mr-2" />
             Anwesenheit erfassen
           </Button>
         </Link>
         <Link href="/trainer/athletes">
-          <Button variant="outline">
+          <Button variant="outline" className="h-10">
             <Users className="h-4 w-4 mr-2" />
             Athleten verwalten
           </Button>
         </Link>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* Upcoming Sessions */}
         <Card>
           <CardHeader>
@@ -193,7 +193,7 @@ export default function TrainerDashboard() {
                         </div>
                       </div>
                       {session.attendanceMarked ? (
-                        <CheckCircle className="h-5 w-5 text-green-500" />
+                        <CheckCircle className="h-5 w-5 text-emerald-500" />
                       ) : (
                         <Clock className="h-5 w-5 text-muted-foreground" />
                       )}
@@ -223,7 +223,7 @@ export default function TrainerDashboard() {
           <CardContent>
             {data.athletesNeedingAttention.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
+                <CheckCircle className="h-12 w-12 text-emerald-500 mb-4" />
                 <p className="text-muted-foreground">Keine Warnungen vorhanden</p>
                 <p className="text-xs text-muted-foreground">Alle Athleten haben gute Anwesenheit</p>
               </div>

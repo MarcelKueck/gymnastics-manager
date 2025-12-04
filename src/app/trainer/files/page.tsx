@@ -221,7 +221,7 @@ export default function TrainerFilesPage() {
         title="Dateien"
         description="Dokumente und Dateien verwalten"
         actions={
-          <Button onClick={() => setShowUploadDialog(true)}>
+          <Button className="h-10" onClick={() => setShowUploadDialog(true)}>
             <Upload className="h-4 w-4 mr-2" />
             Datei hochladen
           </Button>
