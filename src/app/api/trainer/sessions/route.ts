@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
         trainerCancellations: {
           where: { isActive: true },
         },
+        sessionConfirmations: true,
       },
     });
 
@@ -164,6 +165,19 @@ export async function GET(request: NextRequest) {
       const trainerCancelled = trainerProfileId ? trainerCancellationIds.has(trainerProfileId) : false;
       const trainerCancellation = stored?.trainerCancellations?.find(tc => tc.trainerId === trainerProfileId);
       
+      // Calculate confirmed athletes count
+      const confirmedAthletes = stored?.sessionConfirmations?.filter(c => c.athleteId && c.confirmed).length || 0;
+      const declinedAthletes = stored?.sessionConfirmations?.filter(c => c.athleteId && !c.confirmed).length || 0;
+      
+      // Get confirmed trainers
+      const confirmedTrainerIds = new Set(
+        stored?.sessionConfirmations?.filter(c => c.trainerId && c.confirmed).map(c => c.trainerId) || []
+      );
+      const trainersWithConfirmation = trainers.map(t => ({
+        ...t,
+        confirmed: confirmedTrainerIds.has(t.id) || false,
+      }));
+      
       return {
         // Use stored ID if exists, otherwise generate virtual ID
         id: vs.id || getVirtualSessionId(vs.recurringTrainingId, vs.date),
@@ -179,10 +193,12 @@ export async function GET(request: NextRequest) {
         presentCount: 0, // Will be filled from stored session if exists
         isVirtual: vs.id === null, // Flag to indicate if this is a calculated session
         equipment: stored?.equipment || null,
-        trainers,
+        trainers: trainersWithConfirmation,
         trainerCancelled,
         trainerCancellationId: trainerCancellation?.id,
         trainerCancellationReason: trainerCancellation?.reason,
+        confirmedAthletes,
+        declinedAthletes,
       };
     });
 

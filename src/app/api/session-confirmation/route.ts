@@ -27,6 +27,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get system settings to check deadline
+    const settings = await prisma.systemSettings.findFirst({
+      where: { id: 'default' },
+    });
+
     let actualSessionId = sessionId;
 
     // Handle virtual session IDs - create the actual session first
@@ -63,6 +68,36 @@ export async function POST(request: NextRequest) {
           },
         });
         actualSessionId = newSession.id;
+      }
+    }
+
+    // Get the session to check deadline
+    const trainingSession = await prisma.trainingSession.findUnique({
+      where: { id: actualSessionId },
+      include: {
+        recurringTraining: true,
+      },
+    });
+
+    if (!trainingSession) {
+      return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
+    }
+
+    // Check if changing confirmation is within deadline
+    if (settings) {
+      const sessionDateTime = new Date(trainingSession.date);
+      const startTime = trainingSession.startTime || trainingSession.recurringTraining?.startTime || '00:00';
+      const [hours, minutes] = startTime.split(':').map(Number);
+      sessionDateTime.setHours(hours, minutes, 0, 0);
+
+      const deadlineTime = new Date(sessionDateTime);
+      deadlineTime.setHours(deadlineTime.getHours() - settings.cancellationDeadlineHours);
+
+      if (new Date() > deadlineTime) {
+        return NextResponse.json(
+          { error: `Änderungen sind nur bis ${settings.cancellationDeadlineHours} Stunden vor dem Training möglich` },
+          { status: 400 }
+        );
       }
     }
 
@@ -156,6 +191,93 @@ export async function POST(request: NextRequest) {
     console.error('Session confirmation error:', error);
     return NextResponse.json(
       { error: 'Fehler beim Speichern der Bestätigung' },
+      { status: 500 }
+    );
+  }
+}
+
+// GET - Get confirmations for a session
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get('sessionId');
+
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Session-ID erforderlich' }, { status: 400 });
+    }
+
+    // Handle virtual session IDs
+    let actualSessionId = sessionId;
+    const virtualInfo = parseVirtualSessionId(sessionId);
+    if (virtualInfo) {
+      const existingSession = await prisma.trainingSession.findFirst({
+        where: {
+          recurringTrainingId: virtualInfo.recurringTrainingId,
+          date: virtualInfo.date,
+        },
+      });
+      if (existingSession) {
+        actualSessionId = existingSession.id;
+      } else {
+        // No stored session yet, return empty confirmations
+        return NextResponse.json({ data: { athletes: [], trainers: [] } });
+      }
+    }
+
+    const confirmations = await prisma.sessionConfirmation.findMany({
+      where: { trainingSessionId: actualSessionId },
+      include: {
+        athlete: {
+          include: {
+            user: {
+              select: { firstName: true, lastName: true },
+            },
+          },
+        },
+        trainer: {
+          include: {
+            user: {
+              select: { firstName: true, lastName: true },
+            },
+          },
+        },
+      },
+    });
+
+    const athleteConfirmations = confirmations
+      .filter((c) => c.athleteId)
+      .map((c) => ({
+        athleteId: c.athleteId,
+        name: `${c.athlete?.user.firstName} ${c.athlete?.user.lastName}`,
+        confirmed: c.confirmed,
+        confirmedAt: c.confirmedAt?.toISOString(),
+      }));
+
+    const trainerConfirmations = confirmations
+      .filter((c) => c.trainerId)
+      .map((c) => ({
+        trainerId: c.trainerId,
+        name: `${c.trainer?.user.firstName} ${c.trainer?.user.lastName}`,
+        confirmed: c.confirmed,
+        confirmedAt: c.confirmedAt?.toISOString(),
+      }));
+
+    return NextResponse.json({
+      data: {
+        athletes: athleteConfirmations,
+        trainers: trainerConfirmations,
+      },
+    });
+  } catch (error) {
+    console.error('Session confirmation GET error:', error);
+    return NextResponse.json(
+      { error: 'Fehler beim Laden der Bestätigungen' },
       { status: 500 }
     );
   }

@@ -252,7 +252,7 @@ export async function GET(
       groups: recurringTraining?.trainingGroups.map((g: { name: string }) => g.name) || [],
       isCancelled: trainingSession.isCancelled,
       isVirtual: id.startsWith('virtual_'),
-      equipment: (trainingSession as { equipment?: string | null }).equipment || null,
+      equipment: 'equipment' in trainingSession ? trainingSession.equipment : null,
       athletes,
       trainers,
     };
@@ -267,7 +267,7 @@ export async function GET(
   }
 }
 
-// PATCH - Update session details (equipment)
+// PATCH - Update session (equipment, notes, etc.)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -287,33 +287,32 @@ export async function PATCH(
     const body = await request.json();
     const { equipment } = body;
 
-    let sessionId = id;
-
-    // Handle virtual session IDs - create the actual session first
+    // Check if this is a virtual session ID
     const virtualInfo = parseVirtualSessionId(id);
+    
+    let trainingSession;
+    
     if (virtualInfo) {
+      // For virtual sessions, we need to create a real session first
+      const recurringTraining = await prisma.recurringTraining.findUnique({
+        where: { id: virtualInfo.recurringTrainingId },
+      });
+
+      if (!recurringTraining) {
+        return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
+      }
+
       // Check if session already exists
-      const existingSession = await prisma.trainingSession.findFirst({
+      trainingSession = await prisma.trainingSession.findFirst({
         where: {
           recurringTrainingId: virtualInfo.recurringTrainingId,
           date: virtualInfo.date,
         },
       });
 
-      if (existingSession) {
-        sessionId = existingSession.id;
-      } else {
-        // Get recurring training details
-        const recurringTraining = await prisma.recurringTraining.findUnique({
-          where: { id: virtualInfo.recurringTrainingId },
-        });
-
-        if (!recurringTraining) {
-          return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
-        }
-
+      if (!trainingSession) {
         // Create the session
-        const newSession = await prisma.trainingSession.create({
+        trainingSession = await prisma.trainingSession.create({
           data: {
             recurringTrainingId: virtualInfo.recurringTrainingId,
             date: virtualInfo.date,
@@ -323,32 +322,29 @@ export async function PATCH(
             equipment: equipment || null,
           },
         });
-
-        return NextResponse.json({
-          success: true,
-          message: 'Geräte gespeichert',
-          data: { id: newSession.id, equipment: newSession.equipment },
+      } else {
+        // Update existing session
+        trainingSession = await prisma.trainingSession.update({
+          where: { id: trainingSession.id },
+          data: { equipment: equipment || null },
         });
       }
+    } else {
+      // Real session ID - just update
+      trainingSession = await prisma.trainingSession.update({
+        where: { id },
+        data: { equipment: equipment || null },
+      });
     }
 
-    // Update existing session
-    const updatedSession = await prisma.trainingSession.update({
-      where: { id: sessionId },
-      data: {
-        equipment: equipment || null,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Geräte gespeichert',
-      data: { id: updatedSession.id, equipment: updatedSession.equipment },
+    return NextResponse.json({ 
+      data: trainingSession,
+      message: 'Geräte erfolgreich aktualisiert',
     });
   } catch (error) {
-    console.error('Session update API error:', error);
+    console.error('Session PATCH error:', error);
     return NextResponse.json(
-      { error: 'Fehler beim Speichern der Geräte' },
+      { error: 'Fehler beim Aktualisieren der Trainingseinheit' },
       { status: 500 }
     );
   }

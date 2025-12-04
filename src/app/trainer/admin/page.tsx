@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   ChevronRight,
   Mail,
-  Bandage,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -51,13 +50,6 @@ const adminSections = [
     href: '/trainer/admin/file-categories',
     icon: FolderOpen,
     color: 'text-orange-500',
-  },
-  {
-    title: 'Abwesenheitszeiten',
-    description: 'Verletzungs- und Urlaubszeiten verwalten',
-    href: '/trainer/admin/absence-periods',
-    icon: Bandage,
-    color: 'text-pink-500',
   },
   {
     title: 'Abwesenheitswarnungen',

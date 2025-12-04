@@ -1,169 +1,148 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/api/auth';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // GET - Get all absence periods
 export async function GET(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  try {
+    const session = await getServerSession(authOptions);
 
-  const { searchParams } = new URL(request.url);
-  const athleteId = searchParams.get('athleteId');
-  const trainerId = searchParams.get('trainerId');
-  const activeOnly = searchParams.get('activeOnly') !== 'false';
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 });
+    }
 
-  const where: {
-    athleteId?: string;
-    trainerId?: string;
-    isActive?: boolean;
-  } = {};
+    if (session.user.activeRole !== 'ADMIN' && session.user.activeRole !== 'TRAINER') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
 
-  if (athleteId) where.athleteId = athleteId;
-  if (trainerId) where.trainerId = trainerId;
-  if (activeOnly) where.isActive = true;
+    const { searchParams } = new URL(request.url);
+    const athleteId = searchParams.get('athleteId');
+    const trainerId = searchParams.get('trainerId');
+    const activeOnly = searchParams.get('activeOnly') === 'true';
 
-  const absencePeriods = await prisma.absencePeriod.findMany({
-    where,
-    include: {
-      athlete: {
-        include: {
-          user: {
-            select: { firstName: true, lastName: true, email: true },
+    const absencePeriods = await prisma.absencePeriod.findMany({
+      where: {
+        ...(athleteId ? { athleteId } : {}),
+        ...(trainerId ? { trainerId } : {}),
+        ...(activeOnly ? { isActive: true } : {}),
+      },
+      include: {
+        athlete: {
+          include: {
+            user: {
+              select: { firstName: true, lastName: true },
+            },
+          },
+        },
+        trainer: {
+          include: {
+            user: {
+              select: { firstName: true, lastName: true },
+            },
+          },
+        },
+        createdByTrainer: {
+          include: {
+            user: {
+              select: { firstName: true, lastName: true },
+            },
           },
         },
       },
-      trainer: {
-        include: {
-          user: {
-            select: { firstName: true, lastName: true, email: true },
-          },
-        },
-      },
-      createdByAdmin: {
-        include: {
-          user: {
-            select: { firstName: true, lastName: true },
-          },
-        },
-      },
-    },
-    orderBy: { startDate: 'desc' },
-  });
+      orderBy: { startDate: 'desc' },
+    });
 
-  return NextResponse.json({
-    data: absencePeriods.map((p) => ({
-      id: p.id,
-      athleteId: p.athleteId,
-      trainerId: p.trainerId,
-      personName: p.athlete
-        ? `${p.athlete.user.firstName} ${p.athlete.user.lastName}`
-        : p.trainer
-        ? `${p.trainer.user.firstName} ${p.trainer.user.lastName}`
-        : 'Unbekannt',
-      personType: p.athleteId ? 'athlete' : 'trainer',
-      startDate: p.startDate.toISOString(),
-      endDate: p.endDate.toISOString(),
-      reason: p.reason,
-      notes: p.notes,
-      createdBy: p.createdByAdmin
-        ? `${p.createdByAdmin.user.firstName} ${p.createdByAdmin.user.lastName}`
-        : 'Unbekannt',
-      createdAt: p.createdAt.toISOString(),
-      isActive: p.isActive,
-    })),
-  });
+    return NextResponse.json({
+      data: absencePeriods.map((period) => ({
+        id: period.id,
+        athleteId: period.athleteId,
+        athleteName: period.athlete
+          ? `${period.athlete.user.firstName} ${period.athlete.user.lastName}`
+          : null,
+        trainerId: period.trainerId,
+        trainerName: period.trainer
+          ? `${period.trainer.user.firstName} ${period.trainer.user.lastName}`
+          : null,
+        startDate: period.startDate.toISOString(),
+        endDate: period.endDate.toISOString(),
+        reason: period.reason,
+        notes: period.notes,
+        isActive: period.isActive,
+        createdBy: period.createdByTrainer
+          ? `${period.createdByTrainer.user.firstName} ${period.createdByTrainer.user.lastName}`
+          : null,
+        createdAt: period.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    console.error('Absence periods GET error:', error);
+    return NextResponse.json(
+      { error: 'Fehler beim Laden der Abwesenheitszeiträume' },
+      { status: 500 }
+    );
+  }
 }
 
 // POST - Create a new absence period
 export async function POST(request: NextRequest) {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
+  try {
+    const session = await getServerSession(authOptions);
 
-  const body = await request.json();
-  const { athleteId, trainerId, startDate, endDate, reason, notes } = body;
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 });
+    }
 
-  // Validate that either athleteId or trainerId is provided
-  if (!athleteId && !trainerId) {
-    return NextResponse.json(
-      { error: 'Entweder Athlet oder Trainer muss angegeben werden' },
-      { status: 400 }
-    );
-  }
+    if (session.user.activeRole !== 'ADMIN' && session.user.activeRole !== 'TRAINER') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
 
-  if (athleteId && trainerId) {
-    return NextResponse.json(
-      { error: 'Nur Athlet oder Trainer kann angegeben werden, nicht beides' },
-      { status: 400 }
-    );
-  }
+    const trainerProfile = await prisma.trainerProfile.findUnique({
+      where: { userId: session.user.id },
+    });
 
-  if (!startDate || !endDate) {
-    return NextResponse.json(
-      { error: 'Start- und Enddatum sind erforderlich' },
-      { status: 400 }
-    );
-  }
+    if (!trainerProfile) {
+      return NextResponse.json({ error: 'Trainer-Profil nicht gefunden' }, { status: 404 });
+    }
 
-  if (!reason || reason.trim().length < 3) {
-    return NextResponse.json(
-      { error: 'Grund muss mindestens 3 Zeichen haben' },
-      { status: 400 }
-    );
-  }
+    const body = await request.json();
+    const { athleteId, trainerId, startDate, endDate, reason, notes } = body;
 
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+    if (!startDate || !endDate || !reason) {
+      return NextResponse.json(
+        { error: 'Start- und Enddatum sowie Grund sind erforderlich' },
+        { status: 400 }
+      );
+    }
 
-  if (end < start) {
-    return NextResponse.json(
-      { error: 'Enddatum muss nach Startdatum liegen' },
-      { status: 400 }
-    );
-  }
+    if (!athleteId && !trainerId) {
+      return NextResponse.json(
+        { error: 'Entweder Athlet oder Trainer muss angegeben werden' },
+        { status: 400 }
+      );
+    }
 
-  // Get admin's trainer profile
-  const adminProfile = await prisma.trainerProfile.findFirst({
-    where: { userId: session!.user.id },
-  });
-
-  if (!adminProfile) {
-    return NextResponse.json({ error: 'Admin-Profil nicht gefunden' }, { status: 404 });
-  }
-
-  const absencePeriod = await prisma.absencePeriod.create({
-    data: {
-      athleteId: athleteId || null,
-      trainerId: trainerId || null,
-      startDate: start,
-      endDate: end,
-      reason: reason.trim(),
-      notes: notes?.trim() || null,
-      createdBy: adminProfile.id,
-    },
-    include: {
-      athlete: {
-        include: {
-          user: { select: { firstName: true, lastName: true } },
-        },
+    const absencePeriod = await prisma.absencePeriod.create({
+      data: {
+        athleteId: athleteId || null,
+        trainerId: trainerId || null,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        reason,
+        notes: notes || null,
+        createdBy: trainerProfile.id,
       },
-      trainer: {
-        include: {
-          user: { select: { firstName: true, lastName: true } },
-        },
-      },
-    },
-  });
+    });
 
-  return NextResponse.json({
-    success: true,
-    message: 'Abwesenheitszeitraum erstellt',
-    data: {
-      id: absencePeriod.id,
-      personName: absencePeriod.athlete
-        ? `${absencePeriod.athlete.user.firstName} ${absencePeriod.athlete.user.lastName}`
-        : absencePeriod.trainer
-        ? `${absencePeriod.trainer.user.firstName} ${absencePeriod.trainer.user.lastName}`
-        : 'Unbekannt',
-    },
-  });
+    return NextResponse.json({
+      data: absencePeriod,
+      message: 'Abwesenheitszeitraum erstellt',
+    });
+  } catch (error) {
+    console.error('Absence period POST error:', error);
+    return NextResponse.json(
+      { error: 'Fehler beim Erstellen des Abwesenheitszeitraums' },
+      { status: 500 }
+    );
+  }
 }

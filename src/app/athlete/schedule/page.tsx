@@ -22,9 +22,8 @@ import {
   ChevronRight,
   List,
   Users,
-  Dumbbell,
   Check,
-  HelpCircle,
+  Dumbbell,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -50,17 +49,17 @@ interface ScheduleSession {
   attendanceStatus?: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED';
   equipment?: string | null;
   trainers?: SessionTrainer[];
-  // Confirmation fields
   confirmed?: boolean | null;
   confirmedAt?: string | null;
+  totalAthletes?: number;
+  confirmedAthletes?: number;
+  declinedAthletes?: number;
 }
 
 type ViewMode = 'list' | 'calendar';
-type ConfirmationMode = 'AUTO_CONFIRM' | 'REQUIRE_CONFIRMATION';
 
 export default function AthleteSchedule() {
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
-  const [confirmationMode, setConfirmationMode] = useState<ConfirmationMode>('AUTO_CONFIRM');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -70,12 +69,16 @@ export default function AthleteSchedule() {
   const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [confirmingSessionId, setConfirmingSessionId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   
   // Edit state
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editReason, setEditReason] = useState('');
+  
+  // Confirmation state
+  const [confirmationMode, setConfirmationMode] = useState<string>('AUTO_CONFIRM');
+  const [confirmingSessionId, setConfirmingSessionId] = useState<string | null>(null);
+  const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState<number>(2);
   
   // Undo dialog
   const [undoDialogOpen, setUndoDialogOpen] = useState(false);
@@ -104,7 +107,6 @@ export default function AthleteSchedule() {
       if (!res.ok) throw new Error('Failed to fetch');
       const result = await res.json();
       setSessions(result.data);
-      setConfirmationMode(result.confirmationMode || 'AUTO_CONFIRM');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -115,6 +117,63 @@ export default function AthleteSchedule() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Fetch system settings for confirmation mode
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/settings/public');
+        if (res.ok) {
+          const result = await res.json();
+          setConfirmationMode(result.data.attendanceConfirmationMode || 'AUTO_CONFIRM');
+          setCancellationDeadlineHours(result.data.cancellationDeadlineHours || 2);
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  // Check if session is within deadline
+  const isWithinDeadline = useCallback((session: ScheduleSession) => {
+    const sessionDate = new Date(session.date);
+    const [hours, minutes] = session.startTime.split(':').map(Number);
+    sessionDate.setHours(hours, minutes, 0, 0);
+    
+    const deadlineTime = new Date(sessionDate);
+    deadlineTime.setHours(deadlineTime.getHours() - cancellationDeadlineHours);
+    
+    return new Date() <= deadlineTime;
+  }, [cancellationDeadlineHours]);
+
+  // Handle session confirmation/decline
+  const handleConfirmSession = async (sessionId: string, confirmed: boolean) => {
+    setConfirmingSessionId(sessionId);
+    try {
+      const res = await fetch('/api/session-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, confirmed }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Fehler beim Speichern');
+      }
+
+      // Update local state
+      setSessions(prev => prev.map(s => 
+        s.id === sessionId 
+          ? { ...s, confirmed, confirmedAt: new Date().toISOString() }
+          : s
+      ));
+    } catch (err) {
+      setFormError((err as Error).message);
+    } finally {
+      setConfirmingSessionId(null);
+    }
+  };
 
   const handleCancel = async (sessionId: string) => {
     setFormError(null);
@@ -208,31 +267,6 @@ export default function AthleteSchedule() {
     }
   };
 
-  // Handle session confirmation (for REQUIRE_CONFIRMATION mode)
-  const handleConfirmSession = async (sessionId: string, confirmed: boolean) => {
-    setConfirmingSessionId(sessionId);
-    setFormError(null);
-
-    try {
-      const res = await fetch('/api/session-confirmation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, confirmed }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Fehler beim Bestätigen');
-      }
-
-      await loadData();
-    } catch (err) {
-      setFormError((err as Error).message);
-    } finally {
-      setConfirmingSessionId(null);
-    }
-  };
   if (error) return <div className="text-destructive">Fehler beim Laden: {error}</div>;
 
   const getStatusBadge = (session: ScheduleSession) => {
@@ -433,97 +467,145 @@ export default function AthleteSchedule() {
       );
     }
 
-    // Check if we're in REQUIRE_CONFIRMATION mode
-    const sessionDate = new Date(session.date);
-    const isPastSession = sessionDate < new Date();
-    
-    if (confirmationMode === 'REQUIRE_CONFIRMATION' && !isPastSession) {
-      // Show confirmation buttons
-      const isConfirming = confirmingSessionId === session.id;
-      
-      if (session.confirmed === true) {
-        // Already confirmed - show undo option
+    // Check if within deadline
+    const canModify = isWithinDeadline(session);
+
+    // REQUIRE_CONFIRMATION mode: Show confirm/decline buttons
+    if (confirmationMode === 'REQUIRE_CONFIRMATION') {
+      const isConfirmed = session.confirmed === true;
+      const isDeclined = session.confirmed === false;
+      const isLoading = confirmingSessionId === session.id;
+
+      if (isConfirmed) {
         return (
-          <div className="flex gap-2">
-            <Badge className="bg-green-500 gap-1">
-              <Check className="h-3 w-3" />
+          <div className="flex items-center gap-2">
+            <Badge className="bg-green-500">
+              <Check className="h-3 w-3 mr-1" />
               Zugesagt
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleConfirmSession(session.id, false)}
-              disabled={isConfirming}
-              title="Absagen"
-            >
-              <XCircle className="h-4 w-4" />
-            </Button>
-          </div>
-        );
-      } else if (session.confirmed === false) {
-        // Declined - show change option
-        return (
-          <div className="flex gap-2">
-            <Badge variant="secondary" className="gap-1">
-              <XCircle className="h-3 w-3" />
-              Abgesagt
-            </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleConfirmSession(session.id, true)}
-              disabled={isConfirming}
-              title="Doch zusagen"
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-          </div>
-        );
-      } else {
-        // Not yet confirmed - show both buttons
-        return (
-          <div className="flex gap-2">
-            <Badge variant="outline" className="gap-1 text-amber-600 border-amber-300">
-              <HelpCircle className="h-3 w-3" />
-              Bitte bestätigen
-            </Badge>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => handleConfirmSession(session.id, true)}
-              disabled={isConfirming}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Check className="h-4 w-4 mr-1" />
-              Zusagen
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleConfirmSession(session.id, false)}
-              disabled={isConfirming}
-            >
-              <XCircle className="h-4 w-4 mr-1" />
-              Absagen
-            </Button>
+            {canModify && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleConfirmSession(session.id, false)}
+                disabled={isLoading}
+                title="Absagen"
+              >
+                <XCircle className="h-4 w-4 text-destructive" />
+              </Button>
+            )}
           </div>
         );
       }
+
+      if (isDeclined) {
+        return (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">
+              <XCircle className="h-3 w-3 mr-1" />
+              Abgesagt
+            </Badge>
+            {canModify && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleConfirmSession(session.id, true)}
+                disabled={isLoading}
+                title="Doch zusagen"
+              >
+                <Check className="h-4 w-4 text-green-500" />
+              </Button>
+            )}
+          </div>
+        );
+      }
+
+      // Not yet confirmed/declined - show buttons
+      if (!canModify) {
+        return (
+          <Badge variant="outline" className="text-muted-foreground">
+            Frist abgelaufen
+          </Badge>
+        );
+      }
+
+      return (
+        <div className="flex gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => handleConfirmSession(session.id, true)}
+            disabled={isLoading}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isLoading ? '...' : (
+              <>
+                <Check className="h-4 w-4 mr-1" />
+                Zusagen
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleConfirmSession(session.id, false)}
+            disabled={isLoading}
+          >
+            {isLoading ? '...' : (
+              <>
+                <XCircle className="h-4 w-4 mr-1" />
+                Absagen
+              </>
+            )}
+          </Button>
+        </div>
+      );
     }
 
-    // Session can be cancelled (AUTO_CONFIRM mode or fallback)
+    // AUTO_CONFIRM mode: Show Yes/No buttons with Yes preselected
+    // In this mode, users are auto-confirmed unless they decline
+    const isLoading = confirmingSessionId === session.id;
+    const effectiveConfirmed = session.confirmed ?? true; // Default to confirmed in AUTO_CONFIRM mode
+    
+    if (!canModify) {
+      // Past deadline - show current status as read-only
+      return (
+        <Badge className={effectiveConfirmed ? "bg-green-500" : "bg-muted"}>
+          {effectiveConfirmed ? (
+            <>
+              <Check className="h-3 w-3 mr-1" />
+              Zugesagt
+            </>
+          ) : (
+            <>
+              <XCircle className="h-3 w-3 mr-1" />
+              Abgesagt
+            </>
+          )}
+        </Badge>
+      );
+    }
+
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          setCancellingSessionId(session.id);
-          setCancelReason('');
-          setFormError(null);
-        }}
-      >
-        Absagen
-      </Button>
+      <div className="flex gap-1">
+        <Button
+          variant={effectiveConfirmed ? "default" : "outline"}
+          size="sm"
+          onClick={() => handleConfirmSession(session.id, true)}
+          disabled={isLoading || effectiveConfirmed}
+          className={effectiveConfirmed ? "bg-green-600 hover:bg-green-700" : ""}
+        >
+          <Check className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={!effectiveConfirmed ? "destructive" : "outline"}
+          size="sm"
+          onClick={() => handleConfirmSession(session.id, false)}
+          disabled={isLoading || !effectiveConfirmed}
+        >
+          <XCircle className="h-4 w-4" />
+        </Button>
+      </div>
     );
   };
 
@@ -624,15 +706,23 @@ export default function AthleteSchedule() {
                           </div>
                         )}
                         {session.equipment && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <Dumbbell className="h-3 w-3 text-muted-foreground" />
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <Dumbbell className="h-3 w-3" />
                             <div className="flex flex-wrap gap-1">
                               {session.equipment.split(',').map((item, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950">
+                                <Badge key={idx} variant="secondary" className="text-xs px-1.5 py-0">
                                   {item.trim()}
                                 </Badge>
                               ))}
                             </div>
+                          </div>
+                        )}
+                        {session.totalAthletes !== undefined && session.confirmedAthletes !== undefined && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <Users className="h-3 w-3" />
+                            <span>
+                              {session.confirmedAthletes} / {session.totalAthletes} zugesagt
+                            </span>
                           </div>
                         )}
                         {session.athleteCancelled && session.athleteCancellationReason && editingSessionId !== session.id && (
@@ -717,12 +807,9 @@ export default function AthleteSchedule() {
                             </span>
                           </div>
                         )}
-                        {session.equipment && (
-                          <div className="flex items-center gap-1 text-[10px] opacity-70 mt-0.5">
-                            <Dumbbell className="h-3 w-3" />
-                            <span className="truncate">
-                              {session.equipment.split(',').map(i => i.trim()).join(', ')}
-                            </span>
+                        {session.totalAthletes !== undefined && session.confirmedAthletes !== undefined && (
+                          <div className="text-[10px] opacity-70 mt-0.5">
+                            {session.confirmedAthletes}/{session.totalAthletes} zugesagt
                           </div>
                         )}
                         {session.athleteCancelled && (

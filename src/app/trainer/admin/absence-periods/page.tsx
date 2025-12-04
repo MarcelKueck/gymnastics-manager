@@ -1,20 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Loading } from '@/components/ui/loading';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Loading } from '@/components/ui/loading';
-import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared';
+import {
+  Calendar,
+  Plus,
+  Trash2,
+  User,
+  CheckCircle,
+  AlertTriangle,
+  X,
+} from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -22,479 +31,433 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  AlertCircle,
-  Plus,
-  Trash2,
-  Edit,
-  Calendar,
-  User,
-  UserCog,
-  Bandage,
-  Plane,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 
 interface AbsencePeriod {
   id: string;
-  reason: string;
-  notes: string | null;
   startDate: string;
   endDate: string;
+  reason: string;
+  notes?: string;
   isActive: boolean;
-  athleteId: string | null;
-  trainerId: string | null;
-  athlete: {
+  athleteId?: string;
+  trainerId?: string;
+  athlete?: {
     user: { firstName: string; lastName: string };
-  } | null;
-  trainer: {
+  };
+  trainer?: {
     user: { firstName: string; lastName: string };
-  } | null;
-  createdByTrainer: {
+  };
+  createdByTrainer?: {
     user: { firstName: string; lastName: string };
   };
   createdAt: string;
 }
 
-interface UserOption {
+interface PersonOption {
   id: string;
   name: string;
   type: 'athlete' | 'trainer';
 }
 
-export default function AdminAbsencePeriodsPage() {
+export default function AbsencePeriodsPage() {
   const [absencePeriods, setAbsencePeriods] = useState<AbsencePeriod[]>([]);
-  const [users, setUsers] = useState<UserOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingPeriod, setEditingPeriod] = useState<AbsencePeriod | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [athletes, setAthletes] = useState<PersonOption[]>([]);
+  const [trainers, setTrainers] = useState<PersonOption[]>([]);
 
   // Form state
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [reason, setReason] = useState<string>('INJURY');
-  const [notes, setNotes] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [newPeriod, setNewPeriod] = useState({
+    personType: 'athlete' as 'athlete' | 'trainer',
+    personId: '',
+    startDate: '',
+    endDate: '',
+    reason: '',
+    notes: '',
+  });
 
-  const fetchData = async () => {
+  useEffect(() => {
+    fetchAbsencePeriods();
+    fetchPeople();
+  }, []);
+
+  const fetchAbsencePeriods = async () => {
     try {
-      const [periodsRes, usersRes] = await Promise.all([
-        fetch('/api/admin/absence-periods'),
-        fetch('/api/admin/users'),
-      ]);
-
-      if (periodsRes.ok) {
-        const result = await periodsRes.json();
-        setAbsencePeriods(result.data || []);
-      }
-
-      if (usersRes.ok) {
-        const usersResult = await usersRes.json();
-        const userOptions: UserOption[] = [];
-
-        // Add athletes
-        (usersResult.data || []).forEach((user: {
-          id: string;
-          firstName: string;
-          lastName: string;
-          athleteProfile?: { id: string };
-          trainerProfile?: { id: string };
-        }) => {
-          if (user.athleteProfile) {
-            userOptions.push({
-              id: `athlete_${user.athleteProfile.id}`,
-              name: `${user.firstName} ${user.lastName} (Athlet)`,
-              type: 'athlete',
-            });
-          }
-          if (user.trainerProfile) {
-            userOptions.push({
-              id: `trainer_${user.trainerProfile.id}`,
-              name: `${user.firstName} ${user.lastName} (Trainer)`,
-              type: 'trainer',
-            });
-          }
-        });
-
-        setUsers(userOptions);
-      }
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Fehler beim Laden der Daten');
+      setIsLoading(true);
+      const res = await fetch('/api/admin/absence-periods');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const result = await res.json();
+      setAbsencePeriods(result.data || []);
+    } catch {
+      setError('Fehler beim Laden der Abwesenheitszeiträume');
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const resetForm = () => {
-    setSelectedUserId('');
-    setReason('INJURY');
-    setNotes('');
-    setStartDate('');
-    setEndDate('');
-    setEditingPeriod(null);
-    setError(null);
-  };
-
-  const openEditDialog = (period: AbsencePeriod) => {
-    setEditingPeriod(period);
-    if (period.athleteId) {
-      setSelectedUserId(`athlete_${period.athleteId}`);
-    } else if (period.trainerId) {
-      setSelectedUserId(`trainer_${period.trainerId}`);
-    }
-    setReason(period.reason);
-    setNotes(period.notes || '');
-    setStartDate(format(new Date(period.startDate), 'yyyy-MM-dd'));
-    setEndDate(format(new Date(period.endDate), 'yyyy-MM-dd'));
-    setDialogOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
-
+  const fetchPeople = async () => {
     try {
-      // Parse user ID
-      const [type, id] = selectedUserId.split('_');
-      const payload = {
-        athleteId: type === 'athlete' ? id : null,
-        trainerId: type === 'trainer' ? id : null,
-        reason,
-        notes: notes || null,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
-      };
-
-      const url = editingPeriod
-        ? `/api/admin/absence-periods/${editingPeriod.id}`
-        : '/api/admin/absence-periods';
-
-      const res = await fetch(url, {
-        method: editingPeriod ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) {
-        throw new Error(result.error || 'Fehler beim Speichern');
+      // Fetch athletes
+      const athletesRes = await fetch('/api/admin/athletes');
+      if (athletesRes.ok) {
+        const athletesData = await athletesRes.json();
+        setAthletes(
+          (athletesData.data || []).map((a: { id: string; user: { firstName: string; lastName: string } }) => ({
+            id: a.id,
+            name: `${a.user.firstName} ${a.user.lastName}`,
+            type: 'athlete' as const,
+          }))
+        );
       }
 
-      setDialogOpen(false);
-      resetForm();
-      await fetchData();
-    } catch (err) {
-      setError((err as Error).message);
+      // Fetch trainers
+      const trainersRes = await fetch('/api/admin/trainers');
+      if (trainersRes.ok) {
+        const trainersData = await trainersRes.json();
+        setTrainers(
+          (trainersData.data || []).map((t: { id: string; user: { firstName: string; lastName: string } }) => ({
+            id: t.id,
+            name: `${t.user.firstName} ${t.user.lastName}`,
+            type: 'trainer' as const,
+          }))
+        );
+      }
+    } catch {
+      console.error('Error fetching people');
+    }
+  };
+
+  const handleCreatePeriod = async () => {
+    if (!newPeriod.personId || !newPeriod.startDate || !newPeriod.endDate || !newPeriod.reason) {
+      setError('Bitte füllen Sie alle Pflichtfelder aus');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const body: Record<string, string> = {
+        startDate: newPeriod.startDate,
+        endDate: newPeriod.endDate,
+        reason: newPeriod.reason,
+        notes: newPeriod.notes,
+      };
+
+      if (newPeriod.personType === 'athlete') {
+        body.athleteId = newPeriod.personId;
+      } else {
+        body.trainerId = newPeriod.personId;
+      }
+
+      const res = await fetch('/api/admin/absence-periods', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error('Failed to create');
+
+      setSuccessMessage('Abwesenheitszeitraum erfolgreich erstellt');
+      setIsDialogOpen(false);
+      setNewPeriod({
+        personType: 'athlete',
+        personId: '',
+        startDate: '',
+        endDate: '',
+        reason: '',
+        notes: '',
+      });
+      fetchAbsencePeriods();
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch {
+      setError('Fehler beim Erstellen des Abwesenheitszeitraums');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setIsSubmitting(true);
+  const handleDeletePeriod = async (id: string) => {
+    if (!confirm('Möchten Sie diesen Abwesenheitszeitraum wirklich löschen?')) {
+      return;
+    }
+
     try {
       const res = await fetch(`/api/admin/absence-periods/${id}`, {
         method: 'DELETE',
       });
 
-      if (!res.ok) {
-        const result = await res.json();
-        throw new Error(result.error || 'Fehler beim Löschen');
-      }
+      if (!res.ok) throw new Error('Failed to delete');
 
-      setDeleteConfirmId(null);
-      await fetchData();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setIsSubmitting(false);
+      setSuccessMessage('Abwesenheitszeitraum erfolgreich gelöscht');
+      fetchAbsencePeriods();
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch {
+      setError('Fehler beim Löschen des Abwesenheitszeitraums');
     }
   };
 
-  const getReasonBadge = (reason: string) => {
-    switch (reason) {
-      case 'INJURY':
-        return (
-          <Badge variant="destructive" className="gap-1">
-            <Bandage className="h-3 w-3" />
-            Verletzung
-          </Badge>
-        );
-      case 'VACATION':
-        return (
-          <Badge variant="secondary" className="gap-1">
-            <Plane className="h-3 w-3" />
-            Urlaub
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{reason}</Badge>;
+  const handleToggleActive = async (period: AbsencePeriod) => {
+    try {
+      const res = await fetch(`/api/admin/absence-periods/${period.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !period.isActive }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update');
+
+      setSuccessMessage(
+        period.isActive
+          ? 'Abwesenheitszeitraum deaktiviert'
+          : 'Abwesenheitszeitraum aktiviert'
+      );
+      fetchAbsencePeriods();
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch {
+      setError('Fehler beim Aktualisieren des Abwesenheitszeitraums');
     }
   };
 
-  const isActiveNow = (period: AbsencePeriod) => {
-    const now = new Date();
-    const start = new Date(period.startDate);
-    const end = new Date(period.endDate);
-    return period.isActive && now >= start && now <= end;
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
-  if (isLoading) {
-    return <Loading />;
-  }
+  const getPersonName = (period: AbsencePeriod) => {
+    if (period.athlete) {
+      return `${period.athlete.user.firstName} ${period.athlete.user.lastName}`;
+    }
+    if (period.trainer) {
+      return `${period.trainer.user.firstName} ${period.trainer.user.lastName}`;
+    }
+    return 'Unbekannt';
+  };
 
-  // Separate active (current/future) and past periods
-  const now = new Date();
-  const activePeriods = absencePeriods.filter(
-    (p) => p.isActive && new Date(p.endDate) >= now
-  );
-  const pastPeriods = absencePeriods.filter(
-    (p) => !p.isActive || new Date(p.endDate) < now
-  );
+  const getPersonType = (period: AbsencePeriod) => {
+    if (period.athleteId) return 'Athlet';
+    if (period.trainerId) return 'Trainer';
+    return '';
+  };
+
+  if (isLoading) return <Loading />;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Abwesenheitszeiten"
-        description="Verwalte Verletzungs- und Urlaubszeiten von Athleten und Trainern"
+        title="Abwesenheitszeiträume"
+        description="Verwalten Sie Abwesenheitszeiträume für Athleten und Trainer"
       />
 
-      <div className="flex justify-end">
-        <Dialog open={dialogOpen} onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) resetForm();
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Abwesenheit hinzufügen
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={handleSubmit}>
+      {error && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-md flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5" />
+          {error}
+          <button onClick={() => setError(null)} className="ml-auto">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-green-100 text-green-800 p-4 rounded-md flex items-center gap-2">
+          <CheckCircle className="h-5 w-5" />
+          {successMessage}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Abwesenheitszeiträume
+            </CardTitle>
+            <CardDescription>
+              {absencePeriods.length} Einträge insgesamt
+            </CardDescription>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Neu erstellen
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle>
-                  {editingPeriod ? 'Abwesenheit bearbeiten' : 'Neue Abwesenheit'}
-                </DialogTitle>
+                <DialogTitle>Neuen Abwesenheitszeitraum erstellen</DialogTitle>
                 <DialogDescription>
-                  Füge eine Abwesenheitszeit für einen Athleten oder Trainer hinzu.
+                  Erstellen Sie einen neuen Abwesenheitszeitraum für einen Athleten oder Trainer.
                 </DialogDescription>
               </DialogHeader>
-
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="user">Person</Label>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Person *</Label>
                   <Select
-                    value={selectedUserId}
-                    onValueChange={setSelectedUserId}
-                    disabled={!!editingPeriod}
+                    value={newPeriod.personType}
+                    onValueChange={(value: 'athlete' | 'trainer') => {
+                      setNewPeriod({ ...newPeriod, personType: value, personId: '' });
+                    }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Person auswählen..." />
+                      <SelectValue placeholder="Typ auswählen" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="athlete">Athlet</SelectItem>
+                      <SelectItem value="trainer">Trainer</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="reason">Grund</Label>
-                  <Select value={reason} onValueChange={setReason}>
+                <div className="space-y-2">
+                  <Label>{newPeriod.personType === 'athlete' ? 'Athlet' : 'Trainer'} *</Label>
+                  <Select
+                    value={newPeriod.personId}
+                    onValueChange={(value) => setNewPeriod({ ...newPeriod, personId: value })}
+                  >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Person auswählen" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="INJURY">Verletzung</SelectItem>
-                      <SelectItem value="VACATION">Urlaub</SelectItem>
-                      <SelectItem value="OTHER">Sonstiges</SelectItem>
+                      {(newPeriod.personType === 'athlete' ? athletes : trainers).map(
+                        (person) => (
+                          <SelectItem key={person.id} value={person.id}>
+                            {person.name}
+                          </SelectItem>
+                        )
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="startDate">Von</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="startDate">Startdatum *</Label>
                     <Input
                       id="startDate"
                       type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      required
+                      value={newPeriod.startDate}
+                      onChange={(e) =>
+                        setNewPeriod({ ...newPeriod, startDate: e.target.value })
+                      }
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="endDate">Bis</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="endDate">Enddatum *</Label>
                     <Input
                       id="endDate"
                       type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      required
+                      value={newPeriod.endDate}
+                      onChange={(e) =>
+                        setNewPeriod({ ...newPeriod, endDate: e.target.value })
+                      }
                     />
                   </div>
                 </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="notes">Notizen (optional)</Label>
-                  <Textarea
-                    id="notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Zusätzliche Informationen..."
-                    rows={3}
+                <div className="space-y-2">
+                  <Label htmlFor="reason">Grund *</Label>
+                  <Input
+                    id="reason"
+                    placeholder="z.B. Urlaub, Krankheit, etc."
+                    value={newPeriod.reason}
+                    onChange={(e) =>
+                      setNewPeriod({ ...newPeriod, reason: e.target.value })
+                    }
                   />
                 </div>
-
-                {error && (
-                  <div className="flex items-center gap-2 text-destructive text-sm">
-                    <AlertCircle className="h-4 w-4" />
-                    {error}
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notizen</Label>
+                  <Input
+                    id="notes"
+                    placeholder="Optionale Notizen"
+                    value={newPeriod.notes}
+                    onChange={(e) =>
+                      setNewPeriod({ ...newPeriod, notes: e.target.value })
+                    }
+                  />
+                </div>
               </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setDialogOpen(false);
-                    resetForm();
-                  }}
-                >
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Abbrechen
                 </Button>
-                <Button type="submit" disabled={isSubmitting || !selectedUserId || !startDate || !endDate}>
-                  {isSubmitting ? 'Speichern...' : editingPeriod ? 'Speichern' : 'Hinzufügen'}
+                <Button onClick={handleCreatePeriod} disabled={isSubmitting}>
+                  {isSubmitting ? 'Erstelle...' : 'Erstellen'}
                 </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Active Periods */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Aktive Abwesenheiten
-          </CardTitle>
-          <CardDescription>
-            {activePeriods.length} aktive Abwesenheit(en)
-          </CardDescription>
+              </div>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent>
-          {activePeriods.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">
-              Keine aktiven Abwesenheiten
-            </p>
+          {absencePeriods.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Keine Abwesenheitszeiträume vorhanden
+            </div>
           ) : (
             <div className="space-y-4">
-              {activePeriods.map((period) => (
+              {absencePeriods.map((period) => (
                 <div
                   key={period.id}
-                  className={`flex items-center justify-between p-4 rounded-lg border ${
-                    isActiveNow(period)
-                      ? 'bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800'
-                      : 'bg-muted/30'
+                  className={`border rounded-lg p-4 ${
+                    period.isActive ? 'bg-background' : 'bg-muted/50 opacity-60'
                   }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                      period.athleteId ? 'bg-blue-100 dark:bg-blue-900' : 'bg-purple-100 dark:bg-purple-900'
-                    }`}>
-                      {period.athleteId ? (
-                        <User className="h-5 w-5 text-blue-700 dark:text-blue-300" />
-                      ) : (
-                        <UserCog className="h-5 w-5 text-purple-700 dark:text-purple-300" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {period.athlete
-                          ? `${period.athlete.user.firstName} ${period.athlete.user.lastName}`
-                          : period.trainer
-                          ? `${period.trainer.user.firstName} ${period.trainer.user.lastName}`
-                          : 'Unbekannt'}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getReasonBadge(period.reason)}
-                        <span className="text-sm text-muted-foreground">
-                          {format(new Date(period.startDate), 'dd.MM.yyyy', { locale: de })} –{' '}
-                          {format(new Date(period.endDate), 'dd.MM.yyyy', { locale: de })}
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{getPersonName(period)}</span>
+                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                          {getPersonType(period)}
                         </span>
-                        {isActiveNow(period) && (
-                          <Badge variant="outline" className="text-amber-700 border-amber-300">
-                            Aktuell
-                          </Badge>
+                        {!period.isActive && (
+                          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
+                            Inaktiv
+                          </span>
                         )}
                       </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        {formatDate(period.startDate)} - {formatDate(period.endDate)}
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-medium">Grund:</span> {period.reason}
+                      </div>
                       {period.notes && (
-                        <p className="text-sm text-muted-foreground mt-1">{period.notes}</p>
+                        <div className="text-sm text-muted-foreground">
+                          <span className="font-medium">Notizen:</span> {period.notes}
+                        </div>
+                      )}
+                      {period.createdByTrainer && (
+                        <div className="text-xs text-muted-foreground">
+                          Erstellt von:{' '}
+                          {period.createdByTrainer.user.firstName}{' '}
+                          {period.createdByTrainer.user.lastName} am{' '}
+                          {formatDate(period.createdAt)}
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEditDialog(period)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    {deleteConfirmId === period.id ? (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(period.id)}
-                          disabled={isSubmitting}
-                        >
-                          Löschen
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDeleteConfirmId(null)}
-                        >
-                          Abbrechen
-                        </Button>
-                      </div>
-                    ) : (
+                    <div className="flex gap-2">
                       <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteConfirmId(period.id)}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleActive(period)}
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        {period.isActive ? 'Deaktivieren' : 'Aktivieren'}
                       </Button>
-                    )}
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeletePeriod(period.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -502,57 +465,6 @@ export default function AdminAbsencePeriodsPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Past Periods */}
-      {pastPeriods.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-muted-foreground">
-              <Calendar className="h-5 w-5" />
-              Vergangene Abwesenheiten
-            </CardTitle>
-            <CardDescription>
-              {pastPeriods.length} vergangene Abwesenheit(en)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {pastPeriods.slice(0, 10).map((period) => (
-                <div
-                  key={period.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-muted/20 opacity-70"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                      {period.athleteId ? (
-                        <User className="h-5 w-5 text-muted-foreground" />
-                      ) : (
-                        <UserCog className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {period.athlete
-                          ? `${period.athlete.user.firstName} ${period.athlete.user.lastName}`
-                          : period.trainer
-                          ? `${period.trainer.user.firstName} ${period.trainer.user.lastName}`
-                          : 'Unbekannt'}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getReasonBadge(period.reason)}
-                        <span className="text-sm text-muted-foreground">
-                          {format(new Date(period.startDate), 'dd.MM.yyyy', { locale: de })} –{' '}
-                          {format(new Date(period.endDate), 'dd.MM.yyyy', { locale: de })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

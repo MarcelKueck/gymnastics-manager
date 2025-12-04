@@ -40,6 +40,8 @@ async function main() {
       absenceAlertCooldownDays: 14,
       adminNotificationEmail: 'vroni@raumonline.de',
       absenceAlertEnabled: true,
+      // Use REQUIRE_CONFIRMATION to test the new confirmation feature
+      attendanceConfirmationMode: 'REQUIRE_CONFIRMATION',
     },
   });
 

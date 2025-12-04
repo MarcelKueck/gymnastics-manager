@@ -7,6 +7,7 @@ import { Loading } from '@/components/ui/loading';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/components/shared';
 import { 
   Clock,
@@ -16,13 +17,6 @@ import {
   AlertTriangle,
   Users,
 } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface SystemSettings {
   id: string;
@@ -142,6 +136,39 @@ export default function AdminSettingsPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Session-Generierung</CardTitle>
+            </div>
+            <CardDescription>
+              Wie viele Tage im Voraus sollen Sessions generiert werden?
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="sessionGeneration">Tage im Voraus</Label>
+              <Input
+                id="sessionGeneration"
+                type="number"
+                min={7}
+                max={365}
+                value={settings?.sessionGenerationDaysAhead ?? 56}
+                onChange={(e) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    sessionGenerationDaysAhead: parseInt(e.target.value) || 56,
+                  } : null)
+                }
+              />
+              <p className="text-sm text-muted-foreground">
+                Sessions werden automatisch aus den wiederkehrenden Trainings generiert.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Teilnahmebestätigung</CardTitle>
             </div>
@@ -177,41 +204,6 @@ export default function AdminSettingsPage() {
                 {settings?.attendanceConfirmationMode === 'REQUIRE_CONFIRMATION'
                   ? 'Athleten und Trainer müssen jede Trainingseinheit aktiv bestätigen.'
                   : 'Athleten und Trainer sind automatisch als teilnehmend markiert und müssen nur bei Abwesenheit absagen.'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-              <CardTitle>Session-Generierung</CardTitle>
-            </div>
-            <CardDescription>
-              Wie viele Tage im Voraus sollen Sessions generiert werden?
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="sessionGeneration">Tage im Voraus</Label>
-              <Input
-                id="sessionGeneration"
-                type="number"
-                min={7}
-                max={365}
-                value={settings?.sessionGenerationDaysAhead ?? 56}
-                onChange={(e) =>
-                  setSettings(settings ? {
-                    ...settings,
-                    sessionGenerationDaysAhead: parseInt(e.target.value) || 56,
-                  } : null)
-                }
-              />
-              <p className="text-sm text-muted-foreground">
-                Sessions werden automatisch aus den wiederkehrenden Trainings generiert.
               </p>
             </div>
           </CardContent>

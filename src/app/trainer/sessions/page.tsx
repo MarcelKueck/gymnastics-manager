@@ -1,11 +1,21 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loading } from '@/components/ui/loading';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   Calendar, 
   List, 
@@ -14,9 +24,11 @@ import {
   ChevronLeft, 
   ChevronRight,
   Users,
-  Ban,
   Undo2,
+  XCircle,
   Dumbbell,
+  Check,
+  Edit,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -24,6 +36,7 @@ interface SessionTrainer {
   id: string;
   name: string;
   cancelled: boolean;
+  confirmed?: boolean;
 }
 
 interface TrainingSession {
@@ -41,6 +54,8 @@ interface TrainingSession {
   trainers?: SessionTrainer[];
   trainerCancelled?: boolean;
   trainerCancellationId?: string;
+  confirmedAthletes?: number;
+  declinedAthletes?: number;
 }
 
 export default function TrainerSessionsPage() {
@@ -233,31 +248,42 @@ export default function TrainerSessionsPage() {
 function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefresh: () => void }) {
   const sessionDate = new Date(session.date);
   const isPast = sessionDate < new Date();
-  const [isCancelling, setIsCancelling] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isCancellingSession, setIsCancellingSession] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isEditingEquipment, setIsEditingEquipment] = useState(false);
+  const [equipmentValue, setEquipmentValue] = useState(session.equipment || '');
+  const [isSavingEquipment, setIsSavingEquipment] = useState(false);
+  const { data: authSession } = useSession();
+  const isAdmin = authSession?.user?.activeRole === 'ADMIN';
+  const currentTrainerId = authSession?.user?.trainerProfileId;
+  
+  // Find current trainer's confirmation status
+  const currentTrainer = session.trainers?.find(t => t.id === currentTrainerId);
+  const isTrainerConfirmed = currentTrainer?.confirmed ?? false;
 
-  const handleCancelAttendance = async (e: React.MouseEvent) => {
+  const handleConfirmTrainer = async (e: React.MouseEvent, confirmed: boolean) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsCancelling(true);
+    setIsConfirming(true);
     try {
-      const res = await fetch('/api/trainer/cancellations', {
+      const res = await fetch('/api/session-confirmation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: session.id,
-          reason: 'Vom Trainer abgesagt',
+          confirmed,
         }),
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Fehler beim Absagen');
+        throw new Error(data.error || 'Fehler beim Bestätigen');
       }
       onRefresh();
     } catch (err) {
       console.error(err);
     } finally {
-      setIsCancelling(false);
+      setIsConfirming(false);
     }
   };
 
@@ -280,6 +306,78 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
       setIsUndoing(false);
     }
   };
+
+  const handleCancelSession = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const reason = prompt('Grund für die Absage (wird an alle Teilnehmer gesendet):');
+    if (!reason) return;
+    
+    setIsCancellingSession(true);
+    try {
+      const res = await fetch(`/api/trainer/sessions/${session.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Fehler beim Absagen');
+      }
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+      alert('Fehler beim Absagen des Trainings');
+    } finally {
+      setIsCancellingSession(false);
+    }
+  };
+
+  const handleUncancelSession = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsCancellingSession(true);
+    try {
+      const res = await fetch(`/api/trainer/sessions/${session.id}/cancel`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        throw new Error('Fehler beim Zurücknehmen');
+      }
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+      alert('Fehler beim Zurücknehmen der Absage');
+    } finally {
+      setIsCancellingSession(false);
+    }
+  };
+
+  const handleSaveEquipment = async () => {
+    setIsSavingEquipment(true);
+    try {
+      const res = await fetch(`/api/trainer/sessions/${session.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ equipment: equipmentValue }),
+      });
+      if (!res.ok) {
+        throw new Error('Fehler beim Speichern');
+      }
+      setIsEditingEquipment(false);
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+      alert('Fehler beim Speichern der Geräte');
+    } finally {
+      setIsSavingEquipment(false);
+    }
+  };
+
+  // Get confirmed trainers
+  const confirmedTrainers = session.trainers?.filter(t => t.confirmed && !t.cancelled) || [];
 
   return (
     <Link href={`/trainer/sessions/${session.id}`}>
@@ -326,8 +424,9 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                     <span>
                       {session.trainers.map((t, idx) => (
                         <span key={t.id}>
-                          <span className={t.cancelled ? 'line-through' : ''}>
+                          <span className={t.cancelled ? 'line-through text-muted-foreground' : t.confirmed ? 'text-green-600' : ''}>
                             {t.name}
+                            {t.confirmed && !t.cancelled && <Check className="h-3 w-3 inline ml-0.5 text-green-600" />}
                           </span>
                           {idx < (session.trainers?.length ?? 0) - 1 && ', '}
                         </span>
@@ -336,33 +435,87 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                   </div>
                 )}
                 {session.equipment && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <Dumbbell className="h-3 w-3 text-muted-foreground" />
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                    <Dumbbell className="h-3 w-3" />
                     <div className="flex flex-wrap gap-1">
                       {session.equipment.split(',').map((item, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs bg-blue-50 dark:bg-blue-950">
+                        <Badge key={idx} variant="outline" className="text-xs px-1.5 py-0">
                           {item.trim()}
                         </Badge>
                       ))}
                     </div>
+                    {!isPast && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-1 ml-1"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEquipmentValue(session.equipment || '');
+                          setIsEditingEquipment(true);
+                        }}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
+                )}
+                {!session.equipment && !isPast && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground h-5 px-1 mt-1"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setEquipmentValue('');
+                      setIsEditingEquipment(true);
+                    }}
+                  >
+                    <Dumbbell className="h-3 w-3 mr-1" />
+                    Geräte hinzufügen
+                  </Button>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-4">
               {!session.isCancelled && (
                 <>
-                  {!session.trainerCancelled && !isPast && (
+                  {/* Admin cancel entire session button */}
+                  {isAdmin && !isPast && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={handleCancelAttendance}
-                      disabled={isCancelling}
+                      onClick={handleCancelSession}
+                      disabled={isCancellingSession}
                       className="text-destructive hover:text-destructive"
                     >
-                      <Ban className="h-4 w-4 mr-1" />
-                      {isCancelling ? 'Wird abgesagt...' : 'Absagen'}
+                      <XCircle className="h-4 w-4 mr-1" />
+                      {isCancellingSession ? '...' : 'Training absagen'}
                     </Button>
+                  )}
+                  {/* Trainer confirmation buttons */}
+                  {!isAdmin && !isPast && !session.trainerCancelled && (
+                    <div className="flex gap-1">
+                      <Button
+                        variant={isTrainerConfirmed ? "default" : "outline"}
+                        size="sm"
+                        onClick={(e) => handleConfirmTrainer(e, true)}
+                        disabled={isConfirming || isTrainerConfirmed}
+                        className={isTrainerConfirmed ? "bg-green-600 hover:bg-green-700" : ""}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={!isTrainerConfirmed && currentTrainer ? "destructive" : "outline"}
+                        size="sm"
+                        onClick={(e) => handleConfirmTrainer(e, false)}
+                        disabled={isConfirming}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
                   )}
                   {session.trainerCancelled && !isPast && (
                     <Button
@@ -375,13 +528,22 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                       {isUndoing ? 'Wird zurückgenommen...' : 'Zurücknehmen'}
                     </Button>
                   )}
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    <span className="text-sm">
-                      {session.attendanceMarked
-                        ? `${session.presentCount}/${session.expectedAthletes}`
-                        : session.expectedAthletes}
-                    </span>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Users className="h-4 w-4" />
+                      <span className="text-sm">
+                        {session.attendanceMarked
+                          ? `${session.presentCount}/${session.expectedAthletes}`
+                          : session.confirmedAthletes !== undefined
+                            ? `${session.confirmedAthletes}/${session.expectedAthletes} bestätigt`
+                            : session.expectedAthletes}
+                      </span>
+                    </div>
+                    {confirmedTrainers.length > 0 && (
+                      <span className="text-xs text-green-600">
+                        {confirmedTrainers.length} Trainer bestätigt
+                      </span>
+                    )}
                   </div>
                   {isPast ? (
                     session.attendanceMarked ? (
@@ -397,10 +559,68 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                   )}
                 </>
               )}
+              {session.isCancelled && isAdmin && !isPast && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUncancelSession}
+                  disabled={isCancellingSession}
+                >
+                  <Undo2 className="h-4 w-4 mr-1" />
+                  Absage zurücknehmen
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Equipment Edit Dialog */}
+      <Dialog open={isEditingEquipment} onOpenChange={setIsEditingEquipment}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Geräte bearbeiten</DialogTitle>
+            <DialogDescription>
+              Geben Sie die Geräte für diese Trainingseinheit ein (kommagetrennt).
+              Diese werden als Labels für die Gruppen angezeigt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="equipment">Geräte (kommagetrennt)</Label>
+              <Input
+                id="equipment"
+                placeholder="z.B. Reck, Barren, Boden, Sprung"
+                value={equipmentValue}
+                onChange={(e) => setEquipmentValue(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Beispiel: Reck, Barren, Boden, Sprung, Balken
+              </p>
+            </div>
+            {equipmentValue && (
+              <div className="space-y-2">
+                <Label>Vorschau</Label>
+                <div className="flex flex-wrap gap-1">
+                  {equipmentValue.split(',').map((item, idx) => (
+                    <Badge key={idx} variant="secondary">
+                      {item.trim()}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsEditingEquipment(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleSaveEquipment} disabled={isSavingEquipment}>
+              {isSavingEquipment ? 'Speichern...' : 'Speichern'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Link>
   );
 }

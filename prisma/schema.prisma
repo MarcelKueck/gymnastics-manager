@@ -357,54 +357,6 @@ model SessionAthleteAssignment {
 // ATTENDANCE MODELS
 // ============================================================================
 
-// Session confirmation - when user actively confirms they will attend
-model SessionConfirmation {
-  id                String          @id @default(cuid())
-  trainingSessionId String
-  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
-
-  // Either athleteId or trainerId must be set
-  athleteId String?
-  athlete   AthleteProfile? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  trainerId String?
-  trainer   TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-
-  confirmed   Boolean  @default(true) // true = coming, false = not coming
-  confirmedAt DateTime @default(now())
-
-  @@unique([trainingSessionId, athleteId])
-  @@unique([trainingSessionId, trainerId])
-  @@index([trainingSessionId])
-  @@index([athleteId])
-  @@index([trainerId])
-}
-
-// Absence periods - for injuries, holidays, etc.
-model AbsencePeriod {
-  id String @id @default(cuid())
-
-  // Either athleteId or trainerId must be set
-  athleteId String?
-  athlete   AthleteProfile? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  trainerId String?
-  trainer   TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-
-  startDate DateTime
-  endDate   DateTime
-  reason    String // e.g., "Verletzt", "Urlaub", etc.
-  notes     String?
-
-  createdBy      String
-  createdByAdmin TrainerProfile @relation("AbsencePeriodCreator", fields: [createdBy], references: [id])
-  createdAt      DateTime       @default(now())
-  isActive       Boolean        @default(true)
-
-  @@index([athleteId])
-  @@index([trainerId])
-  @@index([startDate, endDate])
-  @@index([isActive])
-}
-
 model Cancellation {
   id                String          @id @default(cuid())
   athleteId         String
@@ -642,4 +594,47 @@ model MonthlyTrainerSummary {
   @@unique([month, year, trainerId])
   @@index([trainerId])
   @@index([year, month])
+}
+
+// ============================================================================
+// SESSION CONFIRMATION MODELS
+// ============================================================================
+
+model SessionConfirmation {
+  id                String          @id @default(cuid())
+  trainingSessionId String
+  trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  athleteId         String?
+  athlete           AthleteProfile? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  trainerId         String?
+  trainer           TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  confirmed         Boolean         @default(true)
+  confirmedAt       DateTime        @default(now())
+
+  @@unique([trainingSessionId, athleteId])
+  @@unique([trainingSessionId, trainerId])
+  @@index([trainingSessionId])
+  @@index([athleteId])
+  @@index([trainerId])
+}
+
+model AbsencePeriod {
+  id               String          @id @default(cuid())
+  athleteId        String?
+  athlete          AthleteProfile? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  trainerId        String?
+  trainer          TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  startDate        DateTime
+  endDate          DateTime
+  reason           String
+  notes            String?
+  createdBy        String
+  createdByTrainer TrainerProfile  @relation("AbsencePeriodCreator", fields: [createdBy], references: [id])
+  createdAt        DateTime        @default(now())
+  isActive         Boolean         @default(true)
+
+  @@index([athleteId])
+  @@index([trainerId])
+  @@index([startDate, endDate])
+  @@index([isActive])
 }
