@@ -82,12 +82,17 @@ export async function POST(request: NextRequest) {
   const { session, error } = await requireAdmin();
   if (error) return error;
 
-  // Always fetch trainer profile from DB to ensure we have the correct ID
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session!.user.id },
-  });
+  // Use trainerProfileId from session if available, otherwise look up by userId
+  let trainerProfileId = session!.user.trainerProfileId;
   
-  if (!trainerProfile) {
+  if (!trainerProfileId) {
+    const trainerProfile = await prisma.trainerProfile.findUnique({
+      where: { userId: session!.user.id },
+    });
+    trainerProfileId = trainerProfile?.id;
+  }
+  
+  if (!trainerProfileId) {
     return NextResponse.json(
       { error: 'Trainer-Profil nicht gefunden' },
       { status: 400 }
@@ -123,7 +128,7 @@ export async function POST(request: NextRequest) {
       recurrence: data.recurrence,
       validFrom: data.validFrom ? new Date(data.validFrom) : null,
       validUntil: data.validUntil ? new Date(data.validUntil) : null,
-      createdBy: trainerProfile.id,
+      createdBy: trainerProfileId,
     },
     include: {
       trainingGroups: true,
