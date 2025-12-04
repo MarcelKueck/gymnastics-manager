@@ -160,15 +160,15 @@ export const trainerService = {
     athleteId: string,
     status: AttendanceStatus,
     trainerProfileId: string,
-    notes?: string
+    notes?: string,
+    trainingGroupId?: string
   ) {
     // Check if record exists
-    const existing = await prisma.attendanceRecord.findUnique({
+    const existing = await prisma.attendanceRecord.findFirst({
       where: {
-        athleteId_trainingSessionId: {
-          athleteId,
-          trainingSessionId: sessionId,
-        },
+        athleteId,
+        trainingSessionId: sessionId,
+        trainingGroupId: trainingGroupId ?? null,
       },
     });
 

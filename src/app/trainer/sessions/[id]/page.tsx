@@ -9,28 +9,37 @@ import { PageHeader } from '@/components/shared';
 import { 
   CheckCircle, 
   XCircle, 
-  Clock, 
   AlertTriangle,
   Save,
   ArrowLeft,
   Calendar,
   Users,
   MessageSquare,
+  Timer,
+  HelpCircle,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface AthleteAttendance {
   id: string;
   athleteId: string;
   name: string;
   group: string;
+  groupId?: string;
   status: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED' | null;
+  isLate?: boolean;
   hasCancellation: boolean;
   cancellationNote?: string;
   note?: string;
+  confirmed?: boolean | null;
+  declineReason?: string | null;
+  // Exception flags set by trainer
+  noShow?: boolean; // Confirmed but didn't come
+  showedUpUnannounced?: boolean; // Came without confirming
 }
 
 interface SessionTrainer {
@@ -38,7 +47,10 @@ interface SessionTrainer {
   name: string;
   cancelled: boolean;
   attendanceStatus: 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED' | null;
+  isLate?: boolean;
   attendanceNote?: string;
+  confirmed?: boolean | null;
+  declineReason?: string | null;
 }
 
 interface SessionDetail {
@@ -47,7 +59,7 @@ interface SessionDetail {
   name: string;
   startTime: string;
   endTime: string;
-  groups: string[];
+  groups: Array<string | { id: string; name: string }>;
   isCancelled: boolean;
   equipment?: string | null;
   athletes: AthleteAttendance[];
@@ -63,8 +75,8 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
   const isAdmin = authSession?.user?.activeRole === 'ADMIN';
   
   const [session, setSession] = useState<SessionDetail | null>(null);
-  const [attendanceData, setAttendanceData] = useState<Map<string, { status: string; note: string }>>(new Map());
-  const [trainerAttendanceData, setTrainerAttendanceData] = useState<Map<string, { status: string; note: string }>>(new Map());
+  const [exceptionData, setExceptionData] = useState<Map<string, { noShow: boolean; showedUpUnannounced: boolean; isLate: boolean; note: string }>>(new Map());
+  const [trainerExceptionData, setTrainerExceptionData] = useState<Map<string, { noShow: boolean; showedUpUnannounced: boolean; isLate: boolean; note: string }>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingTrainers, setIsSavingTrainers] = useState(false);
@@ -80,68 +92,89 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
       })
       .then((result) => {
         setSession(result.data);
-        // Initialize athlete attendance data from fetched data
-        const initialData = new Map<string, { status: string; note: string }>();
+        // Initialize athlete exception data from fetched data
+        const initialData = new Map<string, { noShow: boolean; showedUpUnannounced: boolean; isLate: boolean; note: string }>();
         result.data.athletes.forEach((athlete: AthleteAttendance) => {
+          // Determine exception flags from attendance status
+          const isNoShow = athlete.confirmed === true && athlete.status === 'ABSENT_UNEXCUSED';
+          const showedUpUnannounced = athlete.confirmed === false && athlete.status === 'PRESENT';
           initialData.set(athlete.athleteId, {
-            status: athlete.status || '',
+            noShow: isNoShow,
+            showedUpUnannounced: showedUpUnannounced,
+            isLate: athlete.isLate || false,
             note: athlete.note || '',
           });
         });
-        setAttendanceData(initialData);
+        setExceptionData(initialData);
         
-        // Initialize trainer attendance data
-        const initialTrainerData = new Map<string, { status: string; note: string }>();
+        // Initialize trainer exception data
+        const initialTrainerData = new Map<string, { noShow: boolean; showedUpUnannounced: boolean; isLate: boolean; note: string }>();
         result.data.trainers?.forEach((trainer: SessionTrainer) => {
+          const isNoShow = trainer.confirmed === true && trainer.attendanceStatus === 'ABSENT_UNEXCUSED';
+          const showedUpUnannounced = trainer.confirmed === false && trainer.attendanceStatus === 'PRESENT';
           initialTrainerData.set(trainer.id, {
-            status: trainer.attendanceStatus || '',
+            noShow: isNoShow,
+            showedUpUnannounced: showedUpUnannounced,
+            isLate: trainer.isLate || false,
             note: trainer.attendanceNote || '',
           });
         });
-        setTrainerAttendanceData(initialTrainerData);
+        setTrainerExceptionData(initialTrainerData);
       })
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, [id]);
 
-  const updateAttendance = (athleteId: string, status: string) => {
-    const newData = new Map(attendanceData);
-    const current = newData.get(athleteId) || { status: '', note: '' };
-    newData.set(athleteId, { ...current, status });
-    setAttendanceData(newData);
+  // Exception update functions for athletes
+  const updateAthleteException = (athleteId: string, field: 'noShow' | 'showedUpUnannounced' | 'isLate', value: boolean) => {
+    const newData = new Map(exceptionData);
+    const current = newData.get(athleteId) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
+    newData.set(athleteId, { ...current, [field]: value });
+    setExceptionData(newData);
     setHasChanges(true);
   };
 
-  const updateNote = (athleteId: string, note: string) => {
-    const newData = new Map(attendanceData);
-    const current = newData.get(athleteId) || { status: '', note: '' };
+  const updateAthleteNote = (athleteId: string, note: string) => {
+    const newData = new Map(exceptionData);
+    const current = newData.get(athleteId) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
     newData.set(athleteId, { ...current, note });
-    setAttendanceData(newData);
+    setExceptionData(newData);
     setHasChanges(true);
   };
 
-  const markAllPresent = () => {
-    const newData = new Map(attendanceData);
-    session?.athletes.forEach((athlete) => {
-      if (!athlete.hasCancellation) {
-        const current = newData.get(athlete.athleteId) || { status: '', note: '' };
-        newData.set(athlete.athleteId, { ...current, status: 'PRESENT' });
-      }
-    });
-    setAttendanceData(newData);
-    setHasChanges(true);
-  };
-
-  const saveAttendance = async () => {
+  const saveExceptions = async () => {
     setIsSaving(true);
     try {
-      const records = Array.from(attendanceData.entries())
-        .filter(([, data]) => data.status)
-        .map(([athleteId, data]) => ({
-          athleteId,
-          status: data.status,
-          note: data.note || undefined,
-        }));
+      // Convert exceptions to attendance records
+      const records = session?.athletes.map((athlete) => {
+        const exception = exceptionData.get(athlete.athleteId) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
+        
+        // Determine status based on confirmation and exceptions
+        let status: string;
+        if (exception.noShow) {
+          // Confirmed but didn't show - unexcused absent
+          status = 'ABSENT_UNEXCUSED';
+        } else if (exception.showedUpUnannounced) {
+          // Didn't confirm but showed up - present
+          status = 'PRESENT';
+        } else if (athlete.confirmed === true) {
+          // Confirmed and showed up (default behavior)
+          status = 'PRESENT';
+        } else if (athlete.confirmed === false) {
+          // Declined - excused absent
+          status = 'ABSENT_EXCUSED';
+        } else {
+          // No confirmation yet - skip
+          return null;
+        }
+
+        return {
+          athleteId: athlete.athleteId,
+          status,
+          note: exception.note || undefined,
+          isLate: exception.isLate,
+        };
+      }).filter(Boolean);
 
       const res = await fetch(`/api/trainer/sessions/${id}/attendance`, {
         method: 'POST',
@@ -160,37 +193,42 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
     }
   };
 
-  // Trainer attendance functions (admin only)
-  const updateTrainerAttendance = (trainerId: string, status: string) => {
-    const newData = new Map(trainerAttendanceData);
-    const current = newData.get(trainerId) || { status: '', note: '' };
-    newData.set(trainerId, { ...current, status });
-    setTrainerAttendanceData(newData);
+  // Exception update functions for trainers (admin only)
+  const updateTrainerException = (trainerId: string, field: 'noShow' | 'showedUpUnannounced' | 'isLate', value: boolean) => {
+    const newData = new Map(trainerExceptionData);
+    const current = newData.get(trainerId) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
+    newData.set(trainerId, { ...current, [field]: value });
+    setTrainerExceptionData(newData);
     setHasTrainerChanges(true);
   };
 
-  const markAllTrainersPresent = () => {
-    const newData = new Map(trainerAttendanceData);
-    session?.trainers?.forEach((trainer) => {
-      if (!trainer.cancelled) {
-        const current = newData.get(trainer.id) || { status: '', note: '' };
-        newData.set(trainer.id, { ...current, status: 'PRESENT' });
-      }
-    });
-    setTrainerAttendanceData(newData);
-    setHasTrainerChanges(true);
-  };
-
-  const saveTrainerAttendance = async () => {
+  const saveTrainerExceptions = async () => {
     setIsSavingTrainers(true);
     try {
-      const attendance = Array.from(trainerAttendanceData.entries())
-        .filter(([, data]) => data.status)
-        .map(([trainerId, data]) => ({
-          trainerId,
-          status: data.status,
-          notes: data.note || undefined,
-        }));
+      const attendance = session?.trainers?.map((trainer) => {
+        const exception = trainerExceptionData.get(trainer.id) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
+        
+        // Determine status based on confirmation and exceptions
+        let status: string;
+        if (exception.noShow) {
+          status = 'ABSENT_UNEXCUSED';
+        } else if (exception.showedUpUnannounced) {
+          status = 'PRESENT';
+        } else if (trainer.confirmed === true) {
+          status = 'PRESENT';
+        } else if (trainer.confirmed === false) {
+          status = 'ABSENT_EXCUSED';
+        } else {
+          return null;
+        }
+
+        return {
+          trainerId: trainer.id,
+          status,
+          notes: exception.note || undefined,
+          isLate: exception.isLate,
+        };
+      }).filter(Boolean);
 
       const res = await fetch('/api/admin/trainer-attendance', {
         method: 'POST',
@@ -222,12 +260,10 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
     return acc;
   }, {} as Record<string, AthleteAttendance[]>);
 
-  const presentCount = Array.from(attendanceData.values()).filter(
-    (d) => d.status === 'PRESENT'
-  ).length;
-  const absentCount = Array.from(attendanceData.values()).filter(
-    (d) => d.status === 'ABSENT_UNEXCUSED' || d.status === 'ABSENT_EXCUSED'
-  ).length;
+  // Count confirmations
+  const confirmedCount = session.athletes.filter(a => a.confirmed === true).length;
+  const declinedCount = session.athletes.filter(a => a.confirmed === false).length;
+  const pendingCount = session.athletes.filter(a => a.confirmed === null || a.confirmed === undefined).length;
 
   return (
     <div className="space-y-6">
@@ -271,8 +307,8 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           <CardContent>
             <div className="flex flex-wrap gap-1">
               {session.groups.map((group) => (
-                <Badge key={group} variant="secondary">
-                  {group}
+                <Badge key={typeof group === 'string' ? group : group.id} variant="secondary">
+                  {typeof group === 'string' ? group : group.name}
                 </Badge>
               ))}
             </div>
@@ -281,13 +317,13 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Anwesend</CardTitle>
+            <CardTitle className="text-sm font-medium">Zugesagt</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">
-                {presentCount}/{session.athletes.length}
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
+              <span className="text-2xl font-bold text-emerald-600">
+                {confirmedCount}
               </span>
             </div>
           </CardContent>
@@ -295,12 +331,24 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Abwesend</CardTitle>
+            <CardTitle className="text-sm font-medium">Abgesagt</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{absentCount}</span>
+              <XCircle className="h-5 w-5 text-red-600" />
+              <span className="text-2xl font-bold text-red-600">{declinedCount}</span>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Ausstehend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <HelpCircle className="h-5 w-5 text-muted-foreground" />
+              <span className="text-2xl font-bold text-muted-foreground">{pendingCount}</span>
             </div>
           </CardContent>
         </Card>
@@ -312,64 +360,96 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Trainer</CardTitle>
             {isAdmin && (
-              <CardDescription>Als Admin können Sie die Trainer-Anwesenheit markieren</CardDescription>
+              <CardDescription>Als Admin können Sie Ausnahmen markieren</CardDescription>
             )}
           </CardHeader>
           <CardContent>
             {isAdmin ? (
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <Button onClick={markAllTrainersPresent} variant="outline" size="sm">
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Alle Trainer anwesend
-                  </Button>
                   <Button
-                    onClick={saveTrainerAttendance}
+                    onClick={saveTrainerExceptions}
                     disabled={!hasTrainerChanges || isSavingTrainers}
                     size="sm"
                   >
                     <Save className="h-4 w-4 mr-2" />
-                    {isSavingTrainers ? 'Speichern...' : 'Trainer speichern'}
+                    {isSavingTrainers ? 'Speichern...' : 'Änderungen speichern'}
                   </Button>
                 </div>
                 <div className="space-y-3">
                   {session.trainers.map((trainer) => {
-                    const currentStatus = trainerAttendanceData.get(trainer.id)?.status || '';
+                    const exception = trainerExceptionData.get(trainer.id) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
+                    
                     return (
-                      <div key={trainer.id} className="flex items-center justify-between p-3 rounded-lg border">
-                        <div className="flex items-center gap-2">
-                          <span className={trainer.cancelled ? 'line-through text-muted-foreground' : 'font-medium'}>
-                            {trainer.name}
-                          </span>
-                          {trainer.cancelled && (
-                            <Badge variant="outline" className="text-xs">Vorab abgesagt</Badge>
-                          )}
+                      <div key={trainer.id} className={`flex flex-col gap-3 p-3 rounded-lg border ${
+                        trainer.confirmed === false ? 'bg-red-50 dark:bg-red-900/20' : 
+                        trainer.confirmed === true ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-muted/30'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {/* Confirmation Status Icon */}
+                            {trainer.confirmed === true ? (
+                              <CheckCircle className="h-5 w-5 text-emerald-600" />
+                            ) : trainer.confirmed === false ? (
+                              <XCircle className="h-5 w-5 text-red-600" />
+                            ) : (
+                              <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                            )}
+                            <span className={trainer.cancelled ? 'line-through text-muted-foreground' : 'font-medium'}>
+                              {trainer.name}
+                            </span>
+                          </div>
+                          <Badge 
+                            variant="outline" 
+                            className={
+                              trainer.confirmed === true 
+                                ? "text-emerald-600 border-emerald-300 bg-emerald-100 dark:bg-emerald-900/40" 
+                                : trainer.confirmed === false 
+                                  ? "text-red-600 border-red-300 bg-red-100 dark:bg-red-900/40"
+                                  : "text-muted-foreground"
+                            }
+                          >
+                            {trainer.confirmed === true ? 'Kommt' : trainer.confirmed === false ? 'Kommt nicht' : 'Ausstehend'}
+                          </Badge>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant={currentStatus === 'PRESENT' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => updateTrainerAttendance(trainer.id, 'PRESENT')}
-                            className={currentStatus === 'PRESENT' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant={currentStatus === 'ABSENT_EXCUSED' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => updateTrainerAttendance(trainer.id, 'ABSENT_EXCUSED')}
-                            className={currentStatus === 'ABSENT_EXCUSED' ? 'bg-amber-600 hover:bg-amber-700' : ''}
-                          >
-                            <Clock className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant={currentStatus === 'ABSENT_UNEXCUSED' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => updateTrainerAttendance(trainer.id, 'ABSENT_UNEXCUSED')}
-                            className={currentStatus === 'ABSENT_UNEXCUSED' ? 'bg-red-600 hover:bg-red-700' : ''}
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
+                        
+                        {/* Exception checkboxes */}
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          {trainer.confirmed === true && (
+                            <div className="flex items-center gap-1.5">
+                              <Checkbox
+                                id={`trainer-noshow-${trainer.id}`}
+                                checked={exception.noShow}
+                                onCheckedChange={(checked) => updateTrainerException(trainer.id, 'noShow', checked === true)}
+                              />
+                              <label htmlFor={`trainer-noshow-${trainer.id}`} className="text-muted-foreground cursor-pointer">
+                                Nicht erschienen
+                              </label>
+                            </div>
+                          )}
+                          {trainer.confirmed === false && (
+                            <div className="flex items-center gap-1.5">
+                              <Checkbox
+                                id={`trainer-showed-${trainer.id}`}
+                                checked={exception.showedUpUnannounced}
+                                onCheckedChange={(checked) => updateTrainerException(trainer.id, 'showedUpUnannounced', checked === true)}
+                              />
+                              <label htmlFor={`trainer-showed-${trainer.id}`} className="text-muted-foreground cursor-pointer">
+                                Doch erschienen
+                              </label>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5">
+                            <Checkbox
+                              id={`trainer-late-${trainer.id}`}
+                              checked={exception.isLate}
+                              onCheckedChange={(checked) => updateTrainerException(trainer.id, 'isLate', checked === true)}
+                            />
+                            <label htmlFor={`trainer-late-${trainer.id}`} className="text-muted-foreground flex items-center gap-1 cursor-pointer">
+                              <Timer className="h-3 w-3" />
+                              Verspätet
+                            </label>
+                          </div>
                         </div>
                       </div>
                     );
@@ -377,16 +457,20 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                 </div>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {session.trainers.map((trainer) => (
-                  <Badge 
-                    key={trainer.id} 
-                    variant={trainer.cancelled ? "outline" : "secondary"}
-                    className={trainer.cancelled ? "line-through text-muted-foreground" : ""}
-                  >
-                    {trainer.name}
-                    {trainer.cancelled && " (abgesagt)"}
-                  </Badge>
+                  <div key={trainer.id} className="flex items-center gap-2">
+                    {trainer.confirmed === true ? (
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                    ) : trainer.confirmed === false ? (
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    ) : (
+                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span className={trainer.cancelled ? 'line-through text-muted-foreground' : ''}>
+                      {trainer.name}
+                    </span>
+                  </div>
                 ))}
               </div>
             )}
@@ -398,17 +482,13 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
         <>
           {/* Quick Actions */}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={markAllPresent} variant="outline" className="h-10">
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Alle anwesend
-            </Button>
             <Button
-              onClick={saveAttendance}
+              onClick={saveExceptions}
               disabled={!hasChanges || isSaving}
               className="h-10"
             >
               <Save className="h-4 w-4 mr-2" />
-              {isSaving ? 'Speichern...' : 'Speichern'}
+              {isSaving ? 'Speichern...' : 'Änderungen speichern'}
             </Button>
           </div>
 
@@ -424,70 +504,88 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                   <CardDescription>{athletes.length} Athleten</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {athletes.map((athlete) => {
-                      const currentData = attendanceData.get(athlete.athleteId) || { status: '', note: '' };
+                      const exception = exceptionData.get(athlete.athleteId) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
                       
                       return (
                         <div
                           key={athlete.athleteId}
-                          className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border ${
-                            athlete.hasCancellation ? 'bg-amber-50 dark:bg-amber-900/20' : ''
+                          className={`flex flex-col gap-3 p-3 rounded-lg border ${
+                            athlete.confirmed === false ? 'bg-red-50 dark:bg-red-900/20' : 
+                            athlete.confirmed === true ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-muted/30'
                           }`}
                         >
-                          <div className="flex items-center gap-3">
-                            <div>
-                              <p className="font-medium">{athlete.name}</p>
-                              {athlete.hasCancellation && (
-                                <div className="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  <span>Abgemeldet</span>
-                                  {athlete.cancellationNote && (
-                                    <span className="text-muted-foreground">
-                                      : {athlete.cancellationNote}
-                                    </span>
-                                  )}
-                                </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {/* Confirmation Status Icon */}
+                              {athlete.confirmed === true ? (
+                                <CheckCircle className="h-5 w-5 text-emerald-600" />
+                              ) : athlete.confirmed === false ? (
+                                <XCircle className="h-5 w-5 text-red-600" />
+                              ) : (
+                                <HelpCircle className="h-5 w-5 text-muted-foreground" />
                               )}
+                              <p className="font-medium">{athlete.name}</p>
                             </div>
+                            <Badge 
+                              variant="outline" 
+                              className={
+                                athlete.confirmed === true 
+                                  ? "text-emerald-600 border-emerald-300 bg-emerald-100 dark:bg-emerald-900/40" 
+                                  : athlete.confirmed === false 
+                                    ? "text-red-600 border-red-300 bg-red-100 dark:bg-red-900/40"
+                                    : "text-muted-foreground"
+                              }
+                            >
+                              {athlete.confirmed === true ? 'Kommt' : athlete.confirmed === false ? 'Kommt nicht' : 'Ausstehend'}
+                            </Badge>
                           </div>
                           
-                          <div className="flex items-center gap-2">
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant={currentData.status === 'PRESENT' ? 'default' : 'outline'}
-                                className={currentData.status === 'PRESENT' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-                                onClick={() => updateAttendance(athlete.athleteId, 'PRESENT')}
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={currentData.status === 'ABSENT_EXCUSED' ? 'default' : 'outline'}
-                                className={currentData.status === 'ABSENT_EXCUSED' ? 'bg-amber-600 hover:bg-amber-700' : ''}
-                                onClick={() => updateAttendance(athlete.athleteId, 'ABSENT_EXCUSED')}
-                                title="Entschuldigt abwesend"
-                              >
-                                <Clock className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={currentData.status === 'ABSENT_UNEXCUSED' ? 'default' : 'outline'}
-                                className={currentData.status === 'ABSENT_UNEXCUSED' ? 'bg-red-600 hover:bg-red-700' : ''}
-                                onClick={() => updateAttendance(athlete.athleteId, 'ABSENT_UNEXCUSED')}
-                                title="Unentschuldigt abwesend"
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
+                          {/* Exception checkboxes */}
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            {athlete.confirmed === true && (
+                              <div className="flex items-center gap-1.5">
+                                <Checkbox
+                                  id={`noshow-${athlete.athleteId}`}
+                                  checked={exception.noShow}
+                                  onCheckedChange={(checked) => updateAthleteException(athlete.athleteId, 'noShow', checked === true)}
+                                />
+                                <label htmlFor={`noshow-${athlete.athleteId}`} className="text-muted-foreground cursor-pointer">
+                                  Nicht erschienen
+                                </label>
+                              </div>
+                            )}
+                            {athlete.confirmed === false && (
+                              <div className="flex items-center gap-1.5">
+                                <Checkbox
+                                  id={`showed-${athlete.athleteId}`}
+                                  checked={exception.showedUpUnannounced}
+                                  onCheckedChange={(checked) => updateAthleteException(athlete.athleteId, 'showedUpUnannounced', checked === true)}
+                                />
+                                <label htmlFor={`showed-${athlete.athleteId}`} className="text-muted-foreground cursor-pointer">
+                                  Doch erschienen
+                                </label>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5">
+                              <Checkbox
+                                id={`late-${athlete.athleteId}`}
+                                checked={exception.isLate}
+                                onCheckedChange={(checked) => updateAthleteException(athlete.athleteId, 'isLate', checked === true)}
+                              />
+                              <label htmlFor={`late-${athlete.athleteId}`} className="text-muted-foreground flex items-center gap-1 cursor-pointer">
+                                <Timer className="h-3 w-3" />
+                                Verspätet
+                              </label>
                             </div>
-                            <div className="relative">
+                            <div className="relative flex-1 min-w-[120px]">
                               <MessageSquare className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input
                                 placeholder="Notiz"
-                                value={currentData.note}
-                                onChange={(e) => updateNote(athlete.athleteId, e.target.value)}
-                                className="pl-8 w-32 md:w-40"
+                                value={exception.note}
+                                onChange={(e) => updateAthleteNote(athlete.athleteId, e.target.value)}
+                                className="pl-8 h-8"
                               />
                             </div>
                           </div>
@@ -504,7 +602,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           {hasChanges && (
             <div className="fixed bottom-4 left-4 right-4 sm:static sm:flex sm:justify-end">
               <Button
-                onClick={saveAttendance}
+                onClick={saveExceptions}
                 disabled={isSaving}
                 className="w-full sm:w-auto h-12"
                 size="lg"

@@ -16,6 +16,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Users,
+  Mail,
 } from 'lucide-react';
 
 interface SystemSettings {
@@ -27,6 +28,11 @@ interface SystemSettings {
   absenceAlertCooldownDays: number;
   absenceAlertEnabled: boolean;
   attendanceConfirmationMode: string;
+  // Email notification settings
+  emailRegistrationNotification: boolean;
+  emailApprovalNotification: boolean;
+  emailAbsenceAlert: boolean;
+  emailSessionCancellation: boolean;
 }
 
 export default function AdminSettingsPage() {
@@ -302,6 +308,110 @@ export default function AdminSettingsPage() {
                 Wartezeit zwischen Warnungen für denselben Athleten
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Notification Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-blue-500" />
+            <CardTitle>E-Mail-Benachrichtigungen</CardTitle>
+          </div>
+          <CardDescription>
+            Steuern Sie, welche automatischen E-Mail-Benachrichtigungen vom System gesendet werden
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="emailRegistration">Neue Registrierungen</Label>
+                <p className="text-sm text-muted-foreground">
+                  Admins werden per E-Mail benachrichtigt, wenn sich ein neuer Athlet registriert
+                </p>
+              </div>
+              <Switch
+                id="emailRegistration"
+                checked={settings?.emailRegistrationNotification ?? true}
+                onCheckedChange={(checked: boolean) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    emailRegistrationNotification: checked,
+                  } : null)
+                }
+              />
+            </div>
+
+            <div className="border-t" />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="emailApproval">Freischaltung</Label>
+                <p className="text-sm text-muted-foreground">
+                  Athleten werden per E-Mail benachrichtigt, wenn ihr Account freigeschaltet wird
+                </p>
+              </div>
+              <Switch
+                id="emailApproval"
+                checked={settings?.emailApprovalNotification ?? true}
+                onCheckedChange={(checked: boolean) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    emailApprovalNotification: checked,
+                  } : null)
+                }
+              />
+            </div>
+
+            <div className="border-t" />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="emailAbsence">Abwesenheitswarnungen</Label>
+                <p className="text-sm text-muted-foreground">
+                  Admins werden per E-Mail benachrichtigt, wenn ein Athlet den Abwesenheits-Schwellenwert überschreitet
+                </p>
+              </div>
+              <Switch
+                id="emailAbsence"
+                checked={settings?.emailAbsenceAlert ?? true}
+                onCheckedChange={(checked: boolean) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    emailAbsenceAlert: checked,
+                  } : null)
+                }
+              />
+            </div>
+
+            <div className="border-t" />
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="emailCancellation">Trainingsabsagen</Label>
+                <p className="text-sm text-muted-foreground">
+                  Athleten werden per E-Mail benachrichtigt, wenn ein Training abgesagt wird
+                </p>
+              </div>
+              <Switch
+                id="emailCancellation"
+                checked={settings?.emailSessionCancellation ?? true}
+                onCheckedChange={(checked: boolean) =>
+                  setSettings(settings ? {
+                    ...settings,
+                    emailSessionCancellation: checked,
+                  } : null)
+                }
+              />
+            </div>
+
+            <div className="border-t" />
+
+            <p className="text-sm text-muted-foreground italic">
+              Hinweis: Passwort-Zurücksetzen E-Mails werden immer gesendet, da sie vom Benutzer angefordert werden.
+            </p>
           </div>
         </CardContent>
       </Card>

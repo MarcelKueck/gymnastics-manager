@@ -1,4 +1,12 @@
 import { DayOfWeek, RecurrenceInterval } from '@prisma/client';
+import {
+  DAY_OF_WEEK_TO_NUMBER,
+  toUTCMidnight,
+  getUTCDayOfWeek,
+  addUTCDays,
+  compareUTCDates,
+  formatUTCDate,
+} from '@/lib/utils/date';
 
 export interface VirtualSession {
   // If this is a stored session, this will be the ID
@@ -52,16 +60,6 @@ interface StoredSessionData {
   _count: { attendanceRecords: number };
 }
 
-const DAY_TO_NUMBER: Record<DayOfWeek, number> = {
-  SUNDAY: 0,
-  MONDAY: 1,
-  TUESDAY: 2,
-  WEDNESDAY: 3,
-  THURSDAY: 4,
-  FRIDAY: 5,
-  SATURDAY: 6,
-};
-
 /**
  * Generate virtual sessions for a date range by combining:
  * 1. Calculated dates from recurring trainings
@@ -75,39 +73,42 @@ export function generateVirtualSessions(
 ): VirtualSession[] {
   const sessions: VirtualSession[] = [];
   
+  // Normalize dates to UTC midnight for consistent comparison
+  const normalizedStart = toUTCMidnight(startDate);
+  const normalizedEnd = toUTCMidnight(endDate);
+  
   // Create a map of stored sessions by recurringTrainingId + date
   const storedSessionMap = new Map<string, StoredSessionData>();
   for (const session of storedSessions) {
-    const key = `${session.recurringTrainingId}_${session.date.toISOString().split('T')[0]}`;
+    const key = `${session.recurringTrainingId}_${formatUTCDate(session.date)}`;
     storedSessionMap.set(key, session);
   }
 
   for (const training of recurringTrainings) {
     if (!training.isActive) continue;
     
-    // Check validity period
-    const effectiveStart = training.validFrom && training.validFrom > startDate 
-      ? training.validFrom 
-      : startDate;
-    const effectiveEnd = training.validUntil && training.validUntil < endDate
-      ? training.validUntil
-      : endDate;
+    // Check validity period - normalize to UTC midnight
+    const effectiveStart = training.validFrom && compareUTCDates(training.validFrom, normalizedStart) > 0
+      ? toUTCMidnight(training.validFrom) 
+      : normalizedStart;
+    const effectiveEnd = training.validUntil && compareUTCDates(training.validUntil, normalizedEnd) < 0
+      ? toUTCMidnight(training.validUntil)
+      : normalizedEnd;
     
-    if (effectiveStart > effectiveEnd) continue;
+    if (compareUTCDates(effectiveStart, effectiveEnd) > 0) continue;
 
-    const targetDay = DAY_TO_NUMBER[training.dayOfWeek];
-    const currentDate = new Date(effectiveStart);
-    currentDate.setHours(0, 0, 0, 0);
-
-    // Find first occurrence of this day
-    const currentDay = currentDate.getDay();
-    let daysToAdd = targetDay - currentDay;
+    const targetDay = DAY_OF_WEEK_TO_NUMBER[training.dayOfWeek];
+    
+    // Find first occurrence of this day on or after effectiveStart
+    let currentDate = new Date(effectiveStart);
+    const currentDayNumber = getUTCDayOfWeek(currentDate);
+    let daysToAdd = targetDay - currentDayNumber;
     if (daysToAdd < 0) daysToAdd += 7;
-    currentDate.setDate(currentDate.getDate() + daysToAdd);
+    currentDate = addUTCDays(currentDate, daysToAdd);
 
     // Generate sessions for each occurrence
-    while (currentDate <= effectiveEnd) {
-      const dateKey = `${training.id}_${currentDate.toISOString().split('T')[0]}`;
+    while (compareUTCDates(currentDate, effectiveEnd) <= 0) {
+      const dateKey = `${training.id}_${formatUTCDate(currentDate)}`;
       const storedSession = storedSessionMap.get(dateKey);
 
       const virtualSession: VirtualSession = {
@@ -133,7 +134,7 @@ export function generateVirtualSessions(
 
       // Move to next occurrence
       const increment = training.recurrence === 'BIWEEKLY' ? 14 : 7;
-      currentDate.setDate(currentDate.getDate() + increment);
+      currentDate = addUTCDays(currentDate, increment);
     }
   }
 
@@ -147,17 +148,19 @@ export function generateVirtualSessions(
   return sessions;
 }
 
+
 /**
  * Generate a unique virtual ID for sessions that aren't stored yet
  * Format: virtual_{recurringTrainingId}_{YYYY-MM-DD}
  */
 export function getVirtualSessionId(recurringTrainingId: string, date: Date): string {
-  const dateStr = date.toISOString().split('T')[0];
+  const dateStr = formatUTCDate(date);
   return `virtual_${recurringTrainingId}_${dateStr}`;
 }
 
 /**
- * Parse a virtual session ID to get the recurring training ID and date
+ * Parse a virtual session ID to get the recurring training ID and date.
+ * Returns the date as UTC midnight to match how dates are stored.
  */
 export function parseVirtualSessionId(virtualId: string): { recurringTrainingId: string; date: Date } | null {
   if (!virtualId.startsWith('virtual_')) return null;
@@ -166,10 +169,22 @@ export function parseVirtualSessionId(virtualId: string): { recurringTrainingId:
   if (parts.length < 3) return null;
   
   const recurringTrainingId = parts[1];
-  const dateStr = parts.slice(2).join('_'); // Handle IDs with underscores
-  const date = new Date(dateStr);
+  // The date part is after "virtual_" and the recurringTrainingId
+  // Format: virtual_{id}_{YYYY-MM-DD}
+  const dateStr = parts[2]; // Just the YYYY-MM-DD part
   
-  if (isNaN(date.getTime())) return null;
+  // Parse as UTC date to avoid timezone issues
+  const dateParts = dateStr.split('-');
+  if (dateParts.length !== 3) return null;
+  
+  const year = parseInt(dateParts[0], 10);
+  const month = parseInt(dateParts[1], 10) - 1; // Month is 0-indexed
+  const day = parseInt(dateParts[2], 10);
+  
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+  
+  // Create UTC midnight date
+  const date = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
   
   return { recurringTrainingId, date };
 }

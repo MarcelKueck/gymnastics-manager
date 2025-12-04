@@ -4,6 +4,19 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { parseVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
+// Parse the new group-based ID format: virtual_{rtId}_{date}_group_{groupId}
+function parseGroupSessionId(id: string): { recurringTrainingId: string; date: Date; groupId: string } | null {
+  const groupMatch = id.match(/^virtual_(.+?)_(\d{4}-\d{2}-\d{2})_group_(.+)$/);
+  if (groupMatch) {
+    return {
+      recurringTrainingId: groupMatch[1],
+      date: new Date(groupMatch[2]),
+      groupId: groupMatch[3],
+    };
+  }
+  return null;
+}
+
 // POST - Mark trainer attendance (admin only)
 export async function POST(request: NextRequest) {
   try {
@@ -43,13 +56,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle virtual session IDs - create the actual session first
-    const virtualInfo = parseVirtualSessionId(sessionId);
-    if (virtualInfo) {
+    let trainingGroupId: string | null = null;
+    
+    // Try group-based ID first
+    const groupInfo = parseGroupSessionId(sessionId);
+    if (groupInfo) {
+      trainingGroupId = groupInfo.groupId;
+      
       // Check if session already exists
       const existingSession = await prisma.trainingSession.findFirst({
         where: {
-          recurringTrainingId: virtualInfo.recurringTrainingId,
-          date: virtualInfo.date,
+          recurringTrainingId: groupInfo.recurringTrainingId,
+          date: groupInfo.date,
         },
       });
 
@@ -58,7 +76,7 @@ export async function POST(request: NextRequest) {
       } else {
         // Get recurring training details
         const recurringTraining = await prisma.recurringTraining.findUnique({
-          where: { id: virtualInfo.recurringTrainingId },
+          where: { id: groupInfo.recurringTrainingId },
         });
 
         if (!recurringTraining) {
@@ -68,8 +86,8 @@ export async function POST(request: NextRequest) {
         // Create the session
         const newSession = await prisma.trainingSession.create({
           data: {
-            recurringTrainingId: virtualInfo.recurringTrainingId,
-            date: virtualInfo.date,
+            recurringTrainingId: groupInfo.recurringTrainingId,
+            date: groupInfo.date,
             dayOfWeek: recurringTraining.dayOfWeek,
             startTime: recurringTraining.startTime,
             endTime: recurringTraining.endTime,
@@ -77,22 +95,58 @@ export async function POST(request: NextRequest) {
         });
         sessionId = newSession.id;
       }
+    } else {
+      // Try legacy virtual session ID
+      const virtualInfo = parseVirtualSessionId(sessionId);
+      if (virtualInfo) {
+        // Check if session already exists
+        const existingSession = await prisma.trainingSession.findFirst({
+          where: {
+            recurringTrainingId: virtualInfo.recurringTrainingId,
+            date: virtualInfo.date,
+          },
+        });
+
+        if (existingSession) {
+          sessionId = existingSession.id;
+        } else {
+          // Get recurring training details
+          const recurringTraining = await prisma.recurringTraining.findUnique({
+            where: { id: virtualInfo.recurringTrainingId },
+          });
+
+          if (!recurringTraining) {
+            return NextResponse.json({ error: 'Wiederkehrendes Training nicht gefunden' }, { status: 404 });
+          }
+
+          // Create the session
+          const newSession = await prisma.trainingSession.create({
+            data: {
+              recurringTrainingId: virtualInfo.recurringTrainingId,
+              date: virtualInfo.date,
+              dayOfWeek: recurringTraining.dayOfWeek,
+              startTime: recurringTraining.startTime,
+              endTime: recurringTraining.endTime,
+            },
+          });
+          sessionId = newSession.id;
+        }
+      }
     }
 
     // Upsert attendance records for each trainer
     const results = await Promise.all(
-      attendance.map(async (record: { trainerId: string; status: string; notes?: string }) => {
+      attendance.map(async (record: { trainerId: string; status: string; notes?: string; isLate?: boolean }) => {
         if (!record.trainerId || !record.status) {
           return null;
         }
 
-        // Check if record exists
-        const existing = await prisma.trainerAttendanceRecord.findUnique({
+        // Check if record exists - with or without groupId
+        const existing = await prisma.trainerAttendanceRecord.findFirst({
           where: {
-            trainerId_trainingSessionId: {
-              trainerId: record.trainerId,
-              trainingSessionId: sessionId,
-            },
+            trainerId: record.trainerId,
+            trainingSessionId: sessionId,
+            trainingGroupId: trainingGroupId,
           },
         });
 
@@ -103,6 +157,7 @@ export async function POST(request: NextRequest) {
             data: {
               status: record.status as 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED',
               notes: record.notes || null,
+              isLate: record.isLate ?? false,
               lastModifiedBy: adminProfile.id,
               lastModifiedAt: new Date(),
             },
@@ -113,9 +168,11 @@ export async function POST(request: NextRequest) {
             data: {
               trainerId: record.trainerId,
               trainingSessionId: sessionId,
+              trainingGroupId: trainingGroupId,
               status: record.status as 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED',
               markedBy: adminProfile.id,
               notes: record.notes || null,
+              isLate: record.isLate ?? false,
             },
           });
         }

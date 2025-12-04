@@ -46,6 +46,11 @@ export async function PUT(request: NextRequest) {
       absenceAlertCooldownDays: body.absenceAlertCooldownDays,
       absenceAlertEnabled: body.absenceAlertEnabled,
       attendanceConfirmationMode: body.attendanceConfirmationMode,
+      // Email notification settings
+      emailRegistrationNotification: body.emailRegistrationNotification,
+      emailApprovalNotification: body.emailApprovalNotification,
+      emailAbsenceAlert: body.emailAbsenceAlert,
+      emailSessionCancellation: body.emailSessionCancellation,
     },
     create: {
       id: 'default',
@@ -56,6 +61,11 @@ export async function PUT(request: NextRequest) {
       absenceAlertCooldownDays: body.absenceAlertCooldownDays ?? 14,
       absenceAlertEnabled: body.absenceAlertEnabled ?? true,
       attendanceConfirmationMode: body.attendanceConfirmationMode ?? 'AUTO_CONFIRM',
+      // Email notification settings
+      emailRegistrationNotification: body.emailRegistrationNotification ?? true,
+      emailApprovalNotification: body.emailApprovalNotification ?? true,
+      emailAbsenceAlert: body.emailAbsenceAlert ?? true,
+      emailSessionCancellation: body.emailSessionCancellation ?? true,
     },
   });
 

@@ -36,30 +36,35 @@ interface SessionTrainer {
   id: string;
   name: string;
   cancelled: boolean;
-  confirmed?: boolean;
+  confirmed: boolean;
 }
 
-interface TrainingSession {
+interface GroupSession {
   id: string;
+  sessionId: string;
+  recurringTrainingId: string;
+  trainingGroupId: string;
+  groupName: string;
   date: string;
-  name: string;
+  trainingName: string;
   startTime: string;
   endTime: string;
-  groups: string[];
-  attendanceMarked: boolean;
   isCancelled: boolean;
+  attendanceMarked: boolean;
   expectedAthletes: number;
+  confirmedAthletes: number;
+  declinedAthletes: number;
   presentCount: number;
-  equipment?: string | null;
-  trainers?: SessionTrainer[];
-  trainerCancelled?: boolean;
+  equipment: string | null;
+  trainers: SessionTrainer[];
+  trainerCancelled: boolean;
   trainerCancellationId?: string;
-  confirmedAthletes?: number;
-  declinedAthletes?: number;
+  trainerConfirmed: boolean;
+  isVirtual: boolean;
 }
 
 export default function TrainerSessionsPage() {
-  const [sessions, setSessions] = useState<TrainingSession[]>([]);
+  const [sessions, setSessions] = useState<GroupSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
@@ -188,7 +193,7 @@ export default function TrainerSessionsPage() {
           ) : (
             <div className="space-y-3">
               {sessions.map((session) => (
-                <SessionCard key={session.id} session={session} onRefresh={fetchSessions} />
+                <GroupSessionCard key={session.id} session={session} onRefresh={fetchSessions} />
               ))}
             </div>
           )}
@@ -231,7 +236,8 @@ export default function TrainerSessionsPage() {
                               : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
                           }`}
                         >
-                          <div className="font-medium truncate">{session.name}</div>
+                          <div className="font-medium truncate">{session.groupName}</div>
+                          <div className="text-[10px] opacity-70">{session.trainingName}</div>
                           <div>{session.startTime}</div>
                         </div>
                       </Link>
@@ -247,7 +253,7 @@ export default function TrainerSessionsPage() {
   );
 }
 
-function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefresh: () => void }) {
+function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRefresh: () => void }) {
   const sessionDate = new Date(session.date);
   const isPast = sessionDate < new Date();
   const [isUndoing, setIsUndoing] = useState(false);
@@ -260,8 +266,9 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
   const isAdmin = authSession?.user?.activeRole === 'ADMIN';
   const currentTrainerId = authSession?.user?.trainerProfileId;
   
-  // Find current trainer's confirmation status
+  // Find current trainer in this group's trainers
   const currentTrainer = session.trainers?.find(t => t.id === currentTrainerId);
+  const isTrainerInGroup = !!currentTrainer;
   const isTrainerConfirmed = currentTrainer?.confirmed ?? false;
 
   const handleConfirmTrainer = async (e: React.MouseEvent, confirmed: boolean) => {
@@ -273,7 +280,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: session.id,
+          sessionId: session.id, // Now includes group ID
           confirmed,
         }),
       });
@@ -318,7 +325,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
     
     setIsCancellingSession(true);
     try {
-      const res = await fetch(`/api/trainer/sessions/${session.id}/cancel`, {
+      const res = await fetch(`/api/trainer/sessions/${session.sessionId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
@@ -342,7 +349,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
     
     setIsCancellingSession(true);
     try {
-      const res = await fetch(`/api/trainer/sessions/${session.id}/cancel`, {
+      const res = await fetch(`/api/trainer/sessions/${session.sessionId}/cancel`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -360,7 +367,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
   const handleSaveEquipment = async () => {
     setIsSavingEquipment(true);
     try {
-      const res = await fetch(`/api/trainer/sessions/${session.id}`, {
+      const res = await fetch(`/api/trainer/sessions/${session.sessionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ equipment: equipmentValue }),
@@ -378,7 +385,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
     }
   };
 
-  // Get confirmed trainers
+  // Get confirmed trainers for this group
   const confirmedTrainers = session.trainers?.filter(t => t.confirmed && !t.cancelled) || [];
 
   return (
@@ -402,7 +409,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{session.name}</h3>
+                  <h3 className="font-semibold">{session.groupName}</h3>
                   {session.isCancelled && (
                     <Badge variant="destructive">Abgesagt</Badge>
                   )}
@@ -411,15 +418,8 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {session.startTime} - {session.endTime}
+                  {session.trainingName} • {session.startTime} - {session.endTime}
                 </p>
-                <div className="flex items-center gap-2 mt-1">
-                  {session.groups.map((group) => (
-                    <Badge key={group} variant="secondary" className="text-xs">
-                      {group}
-                    </Badge>
-                  ))}
-                </div>
                 {session.trainers && session.trainers.length > 0 && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                     <Users className="h-3 w-3" />
@@ -494,11 +494,11 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                       className="text-destructive hover:text-destructive"
                     >
                       <XCircle className="h-4 w-4 mr-1" />
-                      {isCancellingSession ? '...' : 'Training absagen'}
+                      {isCancellingSession ? '...' : 'Absagen'}
                     </Button>
                   )}
-                  {/* Trainer confirmation buttons */}
-                  {!isAdmin && !isPast && !session.trainerCancelled && (
+                  {/* Trainer confirmation buttons (only if trainer is assigned to this group) */}
+                  {isTrainerInGroup && !isAdmin && !isPast && !session.trainerCancelled && (
                     <div className="flex gap-1">
                       <Button
                         variant={isTrainerConfirmed ? "default" : "outline"}
@@ -527,7 +527,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                       disabled={isUndoing}
                     >
                       <Undo2 className="h-4 w-4 mr-1" />
-                      {isUndoing ? 'Wird zurückgenommen...' : 'Zurücknehmen'}
+                      {isUndoing ? '...' : 'Zurück'}
                     </Button>
                   )}
                   <div className="flex flex-col items-end gap-0.5">
@@ -536,14 +536,12 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                       <span className="text-sm">
                         {session.attendanceMarked
                           ? `${session.presentCount}/${session.expectedAthletes}`
-                          : session.confirmedAthletes !== undefined
-                            ? `${session.confirmedAthletes}/${session.expectedAthletes} bestätigt`
-                            : session.expectedAthletes}
+                          : `${session.confirmedAthletes}/${session.expectedAthletes} bestätigt`}
                       </span>
                     </div>
                     {confirmedTrainers.length > 0 && (
                       <span className="text-xs text-emerald-600">
-                        {confirmedTrainers.length} Trainer bestätigt
+                        {confirmedTrainers.length} Trainer ✓
                       </span>
                     )}
                   </div>
@@ -553,7 +551,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                     ) : (
                       <Badge variant="destructive">
                         <Clock className="h-3 w-3 mr-1" />
-                        Anwesenheit fehlt
+                        Anwesenheit
                       </Badge>
                     )
                   ) : (
@@ -569,7 +567,7 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                   disabled={isCancellingSession}
                 >
                   <Undo2 className="h-4 w-4 mr-1" />
-                  Absage zurücknehmen
+                  Zurück
                 </Button>
               )}
             </div>
@@ -584,7 +582,6 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
             <DialogTitle>Geräte bearbeiten</DialogTitle>
             <DialogDescription>
               Geben Sie die Geräte für diese Trainingseinheit ein (kommagetrennt).
-              Diese werden als Labels für die Gruppen angezeigt.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -596,9 +593,6 @@ function SessionCard({ session, onRefresh }: { session: TrainingSession; onRefre
                 value={equipmentValue}
                 onChange={(e) => setEquipmentValue(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Beispiel: Reck, Barren, Boden, Sprung, Balken
-              </p>
             </div>
             {equipmentValue && (
               <div className="space-y-2">

@@ -4,6 +4,35 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateVirtualSessions, getVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
+interface GroupSessionData {
+  id: string; // Format: sessionId_groupId or virtual_recurringId_date_groupId
+  sessionId: string;
+  recurringTrainingId: string;
+  trainingGroupId: string;
+  groupName: string;
+  date: string;
+  trainingName: string;
+  startTime: string;
+  endTime: string;
+  isCancelled: boolean;
+  attendanceMarked: boolean;
+  expectedAthletes: number;
+  confirmedAthletes: number;
+  declinedAthletes: number;
+  presentCount: number;
+  equipment: string | null;
+  trainers: {
+    id: string;
+    name: string;
+    cancelled: boolean;
+    confirmed: boolean;
+  }[];
+  trainerCancelled: boolean;
+  trainerCancellationId?: string;
+  trainerConfirmed: boolean;
+  isVirtual: boolean;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -61,7 +90,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch recurring trainings with their groups (filtered for non-admin trainers)
+    // Fetch recurring trainings with their groups
     const recurringTrainings = await prisma.recurringTraining.findMany({
       where: { 
         isActive: true,
@@ -90,7 +119,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Fetch any stored sessions in this date range (sessions with modifications)
+    // Fetch any stored sessions in this date range
     const storedSessions = await prisma.trainingSession.findMany({
       where: {
         date: {
@@ -107,6 +136,12 @@ export async function GET(request: NextRequest) {
           where: { isActive: true },
         },
         sessionConfirmations: true,
+        attendanceRecords: {
+          select: {
+            trainingGroupId: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -118,25 +153,6 @@ export async function GET(request: NextRequest) {
       ])
     );
 
-    // Create a map of recurring training ID to trainers
-    const trainersByRecurringId = new Map<string, { id: string; name: string; cancelled: boolean }[]>();
-    for (const rt of recurringTrainings) {
-      const trainers: { id: string; name: string; cancelled: boolean }[] = [];
-      for (const group of rt.trainingGroups) {
-        for (const assignment of group.trainerAssignments) {
-          const trainerId = assignment.trainerId;
-          if (!trainers.find(t => t.id === trainerId)) {
-            trainers.push({
-              id: trainerId,
-              name: `${assignment.trainer.user.firstName} ${assignment.trainer.user.lastName}`,
-              cancelled: false,
-            });
-          }
-        }
-      }
-      trainersByRecurringId.set(rt.id, trainers);
-    }
-
     // Generate virtual sessions
     const virtualSessions = generateVirtualSessions(
       recurringTrainings,
@@ -145,61 +161,96 @@ export async function GET(request: NextRequest) {
       endDate
     );
 
-    // Transform to API response format
-    const data = virtualSessions.map((vs) => {
-      const expectedAthletes = vs.groups.reduce((sum, g) => sum + g.athleteCount, 0);
+    // Transform to GROUP-BASED API response format (one entry per group)
+    const data: GroupSessionData[] = [];
+
+    for (const vs of virtualSessions) {
       const dateKey = `${vs.recurringTrainingId}_${vs.date.toISOString().split('T')[0]}`;
       const stored = storedSessionsByKey.get(dateKey);
-      
-      // Get trainers for this session with their cancellation status
-      const baseTrainers = trainersByRecurringId.get(vs.recurringTrainingId) || [];
+      const sessionId = vs.id || getVirtualSessionId(vs.recurringTrainingId, vs.date);
+
+      // Get trainer cancellations for this session
       const trainerCancellationIds = new Set(
         stored?.trainerCancellations?.map(tc => tc.trainerId) || []
       );
-      const trainers = baseTrainers.map(t => ({
-        ...t,
-        cancelled: trainerCancellationIds.has(t.id),
-      }));
-      
-      // Check if current trainer has cancelled
-      const trainerCancelled = trainerProfileId ? trainerCancellationIds.has(trainerProfileId) : false;
-      const trainerCancellation = stored?.trainerCancellations?.find(tc => tc.trainerId === trainerProfileId);
-      
-      // Calculate confirmed athletes count
-      const confirmedAthletes = stored?.sessionConfirmations?.filter(c => c.athleteId && c.confirmed).length || 0;
-      const declinedAthletes = stored?.sessionConfirmations?.filter(c => c.athleteId && !c.confirmed).length || 0;
-      
-      // Get confirmed trainers
+
+      // Get confirmed trainers for this session
       const confirmedTrainerIds = new Set(
         stored?.sessionConfirmations?.filter(c => c.trainerId && c.confirmed).map(c => c.trainerId) || []
       );
-      const trainersWithConfirmation = trainers.map(t => ({
-        ...t,
-        confirmed: confirmedTrainerIds.has(t.id) || false,
-      }));
-      
-      return {
-        // Use stored ID if exists, otherwise generate virtual ID
-        id: vs.id || getVirtualSessionId(vs.recurringTrainingId, vs.date),
-        recurringTrainingId: vs.recurringTrainingId,
-        date: vs.date.toISOString(),
-        name: vs.trainingName,
-        startTime: vs.startTime,
-        endTime: vs.endTime,
-        groups: vs.groups.map(g => g.name),
-        attendanceMarked: vs.hasAttendance,
-        isCancelled: vs.isCancelled,
-        expectedAthletes,
-        presentCount: 0, // Will be filled from stored session if exists
-        isVirtual: vs.id === null, // Flag to indicate if this is a calculated session
-        equipment: stored?.equipment || null,
-        trainers: trainersWithConfirmation,
-        trainerCancelled,
-        trainerCancellationId: trainerCancellation?.id,
-        trainerCancellationReason: trainerCancellation?.reason,
-        confirmedAthletes,
-        declinedAthletes,
-      };
+
+      // Create one entry per group
+      for (const group of vs.groups) {
+        // Get trainers for this specific group
+        const recurringTraining = recurringTrainings.find(rt => rt.id === vs.recurringTrainingId);
+        const trainingGroup = recurringTraining?.trainingGroups.find(g => g.id === group.id);
+        
+        const groupTrainers = trainingGroup?.trainerAssignments.map(ta => ({
+          id: ta.trainerId,
+          name: `${ta.trainer.user.firstName} ${ta.trainer.user.lastName}`,
+          cancelled: trainerCancellationIds.has(ta.trainerId),
+          confirmed: confirmedTrainerIds.has(ta.trainerId),
+        })) || [];
+
+        // Check if current trainer is cancelled for this session
+        const trainerCancelled = trainerProfileId ? trainerCancellationIds.has(trainerProfileId) : false;
+        const trainerCancellation = stored?.trainerCancellations?.find(tc => tc.trainerId === trainerProfileId);
+        
+        // Check if current trainer is confirmed
+        const trainerConfirmed = trainerProfileId ? confirmedTrainerIds.has(trainerProfileId) : false;
+
+        // Count confirmations for this specific group
+        const groupConfirmations = stored?.sessionConfirmations?.filter(
+          c => c.athleteId && c.trainingGroupId === group.id
+        ) || [];
+        const confirmedAthletes = groupConfirmations.filter(c => c.confirmed).length;
+        const declinedAthletes = groupConfirmations.filter(c => !c.confirmed).length;
+
+        // Count attendance for this specific group
+        const groupAttendance = stored?.attendanceRecords?.filter(
+          r => r.trainingGroupId === group.id
+        ) || [];
+        const presentCount = groupAttendance.filter(r => r.status === 'PRESENT').length;
+        const hasAttendance = groupAttendance.length > 0;
+
+        // Create unique ID for this group session
+        const groupSessionId = vs.id 
+          ? `${vs.id}_group_${group.id}`
+          : `${getVirtualSessionId(vs.recurringTrainingId, vs.date)}_group_${group.id}`;
+
+        data.push({
+          id: groupSessionId,
+          sessionId,
+          recurringTrainingId: vs.recurringTrainingId,
+          trainingGroupId: group.id,
+          groupName: group.name,
+          date: vs.date.toISOString(),
+          trainingName: vs.trainingName,
+          startTime: vs.startTime,
+          endTime: vs.endTime,
+          isCancelled: vs.isCancelled,
+          attendanceMarked: hasAttendance,
+          expectedAthletes: group.athleteCount,
+          confirmedAthletes,
+          declinedAthletes,
+          presentCount,
+          equipment: stored?.equipment || null,
+          trainers: groupTrainers,
+          trainerCancelled,
+          trainerCancellationId: trainerCancellation?.id,
+          trainerConfirmed,
+          isVirtual: vs.id === null,
+        });
+      }
+    }
+
+    // Sort by date, then time, then group name
+    data.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      if (dateA.getTime() !== dateB.getTime()) return dateA.getTime() - dateB.getTime();
+      if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime);
+      return a.groupName.localeCompare(b.groupName);
     });
 
     return NextResponse.json({ data });

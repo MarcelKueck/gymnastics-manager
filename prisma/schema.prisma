@@ -232,9 +232,12 @@ model TrainingGroup {
   sortOrder           Int               @default(0)
 
   // Relationships
-  athleteAssignments RecurringTrainingAthleteAssignment[]
-  trainerAssignments RecurringTrainingTrainerAssignment[]
-  sessionGroups      SessionGroup[]
+  athleteAssignments   RecurringTrainingAthleteAssignment[]
+  trainerAssignments   RecurringTrainingTrainerAssignment[]
+  sessionGroups        SessionGroup[]
+  sessionConfirmations SessionConfirmation[]
+  attendanceRecords    AttendanceRecord[]
+  trainerAttendance    TrainerAttendanceRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -401,7 +404,10 @@ model TrainerAttendanceRecord {
   trainer            TrainerProfile   @relation("TrainerAttendance", fields: [trainerId], references: [id], onDelete: Cascade)
   trainingSessionId  String
   trainingSession    TrainingSession  @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  trainingGroupId    String?
+  trainingGroup      TrainingGroup?   @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
   status             AttendanceStatus
+  isLate             Boolean          @default(false)
   markedBy           String
   markedByAdmin      TrainerProfile   @relation("TrainerAttendanceMarker", fields: [markedBy], references: [id])
   markedAt           DateTime         @default(now())
@@ -410,9 +416,10 @@ model TrainerAttendanceRecord {
   modificationReason String?
   notes              String?
 
-  @@unique([trainerId, trainingSessionId])
+  @@unique([trainerId, trainingSessionId, trainingGroupId])
   @@index([trainerId])
   @@index([trainingSessionId])
+  @@index([trainingGroupId])
   @@index([status])
 }
 
@@ -422,7 +429,10 @@ model AttendanceRecord {
   athlete            AthleteProfile   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainingSessionId  String
   trainingSession    TrainingSession  @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  trainingGroupId    String?
+  trainingGroup      TrainingGroup?   @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
   status             AttendanceStatus
+  isLate             Boolean          @default(false)
   markedBy           String
   markedByTrainer    TrainerProfile   @relation(fields: [markedBy], references: [id])
   markedAt           DateTime         @default(now())
@@ -431,9 +441,10 @@ model AttendanceRecord {
   modificationReason String?
   notes              String?
 
-  @@unique([athleteId, trainingSessionId])
+  @@unique([athleteId, trainingSessionId, trainingGroupId])
   @@index([athleteId])
   @@index([trainingSessionId])
+  @@index([trainingGroupId])
   @@index([status])
 }
 
@@ -544,6 +555,12 @@ model SystemSettings {
   // REQUIRE_CONFIRMATION = athletes/trainers must actively confirm each session
   attendanceConfirmationMode String @default("AUTO_CONFIRM")
 
+  // Email notification settings
+  emailRegistrationNotification Boolean @default(true) // Email to admins on new registration
+  emailApprovalNotification     Boolean @default(true) // Email to athlete on approval
+  emailAbsenceAlert             Boolean @default(true) // Email to admins on absence threshold
+  emailSessionCancellation      Boolean @default(true) // Email to athletes on session cancellation
+
   lastModifiedBy        String?
   lastModifiedByTrainer TrainerProfile? @relation(fields: [lastModifiedBy], references: [id])
   lastModifiedAt        DateTime?
@@ -608,16 +625,20 @@ model SessionConfirmation {
   id                String          @id @default(cuid())
   trainingSessionId String
   trainingSession   TrainingSession @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  trainingGroupId   String?
+  trainingGroup     TrainingGroup?  @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
   athleteId         String?
   athlete           AthleteProfile? @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainerId         String?
   trainer           TrainerProfile? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   confirmed         Boolean         @default(true)
+  declineReason     String?
   confirmedAt       DateTime        @default(now())
 
-  @@unique([trainingSessionId, athleteId])
-  @@unique([trainingSessionId, trainerId])
+  @@unique([trainingSessionId, trainingGroupId, athleteId])
+  @@unique([trainingSessionId, trainingGroupId, trainerId])
   @@index([trainingSessionId])
+  @@index([trainingGroupId])
   @@index([athleteId])
   @@index([trainerId])
 }

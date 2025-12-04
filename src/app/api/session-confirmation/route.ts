@@ -4,7 +4,22 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { parseVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
-// POST - Confirm or decline attendance for a session
+// Helper to parse group session ID
+// Format: virtual_{recurringTrainingId}_{date}_group_{groupId}
+// Or legacy: virtual_{recurringTrainingId}_{date} (no group)
+// Or real session: {sessionId} or {sessionId}_group_{groupId}
+function parseGroupSessionId(id: string): { sessionId: string; groupId: string | null } {
+  // Check for new format with _group_ marker
+  const groupMatch = id.match(/^(.+)_group_(.+)$/);
+  if (groupMatch) {
+    return { sessionId: groupMatch[1], groupId: groupMatch[2] };
+  }
+  
+  // Legacy format without group ID
+  return { sessionId: id, groupId: null };
+}
+
+// POST - Confirm or decline attendance for a session (with optional group)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,9 +29,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { sessionId, confirmed } = body;
+    const { sessionId: rawSessionId, confirmed, declineReason } = body;
 
-    if (!sessionId) {
+    console.log('[SessionConfirmation] Input:', { rawSessionId, confirmed, declineReason, userId: session.user.id, activeRole: session.user.activeRole });
+
+    if (!rawSessionId) {
       return NextResponse.json({ error: 'Session-ID erforderlich' }, { status: 400 });
     }
 
@@ -27,15 +44,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Parse the session ID to extract group ID if present
+    const { sessionId: parsedSessionId, groupId: trainingGroupId } = parseGroupSessionId(rawSessionId);
+    
+    console.log('[SessionConfirmation] Parsed IDs:', { parsedSessionId, trainingGroupId });
+
     // Get system settings to check deadline
     const settings = await prisma.systemSettings.findFirst({
       where: { id: 'default' },
     });
 
-    let actualSessionId = sessionId;
+    let actualSessionId = parsedSessionId;
 
     // Handle virtual session IDs - create the actual session first
-    const virtualInfo = parseVirtualSessionId(sessionId);
+    const virtualInfo = parseVirtualSessionId(parsedSessionId);
+    console.log('[SessionConfirmation] Virtual info:', virtualInfo);
+    
     if (virtualInfo) {
       // Check if session already exists
       const existingSession = await prisma.trainingSession.findFirst({
@@ -44,6 +68,8 @@ export async function POST(request: NextRequest) {
           date: virtualInfo.date,
         },
       });
+
+      console.log('[SessionConfirmation] Existing session:', existingSession?.id);
 
       if (existingSession) {
         actualSessionId = existingSession.id;
@@ -54,6 +80,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (!recurringTraining) {
+          console.log('[SessionConfirmation] Recurring training not found');
           return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
         }
 
@@ -68,8 +95,11 @@ export async function POST(request: NextRequest) {
           },
         });
         actualSessionId = newSession.id;
+        console.log('[SessionConfirmation] Created new session:', newSession.id);
       }
     }
+
+    console.log('[SessionConfirmation] Final session ID:', actualSessionId);
 
     // Get the session to check deadline
     const trainingSession = await prisma.trainingSession.findUnique({
@@ -85,15 +115,33 @@ export async function POST(request: NextRequest) {
 
     // Check if changing confirmation is within deadline
     if (settings) {
-      const sessionDateTime = new Date(trainingSession.date);
+      // Extract date parts from the session date (stored in DB as date at midnight UTC)
+      // We need to build a proper local datetime from the date + time
       const startTime = trainingSession.startTime || trainingSession.recurringTraining?.startTime || '00:00';
-      const [hours, minutes] = startTime.split(':').map(Number);
-      sessionDateTime.setHours(hours, minutes, 0, 0);
+      
+      // Get the date as YYYY-MM-DD string to avoid timezone issues
+      const dateOnly = trainingSession.date.toISOString().split('T')[0];
+      // Create a new date string with the correct time
+      const sessionDateTimeStr = `${dateOnly}T${startTime.padStart(5, '0')}:00`;
+      const sessionDateTime = new Date(sessionDateTimeStr);
 
-      const deadlineTime = new Date(sessionDateTime);
-      deadlineTime.setHours(deadlineTime.getHours() - settings.cancellationDeadlineHours);
+      const deadlineTime = new Date(sessionDateTime.getTime() - settings.cancellationDeadlineHours * 60 * 60 * 1000);
 
-      if (new Date() > deadlineTime) {
+      const now = new Date();
+      
+      console.log('[SessionConfirmation] Deadline check:', {
+        sessionDate: trainingSession.date,
+        dateOnly,
+        startTime,
+        sessionDateTimeStr,
+        sessionDateTime: sessionDateTime.toISOString(),
+        deadlineTime: deadlineTime.toISOString(),
+        now: now.toISOString(),
+        deadlineHours: settings.cancellationDeadlineHours,
+        isPastDeadline: now > deadlineTime,
+      });
+
+      if (now > deadlineTime) {
         return NextResponse.json(
           { error: `Änderungen sind nur bis ${settings.cancellationDeadlineHours} Stunden vor dem Training möglich` },
           { status: 400 }
@@ -124,24 +172,46 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Upsert confirmation for athlete
-      await prisma.sessionConfirmation.upsert({
+      console.log('[SessionConfirmation] Looking for athlete confirmation:', {
+        trainingSessionId: actualSessionId,
+        trainingGroupId: trainingGroupId || null,
+        athleteId: session.user.athleteProfileId,
+      });
+
+      // Upsert confirmation for athlete (with optional group)
+      // First, try to find existing record
+      const existingAthleteConfirmation = await prisma.sessionConfirmation.findFirst({
         where: {
-          trainingSessionId_athleteId: {
-            trainingSessionId: actualSessionId,
-            athleteId: session.user.athleteProfileId,
-          },
-        },
-        update: {
-          confirmed,
-          confirmedAt: new Date(),
-        },
-        create: {
           trainingSessionId: actualSessionId,
+          trainingGroupId: trainingGroupId || null,
           athleteId: session.user.athleteProfileId,
-          confirmed,
         },
       });
+
+      console.log('[SessionConfirmation] Existing confirmation:', existingAthleteConfirmation?.id);
+
+      if (existingAthleteConfirmation) {
+        const updated = await prisma.sessionConfirmation.update({
+          where: { id: existingAthleteConfirmation.id },
+          data: {
+            confirmed,
+            declineReason: !confirmed ? declineReason : null,
+            confirmedAt: new Date(),
+          },
+        });
+        console.log('[SessionConfirmation] Updated confirmation:', updated);
+      } else {
+        const created = await prisma.sessionConfirmation.create({
+          data: {
+            trainingSessionId: actualSessionId,
+            trainingGroupId: trainingGroupId || null,
+            athleteId: session.user.athleteProfileId,
+            confirmed,
+            declineReason: !confirmed ? declineReason : null,
+          },
+        });
+        console.log('[SessionConfirmation] Created confirmation:', created);
+      }
     } else if (isTrainer && session.user.trainerProfileId) {
       // Check if trainer is in an absence period
       const now = new Date();
@@ -161,24 +231,36 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Upsert confirmation for trainer
-      await prisma.sessionConfirmation.upsert({
+      // Upsert confirmation for trainer (with optional group)
+      // First, try to find existing record
+      const existingTrainerConfirmation = await prisma.sessionConfirmation.findFirst({
         where: {
-          trainingSessionId_trainerId: {
-            trainingSessionId: actualSessionId,
-            trainerId: session.user.trainerProfileId,
-          },
-        },
-        update: {
-          confirmed,
-          confirmedAt: new Date(),
-        },
-        create: {
           trainingSessionId: actualSessionId,
+          trainingGroupId: trainingGroupId || null,
           trainerId: session.user.trainerProfileId,
-          confirmed,
         },
       });
+
+      if (existingTrainerConfirmation) {
+        await prisma.sessionConfirmation.update({
+          where: { id: existingTrainerConfirmation.id },
+          data: {
+            confirmed,
+            declineReason: !confirmed ? declineReason : null,
+            confirmedAt: new Date(),
+          },
+        });
+      } else {
+        await prisma.sessionConfirmation.create({
+          data: {
+            trainingSessionId: actualSessionId,
+            trainingGroupId: trainingGroupId || null,
+            trainerId: session.user.trainerProfileId,
+            confirmed,
+            declineReason: !confirmed ? declineReason : null,
+          },
+        });
+      }
     } else {
       return NextResponse.json({ error: 'Profil nicht gefunden' }, { status: 404 });
     }
@@ -196,7 +278,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Get confirmations for a session
+// GET - Get confirmations for a session (optionally filtered by group)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -206,15 +288,20 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const sessionId = searchParams.get('sessionId');
+    const rawSessionId = searchParams.get('sessionId');
+    const groupIdParam = searchParams.get('groupId');
 
-    if (!sessionId) {
+    if (!rawSessionId) {
       return NextResponse.json({ error: 'Session-ID erforderlich' }, { status: 400 });
     }
 
+    // Parse the session ID to extract group ID if present
+    const { sessionId: parsedSessionId, groupId: parsedGroupId } = parseGroupSessionId(rawSessionId);
+    const groupId = groupIdParam || parsedGroupId;
+
     // Handle virtual session IDs
-    let actualSessionId = sessionId;
-    const virtualInfo = parseVirtualSessionId(sessionId);
+    let actualSessionId = parsedSessionId;
+    const virtualInfo = parseVirtualSessionId(parsedSessionId);
     if (virtualInfo) {
       const existingSession = await prisma.trainingSession.findFirst({
         where: {
@@ -231,7 +318,10 @@ export async function GET(request: NextRequest) {
     }
 
     const confirmations = await prisma.sessionConfirmation.findMany({
-      where: { trainingSessionId: actualSessionId },
+      where: { 
+        trainingSessionId: actualSessionId,
+        ...(groupId ? { trainingGroupId: groupId } : {}),
+      },
       include: {
         athlete: {
           include: {
@@ -247,6 +337,9 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        trainingGroup: {
+          select: { id: true, name: true },
+        },
       },
     });
 
@@ -256,7 +349,10 @@ export async function GET(request: NextRequest) {
         athleteId: c.athleteId,
         name: `${c.athlete?.user.firstName} ${c.athlete?.user.lastName}`,
         confirmed: c.confirmed,
+        declineReason: c.declineReason,
         confirmedAt: c.confirmedAt?.toISOString(),
+        groupId: c.trainingGroupId,
+        groupName: c.trainingGroup?.name,
       }));
 
     const trainerConfirmations = confirmations
@@ -265,7 +361,10 @@ export async function GET(request: NextRequest) {
         trainerId: c.trainerId,
         name: `${c.trainer?.user.firstName} ${c.trainer?.user.lastName}`,
         confirmed: c.confirmed,
+        declineReason: c.declineReason,
         confirmedAt: c.confirmedAt?.toISOString(),
+        groupId: c.trainingGroupId,
+        groupName: c.trainingGroup?.name,
       }));
 
     return NextResponse.json({

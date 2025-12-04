@@ -1,17 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { DayOfWeek, RecurrenceInterval } from '@prisma/client';
-import { addDays, addWeeks, addMonths, startOfDay, isBefore, isAfter } from 'date-fns';
-
-// Map DayOfWeek enum to JavaScript day number (0=Sunday, 1=Monday, etc.)
-const DAY_OF_WEEK_MAP: Record<DayOfWeek, number> = {
-  SUNDAY: 0,
-  MONDAY: 1,
-  TUESDAY: 2,
-  WEDNESDAY: 3,
-  THURSDAY: 4,
-  FRIDAY: 5,
-  SATURDAY: 6,
-};
+import {
+  DAY_OF_WEEK_TO_NUMBER,
+  getTodayUTC,
+  addUTCDays,
+  compareUTCDates,
+  toUTCMidnight,
+  getUTCDayOfWeek,
+} from '@/lib/utils/date';
 
 // Reverse map: JavaScript day number to DayOfWeek enum
 const JS_DAY_TO_ENUM: Record<number, DayOfWeek> = {
@@ -48,8 +44,8 @@ export const sessionGenerationService = {
       },
     });
 
-    const today = startOfDay(new Date());
-    const endDate = addDays(today, daysAhead);
+    const today = getTodayUTC();
+    const endDate = addUTCDays(today, daysAhead);
 
     for (const training of recurringTrainings) {
       try {
@@ -110,7 +106,7 @@ export const sessionGenerationService = {
   },
 
   /**
-   * Calculate session dates based on recurrence pattern
+   * Calculate session dates based on recurrence pattern (all UTC dates)
    */
   calculateSessionDates(
     dayOfWeek: DayOfWeek,
@@ -121,37 +117,41 @@ export const sessionGenerationService = {
     validUntil?: Date
   ): Date[] {
     const dates: Date[] = [];
-    const targetDayNumber = DAY_OF_WEEK_MAP[dayOfWeek];
+    const targetDayNumber = DAY_OF_WEEK_TO_NUMBER[dayOfWeek];
 
-    // Find the first occurrence of the target day on or after startDate
-    let currentDate = startOfDay(startDate);
-    const currentDayNumber = currentDate.getDay();
+    // Find the first occurrence of the target day on or after startDate (all UTC)
+    let currentDate = toUTCMidnight(startDate);
+    const currentDayNumber = getUTCDayOfWeek(currentDate);
 
     // Calculate days until next occurrence of target day
     let daysUntilTarget = targetDayNumber - currentDayNumber;
     if (daysUntilTarget < 0) {
       daysUntilTarget += 7;
     }
-    currentDate = addDays(currentDate, daysUntilTarget);
+    currentDate = addUTCDays(currentDate, daysUntilTarget);
 
     // Apply validFrom constraint
-    if (validFrom && isBefore(currentDate, startOfDay(validFrom))) {
-      currentDate = startOfDay(validFrom);
-      // Adjust to target day if needed
-      const dayDiff = targetDayNumber - currentDate.getDay();
-      if (dayDiff !== 0) {
-        currentDate = addDays(currentDate, dayDiff < 0 ? dayDiff + 7 : dayDiff);
+    if (validFrom) {
+      const validFromUTC = toUTCMidnight(validFrom);
+      if (compareUTCDates(currentDate, validFromUTC) < 0) {
+        currentDate = validFromUTC;
+        // Adjust to target day if needed
+        const dayDiff = targetDayNumber - getUTCDayOfWeek(currentDate);
+        if (dayDiff !== 0) {
+          currentDate = addUTCDays(currentDate, dayDiff < 0 ? dayDiff + 7 : dayDiff);
+        }
       }
     }
 
     // Generate dates based on recurrence
-    while (isBefore(currentDate, endDate) || currentDate.getTime() === endDate.getTime()) {
+    const endDateUTC = toUTCMidnight(endDate);
+    while (compareUTCDates(currentDate, endDateUTC) <= 0) {
       // Check validUntil constraint
-      if (validUntil && isAfter(currentDate, startOfDay(validUntil))) {
+      if (validUntil && compareUTCDates(currentDate, toUTCMidnight(validUntil)) > 0) {
         break;
       }
 
-      dates.push(currentDate);
+      dates.push(new Date(currentDate));
 
       // Move to next occurrence based on recurrence
       switch (recurrence) {
@@ -160,20 +160,25 @@ export const sessionGenerationService = {
           return dates;
 
         case RecurrenceInterval.WEEKLY:
-          currentDate = addWeeks(currentDate, 1);
+          currentDate = addUTCDays(currentDate, 7);
           break;
 
         case RecurrenceInterval.BIWEEKLY:
-          currentDate = addWeeks(currentDate, 2);
+          currentDate = addUTCDays(currentDate, 14);
           break;
 
         case RecurrenceInterval.MONTHLY:
-          currentDate = addMonths(currentDate, 1);
+          // Add roughly a month then adjust to same day of week
+          const newMonth = currentDate.getUTCMonth() + 1;
+          const newYear = currentDate.getUTCFullYear() + Math.floor(newMonth / 12);
+          const monthDate = new Date(Date.UTC(newYear, newMonth % 12, currentDate.getUTCDate()));
           // Adjust to same day of week in new month
-          const newDayNumber = currentDate.getDay();
+          const newDayNumber = monthDate.getUTCDay();
           const dayAdjust = targetDayNumber - newDayNumber;
           if (dayAdjust !== 0) {
-            currentDate = addDays(currentDate, dayAdjust);
+            currentDate = addUTCDays(monthDate, dayAdjust);
+          } else {
+            currentDate = monthDate;
           }
           break;
       }
@@ -226,8 +231,8 @@ export const sessionGenerationService = {
       throw new Error('Recurring training not found');
     }
 
-    const today = startOfDay(new Date());
-    const endDate = addDays(today, daysAhead);
+    const today = getTodayUTC();
+    const endDate = addUTCDays(today, daysAhead);
 
     const sessionsToCreate = this.calculateSessionDates(
       training.dayOfWeek,
@@ -287,8 +292,8 @@ export const sessionGenerationService = {
     endTime: string;
     notes?: string;
   }) {
-    const sessionDate = startOfDay(data.date);
-    const dayOfWeek = JS_DAY_TO_ENUM[sessionDate.getDay()];
+    const sessionDate = toUTCMidnight(data.date);
+    const dayOfWeek = JS_DAY_TO_ENUM[getUTCDayOfWeek(sessionDate)];
 
     return prisma.trainingSession.create({
       data: {
@@ -305,7 +310,7 @@ export const sessionGenerationService = {
    * Delete future sessions for a recurring training (when deactivating)
    */
   async deleteFutureSessions(recurringTrainingId: string) {
-    const today = startOfDay(new Date());
+    const today = getTodayUTC();
 
     const deleted = await prisma.trainingSession.deleteMany({
       where: {

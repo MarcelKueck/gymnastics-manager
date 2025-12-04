@@ -303,6 +303,16 @@ export async function sendRegistrationNotification(athlete: {
   guardianName?: string | null;
   guardianEmail?: string | null;
 }) {
+  // Check if this email type is enabled
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: 'default' },
+  });
+  
+  if (settings && !settings.emailRegistrationNotification) {
+    console.log('[Email] Registration notification disabled in settings, skipping');
+    return { success: true, skipped: true, reason: 'disabled_in_settings' };
+  }
+
   // Get all admin emails from the database
   const adminEmails = await getAdminEmails();
   
@@ -322,6 +332,16 @@ export async function sendApprovalNotification(
   athleteEmail: string,
   athlete: { firstName: string; lastName: string }
 ) {
+  // Check if this email type is enabled
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: 'default' },
+  });
+  
+  if (settings && !settings.emailApprovalNotification) {
+    console.log('[Email] Approval notification disabled in settings, skipping');
+    return { success: true, skipped: true, reason: 'disabled_in_settings' };
+  }
+
   const template = getApprovalNotificationTemplate(athlete);
   return sendEmail({
     to: athleteEmail,
@@ -334,6 +354,16 @@ export async function sendAbsenceAlert(
   absenceCount: number,
   windowDays: number
 ) {
+  // Check if this email type is enabled
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: 'default' },
+  });
+  
+  if (settings && !settings.emailAbsenceAlert) {
+    console.log('[Email] Absence alert email disabled in settings, skipping');
+    return { success: true, skipped: true, reason: 'disabled_in_settings' };
+  }
+
   // Get all admin emails from the database
   const adminEmails = await getAdminEmails();
   
@@ -354,6 +384,16 @@ export async function sendSessionCancellation(
   sessionInfo: { date: string; time: string; trainingName: string },
   reason?: string
 ) {
+  // Check if this email type is enabled
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: 'default' },
+  });
+  
+  if (settings && !settings.emailSessionCancellation) {
+    console.log('[Email] Session cancellation email disabled in settings, skipping');
+    return { success: true, skipped: true, reason: 'disabled_in_settings' };
+  }
+
   const template = getSessionCancellationTemplate(sessionInfo, reason);
   return sendEmail({
     to: athleteEmails,
