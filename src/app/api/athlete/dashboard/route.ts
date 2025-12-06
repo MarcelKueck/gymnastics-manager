@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAthlete } from '@/lib/api/auth';
 import { prisma } from '@/lib/prisma';
-import { startOfMonth, endOfMonth, addDays } from 'date-fns';
+import { startOfMonth, endOfMonth, addDays, subDays } from 'date-fns';
 import { generateVirtualSessions, getVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
 export async function GET() {
@@ -144,6 +144,45 @@ export async function GET() {
       },
     });
 
+    // Upcoming competitions (next 30 days)
+    const upcomingCompetitions = await prisma.competition.findMany({
+      where: {
+        date: {
+          gte: now,
+          lte: addDays(now, 30),
+        },
+      },
+      include: {
+        registrations: {
+          where: { athleteId },
+        },
+      },
+      orderBy: { date: 'asc' },
+      take: 3,
+    });
+
+    // Recent files (uploaded in last 14 days)
+    const recentFiles = await prisma.upload.findMany({
+      where: {
+        uploadedAt: { gte: subDays(now, 14) },
+      },
+      include: {
+        category: true,
+      },
+      orderBy: { uploadedAt: 'desc' },
+      take: 3,
+    });
+
+    // Get athlete's training groups for display
+    const athleteGroups = await prisma.recurringTrainingAthleteAssignment.findMany({
+      where: { athleteId },
+      include: {
+        trainingGroup: {
+          include: { recurringTraining: true },
+        },
+      },
+    });
+
     return NextResponse.json({
       data: {
         upcomingSessions,
@@ -153,6 +192,25 @@ export async function GET() {
           attendanceRate,
         },
         activeCancellations,
+        upcomingCompetitions: upcomingCompetitions.map((c) => ({
+          id: c.id,
+          name: c.name,
+          date: c.date.toISOString(),
+          location: c.location,
+          registrationDeadline: c.registrationDeadline?.toISOString(),
+          isRegistered: c.registrations.length > 0,
+        })),
+        recentFiles: recentFiles.map((f) => ({
+          id: f.id,
+          title: f.title,
+          category: f.category.name,
+          uploadedAt: f.uploadedAt.toISOString(),
+        })),
+        trainingGroups: athleteGroups.map((ag) => ({
+          id: ag.trainingGroup.id,
+          name: ag.trainingGroup.name,
+          trainingName: ag.trainingGroup.recurringTraining.name,
+        })),
       },
     }, {
       headers: {

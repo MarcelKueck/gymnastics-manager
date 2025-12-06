@@ -127,23 +127,23 @@ export default function TrainerAthletesPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="active" className="flex items-center gap-2">
+        <TabsList className="grid grid-cols-3 w-full">
+          <TabsTrigger value="active" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <UserCheck className="h-4 w-4" />
-            Aktiv
-            <Badge variant="secondary">{activeCount}</Badge>
+            <span className="hidden sm:inline">Aktiv</span>
+            <Badge variant="secondary" className="ml-0.5">{activeCount}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="pending" className="flex items-center gap-2">
+          <TabsTrigger value="pending" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <Clock className="h-4 w-4" />
-            Ausstehend
+            <span className="hidden sm:inline">Ausstehend</span>
             {pendingCount > 0 && (
-              <Badge variant="destructive">{pendingCount}</Badge>
+              <Badge variant="destructive" className="ml-0.5">{pendingCount}</Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="inactive" className="flex items-center gap-2">
+          <TabsTrigger value="inactive" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <UserX className="h-4 w-4" />
-            Inaktiv
-            <Badge variant="secondary">{inactiveCount}</Badge>
+            <span className="hidden sm:inline">Inaktiv</span>
+            <Badge variant="secondary" className="ml-0.5">{inactiveCount}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -216,34 +216,39 @@ function AthleteCard({ athlete }: { athlete: Athlete }) {
     <Link href={`/trainer/athletes/${athlete.id}`}>
       <Card className="hover:border-primary transition-colors">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
                 <span className="text-lg font-medium">
                   {athlete.name.charAt(0)}
                 </span>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{athlete.name}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium truncate">{athlete.name}</p>
                   {athlete.youthCategory && (
-                    <Badge variant="outline">{athlete.youthCategory}</Badge>
+                    <Badge variant="outline" className="shrink-0">{athlete.youthCategory}</Badge>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground">{athlete.email}</p>
-                <div className="flex gap-1 mt-1">
-                  {athlete.groups.map((group) => (
+                <p className="text-sm text-muted-foreground truncate">{athlete.email}</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {athlete.groups.slice(0, 2).map((group) => (
                     <Badge key={group} variant="secondary" className="text-xs">
                       {group}
                     </Badge>
                   ))}
+                  {athlete.groups.length > 2 && (
+                    <Badge variant="secondary" className="text-xs">
+                      +{athlete.groups.length - 2}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
               {athlete.attendanceRate !== undefined && (
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Anwesenheit</p>
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs text-muted-foreground">Anwesenheit</p>
                   <p className={`font-medium ${
                     athlete.attendanceRate >= 80 ? 'text-emerald-600' :
                     athlete.attendanceRate >= 60 ? 'text-amber-600' : 'text-red-600'
@@ -251,6 +256,17 @@ function AthleteCard({ athlete }: { athlete: Athlete }) {
                     {athlete.attendanceRate}%
                   </p>
                 </div>
+              )}
+              {athlete.attendanceRate !== undefined && (
+                <Badge 
+                  variant="outline" 
+                  className={`sm:hidden ${
+                    athlete.attendanceRate >= 80 ? 'text-emerald-600 border-emerald-200' :
+                    athlete.attendanceRate >= 60 ? 'text-amber-600 border-amber-200' : 'text-red-600 border-red-200'
+                  }`}
+                >
+                  {athlete.attendanceRate}%
+                </Badge>
               )}
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
             </div>

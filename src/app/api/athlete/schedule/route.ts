@@ -98,8 +98,8 @@ export async function GET(request: NextRequest) {
         trainingGroups: {
           where: { id: { in: groupIds } },
           include: {
-            _count: {
-              select: { athleteAssignments: true },
+            athleteAssignments: {
+              select: { assignedAt: true },
             },
             trainerAssignments: {
               include: {
@@ -137,6 +137,12 @@ export async function GET(request: NextRequest) {
           where: { athleteId },
         },
         sessionConfirmations: true,
+        sessionGroups: {
+          select: {
+            trainingGroupId: true,
+            equipment: true,
+          },
+        },
       },
     });
 
@@ -171,7 +177,13 @@ export async function GET(request: NextRequest) {
 
       // Only include groups the athlete is assigned to
       for (const group of vs.groups) {
-        if (!groupAssignmentMap.has(group.id)) continue;
+        const athleteAssignment = groupAssignmentMap.get(group.id);
+        if (!athleteAssignment) continue;
+
+        // Check if athlete was assigned before or on this session date
+        const sessionDateOnly = new Date(vs.date.getFullYear(), vs.date.getMonth(), vs.date.getDate());
+        const assignedAtDate = new Date(athleteAssignment.assignedAt.getFullYear(), athleteAssignment.assignedAt.getMonth(), athleteAssignment.assignedAt.getDate());
+        if (assignedAtDate > sessionDateOnly) continue;
 
         // Get trainers for this specific group
         const recurringTraining = recurringTrainings.find(rt => rt.id === vs.recurringTrainingId);
@@ -195,6 +207,18 @@ export async function GET(request: NextRequest) {
         const athleteAttendance = stored?.attendanceRecords?.find(
           r => r.athleteId === athleteId && (r.trainingGroupId === group.id || r.trainingGroupId === null)
         );
+
+        // Get equipment for this specific group
+        const groupEquipment = stored?.sessionGroups?.find(
+          sg => sg.trainingGroupId === group.id
+        )?.equipment || null;
+
+        // Calculate total athletes for this group at this session date
+        // Only count athletes who were assigned before or on the session date
+        const totalAthletes = trainingGroup?.athleteAssignments.filter(a => {
+          const aAssignedAtDate = new Date(a.assignedAt.getFullYear(), a.assignedAt.getMonth(), a.assignedAt.getDate());
+          return aAssignedAtDate <= sessionDateOnly;
+        }).length || 0;
 
         // Calculate confirmed athletes count for this group
         const groupConfirmations = stored?.sessionConfirmations?.filter(
@@ -226,12 +250,12 @@ export async function GET(request: NextRequest) {
           isCompleted: stored?.isCompleted || false,
           attendanceStatus: athleteAttendance?.status as 'PRESENT' | 'ABSENT_UNEXCUSED' | 'ABSENT_EXCUSED' | undefined,
           isLate: athleteAttendance?.isLate,
-          equipment: stored?.equipment || null,
+          equipment: groupEquipment,
           trainers: groupTrainers,
           confirmed: athleteConfirmation?.confirmed ?? null,
           confirmedAt: athleteConfirmation?.confirmedAt?.toISOString() ?? null,
           declineReason: athleteConfirmation?.declineReason,
-          totalAthletes: group.athleteCount,
+          totalAthletes,
           confirmedAthletes,
           declinedAthletes,
         });

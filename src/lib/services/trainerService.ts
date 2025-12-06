@@ -227,8 +227,16 @@ export const trainerService = {
     });
 
     if (session) {
+      // Only count athletes who were assigned before or on the session date
+      const sessionDateOnly = new Date(session.date.getFullYear(), session.date.getMonth(), session.date.getDate());
       const totalAthletes = session.sessionGroups.reduce(
-        (sum, sg) => sum + sg.trainingGroup.athleteAssignments.length,
+        (sum, sg) => {
+          const validAssignments = sg.trainingGroup.athleteAssignments.filter(a => {
+            const assignedAtDate = new Date(a.assignedAt.getFullYear(), a.assignedAt.getMonth(), a.assignedAt.getDate());
+            return assignedAtDate <= sessionDateOnly;
+          });
+          return sum + validAssignments.length;
+        },
         0
       );
       const recordedAttendance = session.attendanceRecords.length;

@@ -69,38 +69,38 @@ export default function TrainerStatisticsPage() {
       />
 
       {/* Overview Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Aktive Athleten</CardTitle>
-            <Users className="h-5 w-5 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Aktive Athleten</CardTitle>
+            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.overview.activeAthletes}</div>
+          <CardContent className="px-3 sm:px-6">
+            <div className="text-xl sm:text-2xl font-bold">{stats.overview.activeAthletes}</div>
             <p className="text-xs text-muted-foreground">
-              von {stats.overview.totalAthletes} gesamt
+              von {stats.overview.totalAthletes}
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Trainingseinheiten</CardTitle>
-            <Calendar className="h-5 w-5 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Trainings</CardTitle>
+            <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.overview.totalSessions}</div>
+          <CardContent className="px-3 sm:px-6">
+            <div className="text-xl sm:text-2xl font-bold">{stats.overview.totalSessions}</div>
             <p className="text-xs text-muted-foreground">letzte 30 Tage</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Ø Anwesenheit</CardTitle>
-            <TrendingUp className="h-5 w-5 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Ø Anwesenheit</CardTitle>
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${
+          <CardContent className="px-3 sm:px-6">
+            <div className={`text-xl sm:text-2xl font-bold ${
               stats.overview.averageAttendance >= 80 ? 'text-emerald-600' :
               stats.overview.averageAttendance >= 60 ? 'text-amber-600' : 'text-red-600'
             }`}>
@@ -111,22 +111,22 @@ export default function TrainerStatisticsPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Anwesenheiten</CardTitle>
-            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Anwesenheiten</CardTitle>
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalAttendance}</div>
+          <CardContent className="px-3 sm:px-6">
+            <div className="text-xl sm:text-2xl font-bold">{totalAttendance}</div>
             <p className="text-xs text-muted-foreground">erfasste Einträge</p>
           </CardContent>
         </Card>
       </div>
 
       <Tabs defaultValue="attendance">
-        <TabsList>
-          <TabsTrigger value="attendance">Anwesenheitsverteilung</TabsTrigger>
-          <TabsTrigger value="groups">Nach Gruppen</TabsTrigger>
-          <TabsTrigger value="weekly">Wochenübersicht</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-3 h-auto">
+          <TabsTrigger value="attendance" className="text-xs sm:text-sm py-2">Verteilung</TabsTrigger>
+          <TabsTrigger value="groups" className="text-xs sm:text-sm py-2">Gruppen</TabsTrigger>
+          <TabsTrigger value="weekly" className="text-xs sm:text-sm py-2">Wochen</TabsTrigger>
         </TabsList>
 
         <TabsContent value="attendance">
@@ -168,26 +168,26 @@ export default function TrainerStatisticsPage() {
                 </div>
 
                 {/* Legend */}
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="flex items-center gap-3 p-4 rounded-lg border">
-                    <CheckCircle className="h-8 w-8 text-emerald-500" />
+                <div className="grid gap-3 sm:gap-4 grid-cols-3">
+                  <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg border text-center sm:text-left">
+                    <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
                     <div>
-                      <p className="text-2xl font-bold">{stats.attendance.present}</p>
-                      <p className="text-sm text-muted-foreground">Anwesend</p>
+                      <p className="text-lg sm:text-2xl font-bold">{stats.attendance.present}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Anwesend</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-4 rounded-lg border">
-                    <Clock className="h-8 w-8 text-amber-500" />
+                  <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg border text-center sm:text-left">
+                    <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
                     <div>
-                      <p className="text-2xl font-bold">{stats.attendance.absentExcused}</p>
-                      <p className="text-sm text-muted-foreground">Entschuldigt</p>
+                      <p className="text-lg sm:text-2xl font-bold">{stats.attendance.absentExcused}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Entschuldigt</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-4 rounded-lg border">
-                    <XCircle className="h-8 w-8 text-red-500" />
+                  <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg border text-center sm:text-left">
+                    <XCircle className="h-6 w-6 sm:h-8 sm:w-8 text-red-500" />
                     <div>
-                      <p className="text-2xl font-bold">{stats.attendance.absentUnexcused}</p>
-                      <p className="text-sm text-muted-foreground">Unentschuldigt</p>
+                      <p className="text-lg sm:text-2xl font-bold">{stats.attendance.absentUnexcused}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Unentsch.</p>
                     </div>
                   </div>
                 </div>

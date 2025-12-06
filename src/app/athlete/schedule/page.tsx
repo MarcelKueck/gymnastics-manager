@@ -82,6 +82,7 @@ export default function AthleteSchedule() {
   // Confirmation state
   const [confirmingSessionId, setConfirmingSessionId] = useState<string | null>(null);
   const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState<number>(2);
+  const [confirmationMode, setConfirmationMode] = useState<'AUTO_CONFIRM' | 'REQUIRE_CONFIRMATION'>('AUTO_CONFIRM');
   
   // Undo dialog
   const [undoDialogOpen, setUndoDialogOpen] = useState(false);
@@ -129,6 +130,7 @@ export default function AthleteSchedule() {
         if (res.ok) {
           const result = await res.json();
           setCancellationDeadlineHours(result.data.cancellationDeadlineHours || 2);
+          setConfirmationMode(result.data.attendanceConfirmationMode || 'AUTO_CONFIRM');
         }
       } catch (err) {
         console.error('Failed to fetch settings:', err);
@@ -168,12 +170,54 @@ export default function AthleteSchedule() {
         throw new Error(data.error || 'Fehler beim Speichern');
       }
 
-      // Update local state
-      setSessions(prev => prev.map(s => 
-        s.id === sessionId 
-          ? { ...s, confirmed, confirmedAt: new Date().toISOString(), declineReason }
-          : s
-      ));
+      // Update local state with adjusted counts
+      setSessions(prev => prev.map(s => {
+        if (s.id === sessionId) {
+          const wasConfirmed = confirmationMode === 'AUTO_CONFIRM' 
+            ? s.confirmed !== false 
+            : s.confirmed === true;
+          const wasDeclined = s.confirmed === false;
+          
+          // Calculate new counts based on the change
+          let newConfirmedAthletes = s.confirmedAthletes;
+          let newDeclinedAthletes = s.declinedAthletes;
+          
+          if (confirmed) {
+            // User is confirming
+            if (wasDeclined) {
+              // Was declined, now confirmed: +1 confirmed, -1 declined
+              newConfirmedAthletes += 1;
+              newDeclinedAthletes = Math.max(0, newDeclinedAthletes - 1);
+            } else if (!wasConfirmed && confirmationMode === 'REQUIRE_CONFIRMATION') {
+              // Was pending, now confirmed: +1 confirmed
+              newConfirmedAthletes += 1;
+            }
+            // In AUTO_CONFIRM mode, if was already implicitly confirmed (null), no change needed
+          } else {
+            // User is declining
+            if (wasConfirmed) {
+              // Was confirmed (or implicitly confirmed), now declined: -1 confirmed, +1 declined
+              if (confirmationMode === 'AUTO_CONFIRM' || s.confirmed === true) {
+                newConfirmedAthletes = Math.max(0, newConfirmedAthletes - 1);
+              }
+              newDeclinedAthletes += 1;
+            } else if (!wasDeclined && confirmationMode === 'REQUIRE_CONFIRMATION') {
+              // Was pending, now declined: +1 declined
+              newDeclinedAthletes += 1;
+            }
+          }
+          
+          return { 
+            ...s, 
+            confirmed, 
+            confirmedAt: new Date().toISOString(), 
+            declineReason,
+            confirmedAthletes: newConfirmedAthletes,
+            declinedAthletes: newDeclinedAthletes,
+          };
+        }
+        return s;
+      }));
     } catch (err) {
       console.error('[ConfirmSession] Error:', err);
       setFormError((err as Error).message);
@@ -363,17 +407,23 @@ export default function AthleteSchedule() {
     const canModify = isWithinDeadline(session);
     const isLoading = confirmingSessionId === session.id;
     
-    // Simple two-button confirm/deny
+    // Determine the effective confirmed status based on confirmation mode
+    // In AUTO_CONFIRM mode: null means confirmed (coming by default)
+    // In REQUIRE_CONFIRMATION mode: null means not yet responded
+    const effectiveConfirmed = confirmationMode === 'AUTO_CONFIRM' 
+      ? (session.confirmed === false ? false : true) // null or true = confirmed
+      : session.confirmed; // null = not responded, true = confirmed, false = declined
+    
+    // Past deadline - show current status as read-only
     if (!canModify) {
-      // Past deadline - show current status as read-only
-      if (session.confirmed === true) {
+      if (effectiveConfirmed === true) {
         return (
           <Badge className="bg-emerald-500">
             <Check className="h-3 w-3 mr-1" />
             Zugesagt
           </Badge>
         );
-      } else if (session.confirmed === false) {
+      } else if (effectiveConfirmed === false) {
         return (
           <Badge variant="destructive">
             <XCircle className="h-3 w-3 mr-1" />
@@ -381,14 +431,70 @@ export default function AthleteSchedule() {
           </Badge>
         );
       }
+      // REQUIRE_CONFIRMATION mode and no response
       return (
         <Badge variant="outline" className="text-muted-foreground">
-          Frist abgelaufen
+          Nicht bestätigt
         </Badge>
       );
     }
 
-    // Show two buttons: Confirm (green checkmark) or Deny (red X)
+    // AUTO_CONFIRM mode: Only show cancel button, user is assumed to be coming
+    if (confirmationMode === 'AUTO_CONFIRM') {
+      const isCancelled = session.confirmed === false;
+      
+      if (isCancelled) {
+        // User has cancelled - show "undo" option
+        return (
+          <div className="flex items-center gap-2">
+            <Badge variant="destructive">
+              <XCircle className="h-3 w-3 mr-1" />
+              Abgesagt
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleConfirmSession(session.id, true)}
+              disabled={isLoading}
+              className="hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300"
+              title="Doch dabei"
+            >
+              {isLoading ? (
+                <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        );
+      }
+      
+      // User is coming (default) - show cancel button
+      return (
+        <div className="flex items-center gap-2">
+          <Badge className="bg-emerald-500">
+            <Check className="h-3 w-3 mr-1" />
+            Dabei
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleConfirmSession(session.id, false)}
+            disabled={isLoading}
+            className="hover:bg-red-100 hover:text-red-700 hover:border-red-300"
+            title="Absagen"
+          >
+            {isLoading ? (
+              <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+            ) : (
+              <XCircle className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      );
+    }
+
+    // REQUIRE_CONFIRMATION mode: Show two buttons, user must actively choose
     return (
       <div className="flex gap-1">
         <Button
@@ -433,13 +539,14 @@ export default function AthleteSchedule() {
             variant="outline"
             size="icon"
             onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
+            className="h-10 w-10"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             onClick={() => setCurrentWeekOffset(0)}
-            className="min-w-[180px] sm:min-w-[200px] text-sm"
+            className="min-w-[160px] sm:min-w-[200px] text-sm h-10"
           >
             {formatWeekRange()}
           </Button>
@@ -447,6 +554,7 @@ export default function AthleteSchedule() {
             variant="outline"
             size="icon"
             onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
+            className="h-10 w-10"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -459,6 +567,7 @@ export default function AthleteSchedule() {
           variant={viewMode === 'list' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setViewMode('list')}
+          className="h-10"
         >
           <List className="h-4 w-4 mr-2" />
           Liste
@@ -467,6 +576,7 @@ export default function AthleteSchedule() {
           variant={viewMode === 'calendar' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setViewMode('calendar')}
+          className="h-10 hidden sm:flex"
         >
           <Calendar className="h-4 w-4 mr-2" />
           Kalender
@@ -551,7 +661,10 @@ export default function AthleteSchedule() {
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                             <Users className="h-3 w-3" />
                             <span>
-                              {session.confirmedAthletes} / {session.totalAthletes} zugesagt
+                              {confirmationMode === 'AUTO_CONFIRM' 
+                                ? `${session.totalAthletes - session.declinedAthletes} / ${session.totalAthletes} dabei`
+                                : `${session.confirmedAthletes} / ${session.totalAthletes} zugesagt`
+                              }
                             </span>
                           </div>
                         )}
@@ -630,9 +743,21 @@ export default function AthleteSchedule() {
                           <Clock className="h-3 w-3" />
                           {session.startTime}
                         </div>
-                        {session.confirmed !== null && (
+                        {session.totalAthletes !== undefined && (
+                          <div className="text-[10px] opacity-70 mt-0.5">
+                            <Users className="h-2.5 w-2.5 inline mr-0.5" />
+                            {confirmationMode === 'AUTO_CONFIRM' 
+                              ? `${session.totalAthletes - session.declinedAthletes}/${session.totalAthletes}`
+                              : `${session.confirmedAthletes}/${session.totalAthletes}`
+                            }
+                          </div>
+                        )}
+                        {(session.confirmed !== null || confirmationMode === 'AUTO_CONFIRM') && (
                           <div className="text-[10px] mt-1">
-                            {session.confirmed ? '✓ Zugesagt' : '✗ Abgesagt'}
+                            {confirmationMode === 'AUTO_CONFIRM'
+                              ? (session.confirmed === false ? '✗ Abgesagt' : '✓ Dabei')
+                              : (session.confirmed === true ? '✓ Zugesagt' : session.confirmed === false ? '✗ Abgesagt' : '')
+                            }
                           </div>
                         )}
                       </div>

@@ -61,6 +61,7 @@ interface SessionDetail {
   endTime: string;
   groups: Array<string | { id: string; name: string }>;
   isCancelled: boolean;
+  isOwnGroup?: boolean;
   equipment?: string | null;
   athletes: AthleteAttendance[];
   trainers?: SessionTrainer[];
@@ -83,6 +84,26 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [hasTrainerChanges, setHasTrainerChanges] = useState(false);
+  const [confirmationMode, setConfirmationMode] = useState<'AUTO_CONFIRM' | 'REQUIRE_CONFIRMATION'>('AUTO_CONFIRM');
+
+  // Can edit if admin or trainer's own group
+  const canEdit = isAdmin || (session?.isOwnGroup ?? false);
+
+  // Fetch system settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/settings/public');
+        if (res.ok) {
+          const result = await res.json();
+          setConfirmationMode(result.data.attendanceConfirmationMode || 'AUTO_CONFIRM');
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   useEffect(() => {
     fetch(`/api/trainer/sessions/${id}`)
@@ -260,10 +281,16 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
     return acc;
   }, {} as Record<string, AthleteAttendance[]>);
 
-  // Count confirmations
-  const confirmedCount = session.athletes.filter(a => a.confirmed === true).length;
+  // Count confirmations based on confirmation mode
+  // In AUTO_CONFIRM mode: pending (null/undefined) counts as confirmed
+  // In REQUIRE_CONFIRMATION mode: pending remains pending
+  const confirmedCount = confirmationMode === 'AUTO_CONFIRM'
+    ? session.athletes.filter(a => a.confirmed !== false).length
+    : session.athletes.filter(a => a.confirmed === true).length;
   const declinedCount = session.athletes.filter(a => a.confirmed === false).length;
-  const pendingCount = session.athletes.filter(a => a.confirmed === null || a.confirmed === undefined).length;
+  const pendingCount = confirmationMode === 'AUTO_CONFIRM'
+    ? 0
+    : session.athletes.filter(a => a.confirmed === null || a.confirmed === undefined).length;
 
   return (
     <div className="space-y-6">
@@ -286,28 +313,37 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
+      {!canEdit && !session.isCancelled && (
+        <div className="bg-muted p-4 rounded-lg flex items-center gap-2">
+          <Users className="h-5 w-5 text-muted-foreground" />
+          <span className="text-muted-foreground">
+            Sie sehen diese Gruppe zur Information. Nur zugewiesene Trainer können die Anwesenheit bearbeiten.
+          </span>
+        </div>
+      )}
+
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Datum</CardTitle>
+          <CardHeader className="pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Datum</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-              <span className="font-medium">{formatDate(session.date)}</span>
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+              <span className="font-medium text-sm sm:text-base">{formatDate(session.date)}</span>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Gruppen</CardTitle>
+          <CardHeader className="pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Gruppen</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             <div className="flex flex-wrap gap-1">
               {session.groups.map((group) => (
-                <Badge key={typeof group === 'string' ? group : group.id} variant="secondary">
+                <Badge key={typeof group === 'string' ? group : group.id} variant="secondary" className="text-xs">
                   {typeof group === 'string' ? group : group.name}
                 </Badge>
               ))}
@@ -316,13 +352,15 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Zugesagt</CardTitle>
+          <CardHeader className="pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">
+              {confirmationMode === 'AUTO_CONFIRM' ? 'Dabei' : 'Zugesagt'}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
-              <span className="text-2xl font-bold text-emerald-600">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
+              <span className="text-xl sm:text-2xl font-bold text-emerald-600">
                 {confirmedCount}
               </span>
             </div>
@@ -330,28 +368,30 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Abgesagt</CardTitle>
+          <CardHeader className="pb-2 px-3 sm:px-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Abgesagt</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             <div className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-red-600" />
-              <span className="text-2xl font-bold text-red-600">{declinedCount}</span>
+              <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+              <span className="text-xl sm:text-2xl font-bold text-red-600">{declinedCount}</span>
             </div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Ausstehend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <HelpCircle className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold text-muted-foreground">{pendingCount}</span>
-            </div>
-          </CardContent>
-        </Card>
+        {confirmationMode === 'REQUIRE_CONFIRMATION' && (
+          <Card>
+            <CardHeader className="pb-2 px-3 sm:px-6">
+              <CardTitle className="text-xs sm:text-sm font-medium">Ausstehend</CardTitle>
+            </CardHeader>
+            <CardContent className="px-3 sm:px-6">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                <span className="text-xl sm:text-2xl font-bold text-muted-foreground">{pendingCount}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Trainers */}
@@ -380,17 +420,24 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                   {session.trainers.map((trainer) => {
                     const exception = trainerExceptionData.get(trainer.id) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
                     
+                    // In AUTO_CONFIRM mode, null/undefined is treated as confirmed
+                    const isEffectivelyConfirmed = confirmationMode === 'AUTO_CONFIRM'
+                      ? trainer.confirmed !== false
+                      : trainer.confirmed === true;
+                    const isDeclined = trainer.confirmed === false;
+                    const isPending = confirmationMode === 'REQUIRE_CONFIRMATION' && trainer.confirmed !== true && trainer.confirmed !== false;
+                    
                     return (
                       <div key={trainer.id} className={`flex flex-col gap-3 p-3 rounded-lg border ${
-                        trainer.confirmed === false ? 'bg-red-50 dark:bg-red-900/20' : 
-                        trainer.confirmed === true ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-muted/30'
+                        isDeclined ? 'bg-red-50 dark:bg-red-900/20' : 
+                        isEffectivelyConfirmed ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-muted/30'
                       }`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             {/* Confirmation Status Icon */}
-                            {trainer.confirmed === true ? (
+                            {isEffectivelyConfirmed ? (
                               <CheckCircle className="h-5 w-5 text-emerald-600" />
-                            ) : trainer.confirmed === false ? (
+                            ) : isDeclined ? (
                               <XCircle className="h-5 w-5 text-red-600" />
                             ) : (
                               <HelpCircle className="h-5 w-5 text-muted-foreground" />
@@ -402,20 +449,20 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                           <Badge 
                             variant="outline" 
                             className={
-                              trainer.confirmed === true 
+                              isEffectivelyConfirmed 
                                 ? "text-emerald-600 border-emerald-300 bg-emerald-100 dark:bg-emerald-900/40" 
-                                : trainer.confirmed === false 
+                                : isDeclined 
                                   ? "text-red-600 border-red-300 bg-red-100 dark:bg-red-900/40"
                                   : "text-muted-foreground"
                             }
                           >
-                            {trainer.confirmed === true ? 'Kommt' : trainer.confirmed === false ? 'Kommt nicht' : 'Ausstehend'}
+                            {isEffectivelyConfirmed ? 'Kommt' : isDeclined ? 'Kommt nicht' : 'Ausstehend'}
                           </Badge>
                         </div>
                         
                         {/* Exception checkboxes */}
                         <div className="flex flex-wrap gap-4 text-sm">
-                          {trainer.confirmed === true && (
+                          {isEffectivelyConfirmed && (
                             <div className="flex items-center gap-1.5">
                               <Checkbox
                                 id={`trainer-noshow-${trainer.id}`}
@@ -427,7 +474,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                               </label>
                             </div>
                           )}
-                          {trainer.confirmed === false && (
+                          {isDeclined && (
                             <div className="flex items-center gap-1.5">
                               <Checkbox
                                 id={`trainer-showed-${trainer.id}`}
@@ -438,6 +485,11 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                                 Doch erschienen
                               </label>
                             </div>
+                          )}
+                          {isPending && (
+                            <span className="text-muted-foreground italic">
+                              Bestätigung ausstehend
+                            </span>
                           )}
                           <div className="flex items-center gap-1.5">
                             <Checkbox
@@ -458,20 +510,28 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
               </div>
             ) : (
               <div className="space-y-2">
-                {session.trainers.map((trainer) => (
-                  <div key={trainer.id} className="flex items-center gap-2">
-                    {trainer.confirmed === true ? (
-                      <CheckCircle className="h-4 w-4 text-emerald-600" />
-                    ) : trainer.confirmed === false ? (
-                      <XCircle className="h-4 w-4 text-red-600" />
-                    ) : (
-                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className={trainer.cancelled ? 'line-through text-muted-foreground' : ''}>
-                      {trainer.name}
-                    </span>
-                  </div>
-                ))}
+                {session.trainers.map((trainer) => {
+                  // In AUTO_CONFIRM mode, null/undefined is treated as confirmed
+                  const isEffectivelyConfirmed = confirmationMode === 'AUTO_CONFIRM'
+                    ? trainer.confirmed !== false
+                    : trainer.confirmed === true;
+                  const isDeclined = trainer.confirmed === false;
+                  
+                  return (
+                    <div key={trainer.id} className="flex items-center gap-2">
+                      {isEffectivelyConfirmed ? (
+                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                      ) : isDeclined ? (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      ) : (
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <span className={trainer.cancelled ? 'line-through text-muted-foreground' : ''}>
+                        {trainer.name}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -508,20 +568,27 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                     {athletes.map((athlete) => {
                       const exception = exceptionData.get(athlete.athleteId) || { noShow: false, showedUpUnannounced: false, isLate: false, note: '' };
                       
+                      // In AUTO_CONFIRM mode, null/undefined is treated as confirmed
+                      const isEffectivelyConfirmed = confirmationMode === 'AUTO_CONFIRM'
+                        ? athlete.confirmed !== false
+                        : athlete.confirmed === true;
+                      const isDeclined = athlete.confirmed === false;
+                      const isPending = confirmationMode === 'REQUIRE_CONFIRMATION' && athlete.confirmed !== true && athlete.confirmed !== false;
+                      
                       return (
                         <div
                           key={athlete.athleteId}
                           className={`flex flex-col gap-3 p-3 rounded-lg border ${
-                            athlete.confirmed === false ? 'bg-red-50 dark:bg-red-900/20' : 
-                            athlete.confirmed === true ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-muted/30'
+                            isDeclined ? 'bg-red-50 dark:bg-red-900/20' : 
+                            isEffectivelyConfirmed ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-muted/30'
                           }`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {/* Confirmation Status Icon */}
-                              {athlete.confirmed === true ? (
+                              {isEffectivelyConfirmed ? (
                                 <CheckCircle className="h-5 w-5 text-emerald-600" />
-                              ) : athlete.confirmed === false ? (
+                              ) : isDeclined ? (
                                 <XCircle className="h-5 w-5 text-red-600" />
                               ) : (
                                 <HelpCircle className="h-5 w-5 text-muted-foreground" />
@@ -531,48 +598,56 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                             <Badge 
                               variant="outline" 
                               className={
-                                athlete.confirmed === true 
+                                isEffectivelyConfirmed 
                                   ? "text-emerald-600 border-emerald-300 bg-emerald-100 dark:bg-emerald-900/40" 
-                                  : athlete.confirmed === false 
+                                  : isDeclined 
                                     ? "text-red-600 border-red-300 bg-red-100 dark:bg-red-900/40"
                                     : "text-muted-foreground"
                               }
                             >
-                              {athlete.confirmed === true ? 'Kommt' : athlete.confirmed === false ? 'Kommt nicht' : 'Ausstehend'}
+                              {isEffectivelyConfirmed ? 'Kommt' : isDeclined ? 'Kommt nicht' : 'Ausstehend'}
                             </Badge>
                           </div>
                           
                           {/* Exception checkboxes */}
                           <div className="flex flex-wrap gap-4 text-sm">
-                            {athlete.confirmed === true && (
+                            {isEffectivelyConfirmed && (
                               <div className="flex items-center gap-1.5">
                                 <Checkbox
                                   id={`noshow-${athlete.athleteId}`}
                                   checked={exception.noShow}
                                   onCheckedChange={(checked) => updateAthleteException(athlete.athleteId, 'noShow', checked === true)}
+                                  disabled={!canEdit}
                                 />
                                 <label htmlFor={`noshow-${athlete.athleteId}`} className="text-muted-foreground cursor-pointer">
                                   Nicht erschienen
                                 </label>
                               </div>
                             )}
-                            {athlete.confirmed === false && (
+                            {isDeclined && (
                               <div className="flex items-center gap-1.5">
                                 <Checkbox
                                   id={`showed-${athlete.athleteId}`}
                                   checked={exception.showedUpUnannounced}
                                   onCheckedChange={(checked) => updateAthleteException(athlete.athleteId, 'showedUpUnannounced', checked === true)}
+                                  disabled={!canEdit}
                                 />
                                 <label htmlFor={`showed-${athlete.athleteId}`} className="text-muted-foreground cursor-pointer">
                                   Doch erschienen
                                 </label>
                               </div>
                             )}
+                            {isPending && (
+                              <span className="text-muted-foreground italic">
+                                Bestätigung ausstehend
+                              </span>
+                            )}
                             <div className="flex items-center gap-1.5">
                               <Checkbox
                                 id={`late-${athlete.athleteId}`}
                                 checked={exception.isLate}
                                 onCheckedChange={(checked) => updateAthleteException(athlete.athleteId, 'isLate', checked === true)}
+                                disabled={!canEdit}
                               />
                               <label htmlFor={`late-${athlete.athleteId}`} className="text-muted-foreground flex items-center gap-1 cursor-pointer">
                                 <Timer className="h-3 w-3" />
@@ -586,6 +661,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
                                 value={exception.note}
                                 onChange={(e) => updateAthleteNote(athlete.athleteId, e.target.value)}
                                 className="pl-8 h-8"
+                                disabled={!canEdit}
                               />
                             </div>
                           </div>
@@ -599,7 +675,7 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
           </div>
 
           {/* Save Button (sticky at bottom for mobile) */}
-          {hasChanges && (
+          {hasChanges && canEdit && (
             <div className="fixed bottom-4 left-4 right-4 sm:static sm:flex sm:justify-end">
               <Button
                 onClick={saveExceptions}

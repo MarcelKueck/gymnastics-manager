@@ -100,8 +100,52 @@
   input[type="tel"],
   input[type="number"],
   input[type="search"],
+  input[type="date"],
   textarea,
   select {
     font-size: 16px;
+  }
+  
+  /* Minimum touch target sizes for accessibility */
+  button, 
+  [role="button"],
+  a,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Exception for inline elements */
+  span > a,
+  p > a,
+  .inline-link {
+    min-height: unset;
+    min-width: unset;
+  }
+  
+  /* Smooth scrolling for scroll containers */
+  .scroll-container {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  /* Fix for iOS form elements */
+  input, textarea, select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+  
+  /* Improve focus states for touch devices */
+  @media (hover: none) and (pointer: coarse) {
+    *:focus {
+      outline: none;
+    }
+    
+    *:focus-visible {
+      outline: 2px solid hsl(var(--ring));
+      outline-offset: 2px;
+    }
   }
 }

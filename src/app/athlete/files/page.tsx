@@ -127,19 +127,19 @@ export default function AthleteFilesPage() {
                 {categoryFiles.map((file) => (
                   <div
                     key={file.id}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-8 w-8 text-red-600" />
-                      <div>
-                        <p className="font-medium">{file.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>{file.fileName}</span>
-                          <span>•</span>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <FileText className="h-8 w-8 text-red-600 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{file.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-xs sm:text-sm text-muted-foreground">
+                          <span className="truncate max-w-[150px] sm:max-w-none">{file.fileName}</span>
+                          <span className="hidden sm:inline">•</span>
                           <span>{formatFileSize(file.fileSize)}</span>
                           {file.targetDate && (
                             <>
-                              <span>•</span>
+                              <span className="hidden sm:inline">•</span>
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
                                 {file.targetDate}
@@ -147,13 +147,13 @@ export default function AthleteFilesPage() {
                             </>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground hidden sm:block">
                           Hochgeladen am{' '}
                           {format(new Date(file.uploadedAt), 'dd.MM.yyyy', { locale: de })}
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleDownload(file)}>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={() => handleDownload(file)}>
                       <Download className="h-4 w-4" />
                     </Button>
                   </div>

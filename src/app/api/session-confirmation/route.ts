@@ -113,6 +113,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
     }
 
+    // Check if session is already completed (past sessions)
+    if (trainingSession.isCompleted) {
+      return NextResponse.json(
+        { error: 'Vergangene Trainings können nicht mehr geändert werden' },
+        { status: 400 }
+      );
+    }
+
     // Check if changing confirmation is within deadline
     if (settings) {
       // Extract date parts from the session date (stored in DB as date at midnight UTC)

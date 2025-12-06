@@ -21,6 +21,7 @@ import {
   ShieldPlus,
   ShieldMinus,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -61,6 +62,7 @@ export default function AdminUsersPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
   const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
@@ -133,6 +135,36 @@ export default function AdminUsersPage() {
       setError((err as Error).message);
     } finally {
       setUpdatingRoleFor(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`Möchtest du den Benutzer "${userName}" wirklich komplett löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+      return;
+    }
+
+    setDeletingUser(userId);
+    setSuccessMessage(null);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Fehler beim Löschen');
+      }
+      
+      // Remove user from local state
+      setUsers(users.filter(u => u.id !== userId));
+      setSuccessMessage(`Benutzer "${userName}" wurde erfolgreich gelöscht.`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDeletingUser(null);
     }
   };
 
@@ -318,7 +350,7 @@ export default function AdminUsersPage() {
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              disabled={resettingPasswordFor === user.id || updatingRoleFor === user.id}
+                              disabled={resettingPasswordFor === user.id || updatingRoleFor === user.id || deletingUser === user.id}
                             >
                               <MoreVertical className="h-4 w-4" />
                             </Button>
@@ -373,6 +405,18 @@ export default function AdminUsersPage() {
                                 Zum Admin machen
                               </DropdownMenuItem>
                             )}
+                            
+                            <DropdownMenuSeparator />
+                            
+                            {/* Delete user */}
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteUser(user.id, `${user.firstName} ${user.lastName}`)}
+                              disabled={deletingUser === user.id}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              {deletingUser === user.id ? 'Wird gelöscht...' : 'Benutzer löschen'}
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

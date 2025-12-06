@@ -75,7 +75,13 @@ export default function RootLayout({
       >
         <Providers>
           {children}
-          <Toaster position="top-right" richColors />
+          <Toaster 
+            position="top-center" 
+            richColors 
+            toastOptions={{
+              className: 'mx-4 sm:mx-0',
+            }}
+          />
         </Providers>
         <script
           dangerouslySetInnerHTML={{

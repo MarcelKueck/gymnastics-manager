@@ -101,6 +101,12 @@ export async function GET(
             },
           },
           sessionConfirmations: true,
+          sessionGroups: {
+            select: {
+              trainingGroupId: true,
+              equipment: true,
+            },
+          },
         },
       });
 
@@ -115,12 +121,12 @@ export async function GET(
           isCancelled: false,
           cancellationReason: null,
           notes: null,
-          equipment: null,
           attendanceRecords: [],
           trainerAttendanceRecords: [],
           trainerCancellations: [],
           cancellations: [],
           sessionConfirmations: [],
+          sessionGroups: [],
         };
       }
     } else {
@@ -169,6 +175,12 @@ export async function GET(
             },
           },
           sessionConfirmations: true,
+          sessionGroups: {
+            select: {
+              trainingGroupId: true,
+              equipment: true,
+            },
+          },
         },
       });
 
@@ -187,17 +199,31 @@ export async function GET(
       groupId: string;
     }>();
 
-    // Add athletes from groups
+    // Get the session date for filtering assignments
+    const sessionDate = trainingSession.date instanceof Date 
+      ? trainingSession.date 
+      : new Date(trainingSession.date);
+
+    // Add athletes from groups - only include those assigned BEFORE or ON the session date
     if (recurringTraining) {
       for (const trainingGroup of recurringTraining.trainingGroups) {
         for (const athleteAssignment of trainingGroup.athleteAssignments) {
           const athlete = athleteAssignment.athlete;
-          athleteMap.set(athlete.id, {
-            athleteId: athlete.id,
-            name: `${athlete.user.firstName} ${athlete.user.lastName}`,
-            group: trainingGroup.name,
-            groupId: trainingGroup.id,
-          });
+          
+          // Only include athlete if they were assigned before or on the session date
+          const assignedAt = new Date(athleteAssignment.assignedAt);
+          assignedAt.setHours(0, 0, 0, 0);
+          const sessionDateOnly = new Date(sessionDate);
+          sessionDateOnly.setHours(0, 0, 0, 0);
+          
+          if (assignedAt <= sessionDateOnly) {
+            athleteMap.set(athlete.id, {
+              athleteId: athlete.id,
+              name: `${athlete.user.firstName} ${athlete.user.lastName}`,
+              group: trainingGroup.name,
+              groupId: trainingGroup.id,
+            });
+          }
         }
       }
     }
@@ -260,7 +286,7 @@ export async function GET(
       }
     }
 
-    // Build trainers list from groups
+    // Build trainers list from groups - only include those with valid assignment dates
     const trainerMap = new Map<string, { 
       id: string; 
       name: string; 
@@ -273,7 +299,27 @@ export async function GET(
     }>();
     if (recurringTraining) {
       for (const trainingGroup of recurringTraining.trainingGroups) {
-        for (const assignment of (trainingGroup as { trainerAssignments?: Array<{ trainerId: string; trainer: { user: { firstName: string; lastName: string } } }> }).trainerAssignments || []) {
+        for (const assignment of (trainingGroup as { trainerAssignments?: Array<{ trainerId: string; effectiveFrom?: Date | null; effectiveUntil?: Date | null; trainer: { user: { firstName: string; lastName: string } } }> }).trainerAssignments || []) {
+          // Check if trainer assignment is effective for this session date
+          const effectiveFrom = assignment.effectiveFrom ? new Date(assignment.effectiveFrom) : null;
+          const effectiveUntil = assignment.effectiveUntil ? new Date(assignment.effectiveUntil) : null;
+          const sessionDateOnly = new Date(sessionDate);
+          sessionDateOnly.setHours(0, 0, 0, 0);
+          
+          // Skip if assignment has not started yet
+          if (effectiveFrom) {
+            const effectiveFromDate = new Date(effectiveFrom);
+            effectiveFromDate.setHours(0, 0, 0, 0);
+            if (effectiveFromDate > sessionDateOnly) continue;
+          }
+          
+          // Skip if assignment has ended
+          if (effectiveUntil) {
+            const effectiveUntilDate = new Date(effectiveUntil);
+            effectiveUntilDate.setHours(0, 0, 0, 0);
+            if (effectiveUntilDate < sessionDateOnly) continue;
+          }
+          
           if (!trainerMap.has(assignment.trainerId)) {
             const attendance = trainerAttendanceMap.get(assignment.trainerId) as { status?: string; notes?: string; isLate?: boolean } | undefined;
             // Try group-specific confirmation first, then fall back to trainer-only
@@ -331,6 +377,40 @@ export async function GET(
     // Get the group name if filtering by group
     const groupName = filterGroupId && recurringTraining?.trainingGroups[0]?.name;
 
+    // Get group-specific equipment if filtering by group
+    const sessionGroups = 'sessionGroups' in trainingSession 
+      ? (trainingSession.sessionGroups as Array<{ trainingGroupId: string; equipment: string | null }>)
+      : [];
+    const groupEquipment = filterGroupId 
+      ? sessionGroups.find(sg => sg.trainingGroupId === filterGroupId)?.equipment || null
+      : null;
+
+    // Check if current trainer is assigned to this group
+    const isAdmin = session.user.activeRole === 'ADMIN';
+    const trainerProfileId = session.user.trainerProfileId;
+    let isOwnGroup = isAdmin; // Admins can always edit
+    
+    if (!isAdmin && trainerProfileId && filterGroupId) {
+      // Check if trainer is assigned to this specific group
+      const trainerAssignment = await prisma.recurringTrainingTrainerAssignment.findUnique({
+        where: {
+          trainingGroupId_trainerId: {
+            trainingGroupId: filterGroupId,
+            trainerId: trainerProfileId,
+          },
+        },
+      });
+      isOwnGroup = !!trainerAssignment;
+    } else if (!isAdmin && trainerProfileId && !filterGroupId) {
+      // For session without group filter, check if trainer is in any group
+      const trainerAssignments = await prisma.recurringTrainingTrainerAssignment.findMany({
+        where: { trainerId: trainerProfileId },
+        select: { trainingGroupId: true },
+      });
+      const ownGroupIds = new Set(trainerAssignments.map(a => a.trainingGroupId));
+      isOwnGroup = recurringTraining?.trainingGroups.some((g: { id: string }) => ownGroupIds.has(g.id)) || false;
+    }
+
     const data = {
       id: id, // Return the full ID including group
       sessionId: trainingSession.id,
@@ -344,7 +424,8 @@ export async function GET(
       groups: recurringTraining?.trainingGroups.map((g: { id: string; name: string }) => ({ id: g.id, name: g.name })) || [],
       isCancelled: trainingSession.isCancelled,
       isVirtual: parsedSessionId.startsWith('virtual_'),
-      equipment: 'equipment' in trainingSession ? trainingSession.equipment : null,
+      isOwnGroup,
+      equipment: groupEquipment,
       athletes,
       trainers,
     };
@@ -359,7 +440,7 @@ export async function GET(
   }
 }
 
-// PATCH - Update session (equipment, notes, etc.)
+// PATCH - Update session group (equipment, notes, etc.)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -379,22 +460,55 @@ export async function PATCH(
     const body = await request.json();
     const { equipment } = body;
 
-    // Parse group ID if present and extract just the session ID
-    const { sessionId: parsedSessionId } = parseGroupSessionId(id);
+    // Parse group ID if present and extract session ID and group ID
+    const { sessionId: parsedSessionId, groupId } = parseGroupSessionId(id);
+
+    if (!groupId) {
+      return NextResponse.json({ error: 'Gruppen-ID fehlt' }, { status: 400 });
+    }
+
+    // Check if trainer is authorized to edit this group
+    const isAdmin = session.user.activeRole === 'ADMIN';
+    const trainerProfileId = session.user.trainerProfileId;
+    
+    if (!isAdmin && trainerProfileId) {
+      const trainerAssignment = await prisma.recurringTrainingTrainerAssignment.findUnique({
+        where: {
+          trainingGroupId_trainerId: {
+            trainingGroupId: groupId,
+            trainerId: trainerProfileId,
+          },
+        },
+      });
+      
+      if (!trainerAssignment) {
+        return NextResponse.json({ error: 'Keine Berechtigung für diese Gruppe' }, { status: 403 });
+      }
+    }
 
     // Check if this is a virtual session ID
     const virtualInfo = parseVirtualSessionId(parsedSessionId);
     
     let trainingSession;
+    let sessionGroup;
     
     if (virtualInfo) {
       // For virtual sessions, we need to create a real session first
       const recurringTraining = await prisma.recurringTraining.findUnique({
         where: { id: virtualInfo.recurringTrainingId },
+        include: {
+          trainingGroups: {
+            where: { id: groupId },
+          },
+        },
       });
 
       if (!recurringTraining) {
         return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
+      }
+
+      if (recurringTraining.trainingGroups.length === 0) {
+        return NextResponse.json({ error: 'Gruppe nicht gefunden' }, { status: 404 });
       }
 
       // Check if session already exists
@@ -414,26 +528,57 @@ export async function PATCH(
             dayOfWeek: recurringTraining.dayOfWeek,
             startTime: recurringTraining.startTime,
             endTime: recurringTraining.endTime,
-            equipment: equipment || null,
           },
         });
-      } else {
-        // Update existing session
-        trainingSession = await prisma.trainingSession.update({
-          where: { id: trainingSession.id },
-          data: { equipment: equipment || null },
-        });
       }
+
+      // Now create or update the SessionGroup with equipment
+      sessionGroup = await prisma.sessionGroup.upsert({
+        where: {
+          trainingSessionId_trainingGroupId: {
+            trainingSessionId: trainingSession.id,
+            trainingGroupId: groupId,
+          },
+        },
+        create: {
+          trainingSessionId: trainingSession.id,
+          trainingGroupId: groupId,
+          equipment: equipment || null,
+        },
+        update: {
+          equipment: equipment || null,
+        },
+      });
     } else {
-      // Real session ID - just update
-      trainingSession = await prisma.trainingSession.update({
+      // Real session ID - find or create the SessionGroup and update
+      trainingSession = await prisma.trainingSession.findUnique({
         where: { id: parsedSessionId },
-        data: { equipment: equipment || null },
+      });
+
+      if (!trainingSession) {
+        return NextResponse.json({ error: 'Training nicht gefunden' }, { status: 404 });
+      }
+
+      sessionGroup = await prisma.sessionGroup.upsert({
+        where: {
+          trainingSessionId_trainingGroupId: {
+            trainingSessionId: parsedSessionId,
+            trainingGroupId: groupId,
+          },
+        },
+        create: {
+          trainingSessionId: parsedSessionId,
+          trainingGroupId: groupId,
+          equipment: equipment || null,
+        },
+        update: {
+          equipment: equipment || null,
+        },
       });
     }
 
     return NextResponse.json({ 
-      data: trainingSession,
+      data: sessionGroup,
       message: 'Geräte erfolgreich aktualisiert',
     });
   } catch (error) {

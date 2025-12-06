@@ -61,6 +61,7 @@ interface GroupSession {
   trainerCancellationId?: string;
   trainerConfirmed: boolean;
   isVirtual: boolean;
+  isOwnGroup: boolean;
 }
 
 export default function TrainerSessionsPage() {
@@ -69,6 +70,25 @@ export default function TrainerSessionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [confirmationMode, setConfirmationMode] = useState<'AUTO_CONFIRM' | 'REQUIRE_CONFIRMATION'>('AUTO_CONFIRM');
+  const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState<number>(2);
+
+  // Fetch system settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/settings/public');
+        if (res.ok) {
+          const result = await res.json();
+          setConfirmationMode(result.data.attendanceConfirmationMode || 'AUTO_CONFIRM');
+          setCancellationDeadlineHours(result.data.cancellationDeadlineHours || 2);
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const getWeekStart = useCallback((offset: number) => {
     const now = new Date();
@@ -174,7 +194,7 @@ export default function TrainerSessionsPage() {
             <List className="h-4 w-4 mr-2" />
             Liste
           </TabsTrigger>
-          <TabsTrigger value="calendar">
+          <TabsTrigger value="calendar" className="hidden sm:flex">
             <Calendar className="h-4 w-4 mr-2" />
             Kalender
           </TabsTrigger>
@@ -193,7 +213,16 @@ export default function TrainerSessionsPage() {
           ) : (
             <div className="space-y-3">
               {sessions.map((session) => (
-                <GroupSessionCard key={session.id} session={session} onRefresh={fetchSessions} />
+                <GroupSessionCard 
+                  key={session.id} 
+                  session={session} 
+                  onRefresh={fetchSessions} 
+                  confirmationMode={confirmationMode}
+                  cancellationDeadlineHours={cancellationDeadlineHours}
+                  onSessionUpdate={(updatedSession) => {
+                    setSessions(prev => prev.map(s => s.id === updatedSession.id ? updatedSession : s));
+                  }}
+                />
               ))}
             </div>
           )}
@@ -253,7 +282,19 @@ export default function TrainerSessionsPage() {
   );
 }
 
-function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRefresh: () => void }) {
+function GroupSessionCard({ 
+  session, 
+  onRefresh, 
+  confirmationMode,
+  cancellationDeadlineHours,
+  onSessionUpdate 
+}: { 
+  session: GroupSession; 
+  onRefresh: () => void;
+  confirmationMode: 'AUTO_CONFIRM' | 'REQUIRE_CONFIRMATION';
+  cancellationDeadlineHours: number;
+  onSessionUpdate: (session: GroupSession) => void;
+}) {
   const sessionDate = new Date(session.date);
   const isPast = sessionDate < new Date();
   const [isUndoing, setIsUndoing] = useState(false);
@@ -270,6 +311,18 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
   const currentTrainer = session.trainers?.find(t => t.id === currentTrainerId);
   const isTrainerInGroup = !!currentTrainer;
   const isTrainerConfirmed = currentTrainer?.confirmed ?? false;
+
+  // Check if session is within deadline for confirmation changes
+  const isWithinDeadline = (() => {
+    const sessionDateTime = new Date(session.date);
+    const [hours, minutes] = session.startTime.split(':').map(Number);
+    sessionDateTime.setHours(hours, minutes, 0, 0);
+    
+    const deadlineTime = new Date(sessionDateTime);
+    deadlineTime.setHours(deadlineTime.getHours() - cancellationDeadlineHours);
+    
+    return new Date() <= deadlineTime;
+  })();
 
   const handleConfirmTrainer = async (e: React.MouseEvent, confirmed: boolean) => {
     e.preventDefault();
@@ -288,7 +341,17 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
         const data = await res.json();
         throw new Error(data.error || 'Fehler beim Bestätigen');
       }
-      onRefresh();
+      
+      // Update local session state with new trainer confirmation
+      const updatedTrainers = session.trainers?.map(t => 
+        t.id === currentTrainerId ? { ...t, confirmed } : t
+      ) || [];
+      
+      onSessionUpdate({
+        ...session,
+        trainers: updatedTrainers,
+        trainerConfirmed: confirmed,
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -367,7 +430,8 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
   const handleSaveEquipment = async () => {
     setIsSavingEquipment(true);
     try {
-      const res = await fetch(`/api/trainer/sessions/${session.sessionId}`, {
+      // Use session.id which includes the group ID for group-specific equipment
+      const res = await fetch(`/api/trainer/sessions/${session.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ equipment: equipmentValue }),
@@ -388,17 +452,20 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
   // Get confirmed trainers for this group
   const confirmedTrainers = session.trainers?.filter(t => t.confirmed && !t.cancelled) || [];
 
+  // Can edit if admin or own group
+  const canEdit = isAdmin || session.isOwnGroup;
+
   return (
     <Link href={`/trainer/sessions/${session.id}`}>
       <Card
         className={`hover:border-primary transition-colors ${
           session.isCancelled || session.trainerCancelled ? 'opacity-60' : ''
-        }`}
+        } ${session.isOwnGroup ? 'border-l-4 border-l-primary' : 'border-l-4 border-l-transparent'}`}
       >
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex flex-col items-center justify-center w-14 h-14 bg-muted rounded-lg">
+              <div className={`flex flex-col items-center justify-center w-14 h-14 rounded-lg ${session.isOwnGroup ? 'bg-primary/10' : 'bg-muted'}`}>
                 <span className="text-xs text-muted-foreground">
                   {sessionDate.toLocaleDateString('de-DE', { weekday: 'short' })}
                 </span>
@@ -410,6 +477,9 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">{session.groupName}</h3>
+                  {session.isOwnGroup && !isAdmin && (
+                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">Meine Gruppe</Badge>
+                  )}
                   {session.isCancelled && (
                     <Badge variant="destructive">Abgesagt</Badge>
                   )}
@@ -446,7 +516,7 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
                         </Badge>
                       ))}
                     </div>
-                    {!isPast && (
+                    {!isPast && canEdit && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -463,7 +533,7 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
                     )}
                   </div>
                 )}
-                {!session.equipment && !isPast && (
+                {!session.equipment && !isPast && canEdit && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -498,7 +568,7 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
                     </Button>
                   )}
                   {/* Trainer confirmation buttons (only if trainer is assigned to this group) */}
-                  {isTrainerInGroup && !isAdmin && !isPast && !session.trainerCancelled && (
+                  {isTrainerInGroup && !isAdmin && !isPast && !session.trainerCancelled && isWithinDeadline && (
                     <div className="flex gap-1">
                       <Button
                         variant={isTrainerConfirmed ? "default" : "outline"}
@@ -519,7 +589,14 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
                       </Button>
                     </div>
                   )}
-                  {session.trainerCancelled && !isPast && (
+                  {/* Show deadline passed indicator for trainer's own group */}
+                  {isTrainerInGroup && !isAdmin && !isPast && !session.trainerCancelled && !isWithinDeadline && (
+                    <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                      <Clock className="h-3 w-3 mr-1" />
+                      Frist abgelaufen
+                    </Badge>
+                  )}
+                  {session.trainerCancelled && !isPast && isWithinDeadline && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -536,7 +613,9 @@ function GroupSessionCard({ session, onRefresh }: { session: GroupSession; onRef
                       <span className="text-sm">
                         {session.attendanceMarked
                           ? `${session.presentCount}/${session.expectedAthletes}`
-                          : `${session.confirmedAthletes}/${session.expectedAthletes} bestätigt`}
+                          : confirmationMode === 'AUTO_CONFIRM'
+                            ? `${session.expectedAthletes - session.declinedAthletes}/${session.expectedAthletes} dabei`
+                            : `${session.confirmedAthletes}/${session.expectedAthletes} bestätigt`}
                       </span>
                     </div>
                     {confirmedTrainers.length > 0 && (

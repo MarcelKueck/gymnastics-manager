@@ -217,14 +217,56 @@ export async function GET() {
       return stored ? stored._count.attendanceRecords > 0 : false;
     }).length;
 
+    // Get today's sessions
+    const todaysDate = now.toISOString().split('T')[0];
+    const todaysSessions = virtualSessions.filter((s) => {
+      const sessionDate = s.date.toISOString().split('T')[0];
+      return sessionDate === todaysDate && !s.isCancelled;
+    }).map((s) => {
+      const dateKey = `${s.recurringTrainingId}_${s.date.toISOString().split('T')[0]}`;
+      const stored = storedSessionsByKey.get(dateKey);
+      return {
+        id: s.id || getVirtualSessionId(s.recurringTrainingId, s.date),
+        date: s.date.toISOString(),
+        name: s.trainingName || 'Training',
+        startTime: s.startTime,
+        endTime: s.endTime,
+        groups: s.groups.map((g) => g.name),
+        athleteCount: s.groups.reduce((sum, g) => sum + (g.athleteCount || 0), 0),
+        attendanceMarked: stored ? stored._count.attendanceRecords > 0 : false,
+      };
+    });
+
+    // Get total athletes count (for admin stats)
+    let totalAthletes = 0;
+    let totalTrainers = 0;
+    let totalActiveTrainings = 0;
+    
+    if (isAdmin) {
+      totalAthletes = await prisma.athleteProfile.count({
+        where: { status: 'ACTIVE' },
+      });
+      totalTrainers = await prisma.trainerProfile.count({
+        where: { isActive: true },
+      });
+      totalActiveTrainings = await prisma.recurringTraining.count({
+        where: { isActive: true },
+      });
+    }
+
     const data = {
       upcomingSessions,
+      todaysSessions,
       pendingApprovals,
       athletesNeedingAttention,
       stats: {
         sessionsThisWeek,
         attendanceMarkedThisWeek,
+        totalAthletes,
+        totalTrainers,
+        totalActiveTrainings,
       },
+      isAdmin,
     };
 
     return NextResponse.json({ data }, {

@@ -157,13 +157,13 @@ export default function AthleteProfile() {
           <CardTitle>Account-Informationen</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
             <div>
               <p className="font-medium">Aktuelle Rolle</p>
               <p className="text-sm text-muted-foreground">Athlet</p>
             </div>
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div>
               <p className="font-medium">Passwort ändern</p>
               <p className="text-sm text-muted-foreground">
@@ -175,6 +175,7 @@ export default function AthleteProfile() {
             <Button 
               variant="outline" 
               disabled={isRequestingPasswordReset || passwordResetSent}
+              className="w-full sm:w-auto"
               onClick={async () => {
                 if (!profile?.email) return;
                 setIsRequestingPasswordReset(true);

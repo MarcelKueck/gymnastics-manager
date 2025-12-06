@@ -31,6 +31,7 @@ interface GroupSessionData {
   trainerCancellationId?: string;
   trainerConfirmed: boolean;
   isVirtual: boolean;
+  isOwnGroup: boolean; // Whether the current trainer is assigned to this group
 }
 
 export async function GET(request: NextRequest) {
@@ -65,43 +66,29 @@ export async function GET(request: NextRequest) {
     const isAdmin = session.user.activeRole === 'ADMIN';
     const trainerProfileId = session.user.trainerProfileId;
 
-    // For non-admin trainers, get only their assigned training groups
-    let trainingGroupIds: string[] | null = null;
-    let recurringTrainingIds: string[] | null = null;
+    // For non-admin trainers, get their assigned training groups (for marking as "own")
+    // but still show all groups for visibility
+    let ownTrainingGroupIds: Set<string> = new Set();
 
     if (!isAdmin && trainerProfileId) {
       const trainerAssignments = await prisma.recurringTrainingTrainerAssignment.findMany({
         where: { trainerId: trainerProfileId },
-        include: {
-          trainingGroup: {
-            include: { recurringTraining: true },
-          },
-        },
+        select: { trainingGroupId: true },
       });
 
-      trainingGroupIds = trainerAssignments.map((a) => a.trainingGroupId);
-      recurringTrainingIds = Array.from(new Set(
-        trainerAssignments.map((a) => a.trainingGroup.recurringTrainingId)
-      ));
-
-      // If trainer has no assignments, return empty data
-      if (trainingGroupIds.length === 0) {
-        return NextResponse.json({ data: [] });
-      }
+      ownTrainingGroupIds = new Set(trainerAssignments.map((a) => a.trainingGroupId));
     }
 
-    // Fetch recurring trainings with their groups
+    // Fetch ALL recurring trainings with their groups (trainers can see all)
     const recurringTrainings = await prisma.recurringTraining.findMany({
       where: { 
         isActive: true,
-        ...(recurringTrainingIds ? { id: { in: recurringTrainingIds } } : {}),
       },
       include: {
         trainingGroups: {
-          ...(trainingGroupIds ? { where: { id: { in: trainingGroupIds } } } : {}),
           include: {
-            _count: {
-              select: { athleteAssignments: true },
+            athleteAssignments: {
+              select: { assignedAt: true },
             },
             trainerAssignments: {
               include: {
@@ -119,14 +106,13 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Fetch any stored sessions in this date range
+    // Fetch any stored sessions in this date range (all sessions for visibility)
     const storedSessions = await prisma.trainingSession.findMany({
       where: {
         date: {
           gte: startDate,
           lte: endDate,
         },
-        ...(recurringTrainingIds ? { recurringTrainingId: { in: recurringTrainingIds } } : {}),
       },
       include: {
         _count: {
@@ -140,6 +126,12 @@ export async function GET(request: NextRequest) {
           select: {
             trainingGroupId: true,
             status: true,
+          },
+        },
+        sessionGroups: {
+          select: {
+            trainingGroupId: true,
+            equipment: true,
           },
         },
       },
@@ -213,10 +205,26 @@ export async function GET(request: NextRequest) {
         const presentCount = groupAttendance.filter(r => r.status === 'PRESENT').length;
         const hasAttendance = groupAttendance.length > 0;
 
+        // Get equipment for this specific group
+        const groupEquipment = stored?.sessionGroups?.find(
+          sg => sg.trainingGroupId === group.id
+        )?.equipment || null;
+
+        // Calculate expected athletes for this session date
+        // Only count athletes who were assigned before or on the session date
+        const sessionDateOnly = new Date(vs.date.getFullYear(), vs.date.getMonth(), vs.date.getDate());
+        const expectedAthletes = trainingGroup?.athleteAssignments?.filter(a => {
+          const assignedAtDate = new Date(a.assignedAt.getFullYear(), a.assignedAt.getMonth(), a.assignedAt.getDate());
+          return assignedAtDate <= sessionDateOnly;
+        }).length || 0;
+
         // Create unique ID for this group session
         const groupSessionId = vs.id 
           ? `${vs.id}_group_${group.id}`
           : `${getVirtualSessionId(vs.recurringTrainingId, vs.date)}_group_${group.id}`;
+
+        // Check if this is the trainer's own group
+        const isOwnGroup = isAdmin || ownTrainingGroupIds.has(group.id);
 
         data.push({
           id: groupSessionId,
@@ -230,16 +238,17 @@ export async function GET(request: NextRequest) {
           endTime: vs.endTime,
           isCancelled: vs.isCancelled,
           attendanceMarked: hasAttendance,
-          expectedAthletes: group.athleteCount,
+          expectedAthletes,
           confirmedAthletes,
           declinedAthletes,
           presentCount,
-          equipment: stored?.equipment || null,
+          equipment: groupEquipment,
           trainers: groupTrainers,
           trainerCancelled,
           trainerCancellationId: trainerCancellation?.id,
           trainerConfirmed,
           isVirtual: vs.id === null,
+          isOwnGroup,
         });
       }
     }

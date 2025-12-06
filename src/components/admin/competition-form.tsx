@@ -250,8 +250,8 @@ export function CompetitionForm({
         </div>
       </div>
 
-      <div className="flex items-center gap-6 pt-2">
-        <div className="flex items-center space-x-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 pt-2">
+        <div className="flex items-center space-x-2 min-h-[44px]">
           <Checkbox
             id="requiresDtbId"
             checked={formData.requiresDtbId}
@@ -259,12 +259,12 @@ export function CompetitionForm({
               setFormData({ ...formData, requiresDtbId: checked as boolean })
             }
           />
-          <Label htmlFor="requiresDtbId" className="text-sm font-normal">
+          <Label htmlFor="requiresDtbId" className="text-sm font-normal cursor-pointer">
             DTB-ID erforderlich
           </Label>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 min-h-[44px]">
           <Checkbox
             id="isPublished"
             checked={formData.isPublished}
@@ -272,17 +272,17 @@ export function CompetitionForm({
               setFormData({ ...formData, isPublished: checked as boolean })
             }
           />
-          <Label htmlFor="isPublished" className="text-sm font-normal">
+          <Label htmlFor="isPublished" className="text-sm font-normal cursor-pointer">
             Sofort veröffentlichen
           </Label>
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
+      <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto">
           Abbrechen
         </Button>
-        <Button type="submit" disabled={loading}>
+        <Button type="submit" disabled={loading} className="w-full sm:w-auto">
           {loading ? "Speichern..." : competition ? "Aktualisieren" : "Erstellen"}
         </Button>
       </div>

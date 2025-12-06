@@ -323,6 +323,7 @@ model SessionGroup {
   trainingGroup     TrainingGroup   @relation(fields: [trainingGroupId], references: [id], onDelete: Cascade)
   exercises         String? // Exercise plan for this session
   notes             String?
+  equipment         String? // Comma-separated list of equipment/apparatus for this group in this session
 
   // Relationships
   trainerAssignments SessionGroupTrainerAssignment[]

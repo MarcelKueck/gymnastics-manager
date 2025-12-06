@@ -43,7 +43,8 @@ interface RecurringTrainingData {
   trainingGroups: {
     id: string;
     name: string;
-    _count: { athletes?: number; athleteAssignments?: number };
+    _count?: { athletes?: number; athleteAssignments?: number };
+    athleteAssignments?: { assignedAt: Date }[];
   }[];
 }
 
@@ -126,7 +127,7 @@ export function generateVirtualSessions(
         groups: training.trainingGroups.map(g => ({
           id: g.id,
           name: g.name,
-          athleteCount: g._count.athletes || g._count.athleteAssignments || 0,
+          athleteCount: g._count?.athletes || g._count?.athleteAssignments || g.athleteAssignments?.length || 0,
         })),
       };
 

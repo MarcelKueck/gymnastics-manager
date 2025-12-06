@@ -36,6 +36,49 @@ export async function PUT(request: NextRequest) {
 
   const body = await request.json();
 
+  // Get current settings to check if confirmation mode is changing
+  const currentSettings = await prisma.systemSettings.findFirst({
+    where: { id: 'default' },
+  });
+
+  const oldMode = currentSettings?.attendanceConfirmationMode || 'AUTO_CONFIRM';
+  const newMode = body.attendanceConfirmationMode;
+
+  // If confirmation mode is changing, reset future session confirmations
+  if (newMode && oldMode !== newMode) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (newMode === 'REQUIRE_CONFIRMATION') {
+      // Switching to REQUIRE_CONFIRMATION: 
+      // Delete all athlete confirmations for future sessions (they need to actively confirm)
+      // Keep trainer confirmations as they should still confirm
+      await prisma.sessionConfirmation.deleteMany({
+        where: {
+          athleteId: { not: null },
+          trainingSession: {
+            date: { gte: today },
+          },
+        },
+      });
+      console.log(`[Settings] Mode changed to REQUIRE_CONFIRMATION: Reset all future athlete confirmations`);
+    } else if (newMode === 'AUTO_CONFIRM') {
+      // Switching to AUTO_CONFIRM:
+      // Delete all athlete confirmations for future sessions (null = implicitly confirmed)
+      // Athletes who explicitly declined will need to be handled - we keep declined ones
+      await prisma.sessionConfirmation.deleteMany({
+        where: {
+          athleteId: { not: null },
+          confirmed: true, // Only delete explicit confirmations, keep declines
+          trainingSession: {
+            date: { gte: today },
+          },
+        },
+      });
+      console.log(`[Settings] Mode changed to AUTO_CONFIRM: Reset all future athlete confirmations (kept declines)`);
+    }
+  }
+
   const settings = await prisma.systemSettings.upsert({
     where: { id: 'default' },
     update: {
@@ -71,6 +114,8 @@ export async function PUT(request: NextRequest) {
 
   return NextResponse.json({
     data: settings,
-    message: 'Einstellungen erfolgreich gespeichert',
+    message: newMode && oldMode !== newMode 
+      ? 'Einstellungen gespeichert. Bestätigungen für zukünftige Trainings wurden zurückgesetzt.'
+      : 'Einstellungen erfolgreich gespeichert',
   });
 }

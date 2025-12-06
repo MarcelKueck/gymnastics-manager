@@ -48,7 +48,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check if session hasn't passed
+    // Get settings for deadline check
+    const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+    const deadlineHours = settings?.cancellationDeadlineHours || 2;
+
+    // Check if session hasn't passed and is within deadline
     const sessionDate = new Date(cancellation.trainingSession.date);
     const timeStr = cancellation.trainingSession.startTime || 
                     cancellation.trainingSession.recurringTraining?.startTime || '00:00';
@@ -58,6 +62,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (new Date() > sessionDate) {
       return NextResponse.json(
         { error: 'Training hat bereits stattgefunden' },
+        { status: 400 }
+      );
+    }
+
+    // Check deadline
+    const deadlineTime = new Date(sessionDate);
+    deadlineTime.setHours(deadlineTime.getHours() - deadlineHours);
+    
+    if (new Date() > deadlineTime) {
+      return NextResponse.json(
+        { error: `Änderungen sind nur bis ${deadlineHours} Stunden vor dem Training möglich` },
         { status: 400 }
       );
     }
