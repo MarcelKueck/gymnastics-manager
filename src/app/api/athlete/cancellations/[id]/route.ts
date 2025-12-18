@@ -7,37 +7,6 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// Helper to check deadline
-async function checkDeadline(cancellationId: string, athleteId: string) {
-  const cancellation = await prisma.cancellation.findFirst({
-    where: { id: cancellationId, athleteId, isActive: true },
-    include: {
-      trainingSession: { include: { recurringTraining: true } },
-    },
-  });
-
-  if (!cancellation) {
-    return { error: 'Absage nicht gefunden', status: 404 };
-  }
-
-  const settings = await prisma.systemSettings.findUnique({
-    where: { id: 'default' },
-  });
-  const deadlineHours = settings?.cancellationDeadlineHours || 2;
-  
-  const sessionStart = new Date(cancellation.trainingSession.date);
-  const timeStr = cancellation.trainingSession.startTime ||
-    cancellation.trainingSession.recurringTraining?.startTime || '00:00';
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  sessionStart.setHours(hours, minutes);
-
-  if (new Date() > subHours(sessionStart, deadlineHours)) {
-    return { error: 'Absagefrist überschritten', status: 400 };
-  }
-
-  return { cancellation };
-}
-
 // PUT - Update cancellation reason
 export async function PUT(
   request: NextRequest,
@@ -59,14 +28,35 @@ export async function PUT(
       );
     }
 
-    const check = await checkDeadline(id, athleteId);
-    if ('error' in check) {
+    const cancellation = await prisma.cancellation.findFirst({
+      where: { id, athleteId, isActive: true },
+      include: {
+        trainingSession: { include: { recurringTraining: true } },
+      },
+    });
+
+    if (!cancellation) {
       return NextResponse.json(
-        { error: check.error },
-        { status: check.status }
+        { error: 'Absage nicht gefunden' },
+        { status: 404 }
       );
     }
 
+    // Check if session has already passed
+    const sessionStart = new Date(cancellation.trainingSession.date);
+    const timeStr = cancellation.trainingSession.startTime ||
+      cancellation.trainingSession.recurringTraining?.startTime || '00:00';
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    sessionStart.setHours(hours, minutes);
+
+    if (new Date() > sessionStart) {
+      return NextResponse.json(
+        { error: 'Training hat bereits stattgefunden' },
+        { status: 400 }
+      );
+    }
+
+    // BUG FIX #7: Allow editing reason even after deadline (reason update doesn't affect late status)
     const updated = await prisma.cancellation.update({
       where: { id },
       data: { reason },
@@ -97,14 +87,45 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const check = await checkDeadline(id, athleteId);
-    if ('error' in check) {
+    const cancellation = await prisma.cancellation.findFirst({
+      where: { id, athleteId, isActive: true },
+      include: {
+        trainingSession: { include: { recurringTraining: true } },
+      },
+    });
+
+    if (!cancellation) {
       return NextResponse.json(
-        { error: check.error },
-        { status: check.status }
+        { error: 'Absage nicht gefunden' },
+        { status: 404 }
       );
     }
 
+    // Check if session has already passed
+    const sessionStart = new Date(cancellation.trainingSession.date);
+    const timeStr = cancellation.trainingSession.startTime ||
+      cancellation.trainingSession.recurringTraining?.startTime || '00:00';
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    sessionStart.setHours(hours, minutes);
+
+    if (new Date() > sessionStart) {
+      return NextResponse.json(
+        { error: 'Training hat bereits stattgefunden' },
+        { status: 400 }
+      );
+    }
+
+    // Get settings for deadline check (for warning only)
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+    });
+    const deadlineHours = settings?.cancellationDeadlineHours || 2;
+    const deadline = subHours(sessionStart, deadlineHours);
+    const isPastDeadline = new Date() > deadline;
+
+    // BUG FIX #7: Allow undo but warn if past deadline
+    // The athlete will be considered confirmed if they undo, 
+    // but since the original cancellation was late, it may still affect their record
     const updated = await prisma.cancellation.update({
       where: { id },
       data: {
@@ -113,14 +134,20 @@ export async function DELETE(
       },
     });
 
+    let message = 'Absage zurückgenommen';
+    if (isPastDeadline) {
+      message = `Absage zurückgenommen. Hinweis: Die Frist (${deadlineHours} Stunden vor Trainingsbeginn) ist bereits abgelaufen.`;
+    }
+
     return NextResponse.json({
       data: updated,
-      message: 'Absage zurückgenommen',
+      message,
+      isPastDeadline,
     });
   } catch (err) {
     console.error('Cancellation DELETE error:', err);
     return NextResponse.json(
-      { error: 'Fehler beim Zurücknehmen der Absage' },
+      { error: 'Fehler beim Rückgängigmachen der Absage' },
       { status: 500 }
     );
   }

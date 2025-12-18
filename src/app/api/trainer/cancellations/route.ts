@@ -103,21 +103,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check deadline (same as athletes)
-    const deadlineHours = settings?.cancellationDeadlineHours || 2;
-    const sessionStart = new Date(trainingSession.date);
+    // Check if session is in the past (already happened)
+    const sessionDate = new Date(trainingSession.date);
     const timeStr = trainingSession.startTime || trainingSession.recurringTraining?.startTime || '00:00';
     const [hours, minutes] = timeStr.split(':').map(Number);
-    sessionStart.setHours(hours, minutes);
+    sessionDate.setHours(hours, minutes);
 
-    const deadline = subHours(sessionStart, deadlineHours);
-
-    if (new Date() > deadline) {
+    if (new Date() > sessionDate) {
       return NextResponse.json(
-        { error: 'Absagefrist überschritten' },
+        { error: 'Training hat bereits stattgefunden' },
         { status: 400 }
       );
     }
+
+    // BUG FIX #8: Check deadline but DON'T block - instead mark as late
+    const deadlineHours = settings?.cancellationDeadlineHours || 2;
+    const deadline = subHours(sessionDate, deadlineHours);
+    const isLate = new Date() > deadline;
 
     // Check if already cancelled
     const existing = await prisma.trainerCancellation.findUnique({
@@ -136,23 +138,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create or reactivate cancellation
+    // Create or reactivate cancellation with isLate flag
     const cancellation = existing
       ? await prisma.trainerCancellation.update({
           where: { id: existing.id },
-          data: { isActive: true, reason, cancelledAt: new Date(), undoneAt: null },
+          data: {
+            reason,
+            isActive: true,
+            cancelledAt: new Date(),
+            undoneAt: null,
+            isLate, // BUG FIX #8: Track if cancellation was late
+          },
         })
       : await prisma.trainerCancellation.create({
           data: {
             trainerId,
             trainingSessionId: actualSessionId,
             reason,
+            isLate, // BUG FIX #8: Track if cancellation was late
           },
         });
 
-    return NextResponse.json({ data: cancellation }, { status: 201 });
-  } catch (error) {
-    console.error('Trainer cancellation error:', error);
+    // Prepare response message
+    let message = 'Training erfolgreich abgesagt';
+    if (isLate) {
+      message = `Training abgesagt. Hinweis: Die Absage erfolgte nach der Frist (${deadlineHours} Stunden vor Trainingsbeginn) und wird als unentschuldigt gewertet.`;
+    }
+
+    return NextResponse.json({
+      data: {
+        ...cancellation,
+        isLate,
+      },
+      message,
+      isLate, // Include in response so UI can show warning
+    });
+  } catch (err) {
+    console.error('Trainer cancellation POST error:', err);
     return NextResponse.json(
       { error: 'Fehler beim Absagen des Trainings' },
       { status: 500 }
@@ -160,7 +182,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Get trainer's cancellations
+// GET - Get active trainer cancellations
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -179,20 +201,38 @@ export async function GET() {
       where: {
         trainerId,
         isActive: true,
+        trainingSession: {
+          date: { gte: new Date() },
+        },
       },
       include: {
         trainingSession: {
-          include: {
-            recurringTraining: true,
-          },
+          include: { recurringTraining: true },
         },
       },
-      orderBy: { cancelledAt: 'desc' },
+      orderBy: {
+        trainingSession: { date: 'asc' },
+      },
     });
 
-    return NextResponse.json({ data: cancellations });
-  } catch (error) {
-    console.error('Get trainer cancellations error:', error);
+    return NextResponse.json({
+      data: cancellations.map((c) => ({
+        id: c.id,
+        trainingSessionId: c.trainingSessionId,
+        reason: c.reason,
+        cancelledAt: c.cancelledAt.toISOString(),
+        isLate: c.isLate, // BUG FIX #8: Include isLate in response
+        trainingSession: {
+          id: c.trainingSession.id,
+          date: c.trainingSession.date.toISOString(),
+          name: c.trainingSession.recurringTraining?.name || 'Training',
+          startTime: c.trainingSession.startTime || c.trainingSession.recurringTraining?.startTime,
+          endTime: c.trainingSession.endTime || c.trainingSession.recurringTraining?.endTime,
+        },
+      })),
+    });
+  } catch (err) {
+    console.error('Trainer cancellation GET error:', err);
     return NextResponse.json(
       { error: 'Fehler beim Laden der Absagen' },
       { status: 500 }

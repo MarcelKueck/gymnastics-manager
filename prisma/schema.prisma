@@ -135,8 +135,11 @@ model AthleteProfile {
   approvedAt        DateTime?
   configuredAt      DateTime?
 
-  // Preferences
-  autoConfirmFutureSessions Boolean @default(false)
+  // BUG FIX #1: Individual auto-confirm preference
+  // If true, athlete is auto-confirmed for future sessions (overrides system setting)
+  // If false, athlete must manually confirm (overrides system AUTO_CONFIRM setting)
+  // If null, use system setting
+  autoConfirmFutureSessions Boolean?
 
   // Relationships
   recurringTrainingAssignments RecurringTrainingAthleteAssignment[]
@@ -154,6 +157,7 @@ model AthleteProfile {
   @@index([userId])
   @@index([isApproved])
   @@index([youthCategory])
+  @@index([status])
 }
 
 model TrainerProfile {
@@ -162,6 +166,12 @@ model TrainerProfile {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   role     UserRole @default(TRAINER)
   isActive Boolean  @default(true)
+
+  // BUG FIX #1 & #2: Individual auto-confirm preference for trainers
+  // If true, trainer is auto-confirmed for future sessions (overrides system setting)
+  // If false, trainer must manually confirm (overrides system AUTO_CONFIRM setting)
+  // If null, use system setting
+  autoConfirmFutureSessions Boolean?
 
   // Relationships
   approvedAthletes              AthleteProfile[]                     @relation("AthleteApprovals")
@@ -375,6 +385,10 @@ model Cancellation {
   cancelledAt       DateTime        @default(now())
   isActive          Boolean         @default(true)
   undoneAt          DateTime?
+  
+  // BUG FIX #7: Track if cancellation was made after deadline
+  // Late cancellations are allowed but marked as unexcused when recording attendance
+  isLate            Boolean         @default(false)
 
   @@unique([athleteId, trainingSessionId])
   @@index([athleteId])
@@ -392,6 +406,10 @@ model TrainerCancellation {
   cancelledAt       DateTime        @default(now())
   isActive          Boolean         @default(true)
   undoneAt          DateTime?
+  
+  // BUG FIX #8: Track if cancellation was made after deadline
+  // Late cancellations are allowed but marked as unexcused when recording attendance
+  isLate            Boolean         @default(false)
 
   @@unique([trainerId, trainingSessionId])
   @@index([trainerId])

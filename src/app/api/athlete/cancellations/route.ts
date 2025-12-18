@@ -95,21 +95,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check deadline
-    const deadlineHours = settings?.cancellationDeadlineHours || 2;
-    const sessionStart = new Date(trainingSession.date);
+    // Check if session is in the past (already happened)
+    const sessionDate = new Date(trainingSession.date);
     const timeStr = trainingSession.startTime || trainingSession.recurringTraining?.startTime || '00:00';
     const [hours, minutes] = timeStr.split(':').map(Number);
-    sessionStart.setHours(hours, minutes);
+    sessionDate.setHours(hours, minutes);
 
-    const deadline = subHours(sessionStart, deadlineHours);
-
-    if (new Date() > deadline) {
+    if (new Date() > sessionDate) {
       return NextResponse.json(
-        { error: 'Absagefrist überschritten' },
+        { error: 'Training hat bereits stattgefunden' },
         { status: 400 }
       );
     }
+
+    // BUG FIX #7: Check deadline but DON'T block - instead mark as late
+    const deadlineHours = settings?.cancellationDeadlineHours || 2;
+    const deadline = subHours(sessionDate, deadlineHours);
+    const isLate = new Date() > deadline;
 
     // Check if already cancelled
     const existing = await prisma.cancellation.findUnique({
@@ -128,7 +130,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create or reactivate cancellation
+    // Create or reactivate cancellation with isLate flag
     const cancellation = await prisma.cancellation.upsert({
       where: {
         athleteId_trainingSessionId: {
@@ -141,17 +143,29 @@ export async function POST(request: NextRequest) {
         isActive: true,
         cancelledAt: new Date(),
         undoneAt: null,
+        isLate, // BUG FIX #7: Track if cancellation was late
       },
       create: {
         athleteId,
         trainingSessionId: actualSessionId,
         reason,
+        isLate, // BUG FIX #7: Track if cancellation was late
       },
     });
 
+    // Prepare response message
+    let message = 'Training erfolgreich abgesagt';
+    if (isLate) {
+      message = `Training abgesagt. Hinweis: Die Absage erfolgte nach der Frist (${deadlineHours} Stunden vor Trainingsbeginn) und wird als unentschuldigt gewertet.`;
+    }
+
     return NextResponse.json({
-      data: cancellation,
-      message: 'Training erfolgreich abgesagt',
+      data: {
+        ...cancellation,
+        isLate,
+      },
+      message,
+      isLate, // Include in response so UI can show warning
     });
   } catch (err) {
     console.error('Cancellation POST error:', err);
@@ -191,14 +205,16 @@ export async function GET() {
     return NextResponse.json({
       data: cancellations.map((c) => ({
         id: c.id,
+        trainingSessionId: c.trainingSessionId,
         reason: c.reason,
         cancelledAt: c.cancelledAt.toISOString(),
+        isLate: c.isLate, // BUG FIX #7: Include isLate in response
         trainingSession: {
           id: c.trainingSession.id,
           date: c.trainingSession.date.toISOString(),
           name: c.trainingSession.recurringTraining?.name || 'Training',
-          startTime: c.trainingSession.startTime || c.trainingSession.recurringTraining?.startTime || '00:00',
-          endTime: c.trainingSession.endTime || c.trainingSession.recurringTraining?.endTime || '00:00',
+          startTime: c.trainingSession.startTime || c.trainingSession.recurringTraining?.startTime,
+          endTime: c.trainingSession.endTime || c.trainingSession.recurringTraining?.endTime,
         },
       })),
     });

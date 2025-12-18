@@ -31,7 +31,7 @@ export async function GET() {
 
 // PUT - Update system settings
 export async function PUT(request: NextRequest) {
-  const { error } = await requireAdmin();
+  const { session, error } = await requireAdmin();
   if (error) return error;
 
   const body = await request.json();
@@ -50,32 +50,29 @@ export async function PUT(request: NextRequest) {
     today.setHours(0, 0, 0, 0);
 
     if (newMode === 'REQUIRE_CONFIRMATION') {
-      // Switching to REQUIRE_CONFIRMATION: 
-      // Delete all athlete confirmations for future sessions (they need to actively confirm)
-      // Keep trainer confirmations as they should still confirm
+      // BUG FIX #2: Switching to REQUIRE_CONFIRMATION: 
+      // Delete ALL confirmations for future sessions (both athletes AND trainers need to actively confirm)
       await prisma.sessionConfirmation.deleteMany({
         where: {
-          athleteId: { not: null },
           trainingSession: {
             date: { gte: today },
           },
         },
       });
-      console.log(`[Settings] Mode changed to REQUIRE_CONFIRMATION: Reset all future athlete confirmations`);
+      console.log(`[Settings] Mode changed to REQUIRE_CONFIRMATION: Reset all future confirmations (athletes AND trainers)`);
     } else if (newMode === 'AUTO_CONFIRM') {
-      // Switching to AUTO_CONFIRM:
-      // Delete all athlete confirmations for future sessions (null = implicitly confirmed)
-      // Athletes who explicitly declined will need to be handled - we keep declined ones
+      // BUG FIX #2: Switching to AUTO_CONFIRM:
+      // Delete all confirmations for future sessions except declines
+      // Both athletes AND trainers who explicitly declined should keep their decline
       await prisma.sessionConfirmation.deleteMany({
         where: {
-          athleteId: { not: null },
           confirmed: true, // Only delete explicit confirmations, keep declines
           trainingSession: {
             date: { gte: today },
           },
         },
       });
-      console.log(`[Settings] Mode changed to AUTO_CONFIRM: Reset all future athlete confirmations (kept declines)`);
+      console.log(`[Settings] Mode changed to AUTO_CONFIRM: Reset all future confirmations (kept declines for both athletes AND trainers)`);
     }
   }
 
@@ -94,6 +91,9 @@ export async function PUT(request: NextRequest) {
       emailApprovalNotification: body.emailApprovalNotification,
       emailAbsenceAlert: body.emailAbsenceAlert,
       emailSessionCancellation: body.emailSessionCancellation,
+      // Track who modified
+      lastModifiedBy: session!.user.trainerProfileId,
+      lastModifiedAt: new Date(),
     },
     create: {
       id: 'default',
@@ -109,13 +109,15 @@ export async function PUT(request: NextRequest) {
       emailApprovalNotification: body.emailApprovalNotification ?? true,
       emailAbsenceAlert: body.emailAbsenceAlert ?? true,
       emailSessionCancellation: body.emailSessionCancellation ?? true,
+      lastModifiedBy: session!.user.trainerProfileId,
+      lastModifiedAt: new Date(),
     },
   });
 
   return NextResponse.json({
     data: settings,
     message: newMode && oldMode !== newMode 
-      ? 'Einstellungen gespeichert. Bestätigungen für zukünftige Trainings wurden zurückgesetzt.'
+      ? 'Einstellungen gespeichert. Bestätigungen für zukünftige Trainings wurden zurückgesetzt (Athleten und Trainer).'
       : 'Einstellungen erfolgreich gespeichert',
   });
 }

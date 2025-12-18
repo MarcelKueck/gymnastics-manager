@@ -36,6 +36,9 @@ export async function GET() {
             attendanceRate: 0,
           },
           activeCancellations: 0,
+          upcomingCompetitions: [],
+          recentFiles: [],
+          trainingGroups: [],
         },
       });
     }
@@ -117,20 +120,39 @@ export async function GET() {
         };
       });
 
-    // Monthly attendance stats
+    // BUG FIX #11: Monthly attendance stats - fix the query
+    // The issue was that attendance records might have trainingGroupId set,
+    // so we need to check if the athlete's groups match
     const attendanceRecords = await prisma.attendanceRecord.findMany({
       where: {
         athleteId,
         trainingSession: {
           date: { gte: monthStart, lte: monthEnd },
+          isCancelled: false, // Don't count cancelled sessions
         },
+        // BUG FIX #11: Include records where either:
+        // - trainingGroupId is null (legacy records)
+        // - trainingGroupId is in the athlete's assigned groups
+        OR: [
+          { trainingGroupId: null },
+          { trainingGroupId: { in: groupIds } },
+        ],
+      },
+      include: {
+        trainingSession: true,
       },
     });
 
-    const totalSessions = attendanceRecords.length;
-    const presentCount = attendanceRecords.filter(
-      (r) => r.status === 'PRESENT'
-    ).length;
+    // BUG FIX #11: Count unique sessions (an athlete might have multiple records for same session in different groups)
+    const uniqueSessionIds = new Set(attendanceRecords.map(r => r.trainingSessionId));
+    
+    // For attendance rate, we need to count sessions where the athlete was present
+    // vs total sessions they should have attended
+    const presentRecords = attendanceRecords.filter(r => r.status === 'PRESENT');
+    const presentSessionIds = new Set(presentRecords.map(r => r.trainingSessionId));
+
+    const totalSessions = uniqueSessionIds.size;
+    const presentCount = presentSessionIds.size;
     const attendanceRate = totalSessions > 0 
       ? Math.round((presentCount / totalSessions) * 100) 
       : 0;
@@ -151,6 +173,8 @@ export async function GET() {
           gte: now,
           lte: addDays(now, 30),
         },
+        isPublished: true,
+        isCancelled: false,
       },
       include: {
         registrations: {
@@ -165,6 +189,7 @@ export async function GET() {
     const recentFiles = await prisma.upload.findMany({
       where: {
         uploadedAt: { gte: subDays(now, 14) },
+        isActive: true,
       },
       include: {
         category: true,

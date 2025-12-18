@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { subHours } from 'date-fns';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -48,11 +49,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Get settings for deadline check
-    const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
-    const deadlineHours = settings?.cancellationDeadlineHours || 2;
-
-    // Check if session hasn't passed and is within deadline
+    // Check if session has already passed
     const sessionDate = new Date(cancellation.trainingSession.date);
     const timeStr = cancellation.trainingSession.startTime || 
                     cancellation.trainingSession.recurringTraining?.startTime || '00:00';
@@ -66,18 +63,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check deadline
-    const deadlineTime = new Date(sessionDate);
-    deadlineTime.setHours(deadlineTime.getHours() - deadlineHours);
-    
-    if (new Date() > deadlineTime) {
-      return NextResponse.json(
-        { error: `Änderungen sind nur bis ${deadlineHours} Stunden vor dem Training möglich` },
-        { status: 400 }
-      );
-    }
+    // Get settings for deadline check (for warning only)
+    const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+    const deadlineHours = settings?.cancellationDeadlineHours || 2;
+    const deadline = subHours(sessionDate, deadlineHours);
+    const isPastDeadline = new Date() > deadline;
 
-    // Undo the cancellation
+    // BUG FIX #8: Allow undo regardless of deadline (just warn)
     await prisma.trainerCancellation.update({
       where: { id },
       data: {
@@ -86,7 +78,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       },
     });
 
-    return NextResponse.json({ success: true });
+    let message = 'Absage zurückgenommen';
+    if (isPastDeadline) {
+      message = `Absage zurückgenommen. Hinweis: Die Frist (${deadlineHours} Stunden vor Trainingsbeginn) ist bereits abgelaufen.`;
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message,
+      isPastDeadline,
+    });
   } catch (error) {
     console.error('Undo trainer cancellation error:', error);
     return NextResponse.json(
@@ -111,9 +112,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const trainerId = session.user.trainerProfileId;
     const { id } = await params;
-    const body = await request.json();
 
-    if (!body.reason || body.reason.length < 10) {
+    const { reason } = await request.json();
+
+    if (!reason || reason.length < 10) {
       return NextResponse.json(
         { error: 'Grund muss mindestens 10 Zeichen haben' },
         { status: 400 }
@@ -123,6 +125,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Find the cancellation
     const cancellation = await prisma.trainerCancellation.findUnique({
       where: { id },
+      include: {
+        trainingSession: {
+          include: { recurringTraining: true },
+        },
+      },
     });
 
     if (!cancellation) {
@@ -140,13 +147,30 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Update reason
+    // Check if session has already passed
+    const sessionDate = new Date(cancellation.trainingSession.date);
+    const timeStr = cancellation.trainingSession.startTime || 
+                    cancellation.trainingSession.recurringTraining?.startTime || '00:00';
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    sessionDate.setHours(hours, minutes);
+
+    if (new Date() > sessionDate) {
+      return NextResponse.json(
+        { error: 'Training hat bereits stattgefunden' },
+        { status: 400 }
+      );
+    }
+
+    // BUG FIX #8: Allow editing reason even after deadline
     const updated = await prisma.trainerCancellation.update({
       where: { id },
-      data: { reason: body.reason },
+      data: { reason },
     });
 
-    return NextResponse.json({ data: updated });
+    return NextResponse.json({
+      data: updated,
+      message: 'Absage aktualisiert',
+    });
   } catch (error) {
     console.error('Update trainer cancellation error:', error);
     return NextResponse.json(
