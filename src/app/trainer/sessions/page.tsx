@@ -1,124 +1,146 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loading } from '@/components/ui/loading';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loading } from '@/components/ui/loading';
+import { PageHeader } from '@/components/shared/page-header';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { 
-  Calendar, 
-  List, 
-  CheckCircle, 
-  Clock, 
-  ChevronLeft, 
+import Link from 'next/link';
+import {
+  Calendar,
+  ChevronLeft,
   ChevronRight,
   Users,
-  Undo2,
+  List,
   XCircle,
-  Dumbbell,
+  Undo2,
   Check,
+  Clock,
+  Dumbbell,
   Edit,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
-import Link from 'next/link';
-
-interface SessionTrainer {
-  id: string;
-  name: string;
-  cancelled: boolean;
-  confirmed: boolean;
-}
+import { useSession } from 'next-auth/react';
 
 interface GroupSession {
   id: string;
-  sessionId: string;
   recurringTrainingId: string;
-  trainingGroupId: string;
+  groupId: string;
   groupName: string;
-  date: string;
   trainingName: string;
+  date: string;
   startTime: string;
   endTime: string;
   isCancelled: boolean;
+  isCompleted: boolean;
   attendanceMarked: boolean;
   expectedAthletes: number;
   confirmedAthletes: number;
   declinedAthletes: number;
   presentCount: number;
-  equipment: string | null;
-  trainers: SessionTrainer[];
+  isOwnGroup: boolean;
   trainerCancelled: boolean;
   trainerCancellationId?: string;
+  trainerCancellationReason?: string;
   trainerConfirmed: boolean;
-  isVirtual: boolean;
-  isOwnGroup: boolean;
+  equipment: string | null;
+  trainers?: Array<{
+    id: string;
+    name: string;
+    cancelled: boolean;
+    confirmed: boolean;
+  }>;
+}
+
+function getWeekStart(offset: number): Date {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+  const start = new Date(now.setDate(diff));
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() + offset * 7);
+  return start;
+}
+
+function isToday(date: Date): boolean {
+  const today = new Date();
+  return (
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+  );
+}
+
+function isPast(date: Date): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const compareDate = new Date(date);
+  compareDate.setHours(0, 0, 0, 0);
+  return compareDate < today;
 }
 
 export default function TrainerSessionsPage() {
   const [sessions, setSessions] = useState<GroupSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [confirmationMode, setConfirmationMode] = useState<'AUTO_CONFIRM' | 'REQUIRE_CONFIRMATION'>('AUTO_CONFIRM');
-  const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState<number>(2);
+  const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState(2);
+  const [showPastSessions, setShowPastSessions] = useState(false);
+  const { data: authSession } = useSession();
+  const isAdmin = authSession?.user?.activeRole === 'ADMIN';
 
-  // Fetch system settings
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await fetch('/api/settings/public');
-        if (res.ok) {
-          const result = await res.json();
-          setConfirmationMode(result.data.attendanceConfirmationMode || 'AUTO_CONFIRM');
-          setCancellationDeadlineHours(result.data.cancellationDeadlineHours || 2);
-        }
-      } catch (err) {
-        console.error('Failed to fetch settings:', err);
-      }
-    };
-    fetchSettings();
-  }, []);
-
-  const getWeekStart = useCallback((offset: number) => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to Monday
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + diff + offset * 7);
-    monday.setHours(0, 0, 0, 0);
-    return monday;
-  }, []);
-
-  const fetchSessions = useCallback(() => {
+  const fetchSessions = useCallback(async () => {
     setIsLoading(true);
-    const startDate = getWeekStart(currentWeekOffset);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 6);
+    const weekStart = getWeekStart(currentWeekOffset);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
 
-    fetch(`/api/trainer/sessions?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch');
-        return res.json();
-      })
-      .then((result) => setSessions(result.data))
-      .catch((err) => setError(err.message))
-      .finally(() => setIsLoading(false));
-  }, [currentWeekOffset, getWeekStart]);
+    try {
+      const res = await fetch(
+        `/api/trainer/sessions?from=${weekStart.toISOString()}&to=${weekEnd.toISOString()}`
+      );
+      if (res.ok) {
+        const result = await res.json();
+        setSessions(result.data || []);
+        if (result.confirmationMode) {
+          setConfirmationMode(result.confirmationMode);
+        }
+        if (result.cancellationDeadlineHours !== undefined) {
+          setCancellationDeadlineHours(result.cancellationDeadlineHours);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch sessions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentWeekOffset]);
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
+
+  const formatWeekRange = () => {
+    const start = getWeekStart(currentWeekOffset);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return `${start.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  };
 
   const getWeekDays = () => {
     const start = getWeekStart(currentWeekOffset);
@@ -131,13 +153,6 @@ export default function TrainerSessionsPage() {
     return days;
   };
 
-  const formatWeekRange = () => {
-    const start = getWeekStart(currentWeekOffset);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    return `${start.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-  };
-
   const getSessionsForDate = (date: Date) => {
     return sessions.filter((session) => {
       const sessionDate = new Date(session.date);
@@ -145,22 +160,27 @@ export default function TrainerSessionsPage() {
     });
   };
 
-  const isToday = (date: Date) => {
-    return date.toDateString() === new Date().toDateString();
-  };
+  // Filter sessions based on showPastSessions toggle
+  const filteredSessions = sessions.filter((session) => {
+    if (showPastSessions) return true;
+    const sessionDate = new Date(session.date);
+    return !isPast(sessionDate);
+  });
 
-  const isPast = (date: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date < today;
-  };
-
-  if (error) return <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Fehler beim Laden: {error}</div>;
+  // Check if there are any past sessions to show the toggle
+  const hasPastSessions = sessions.some((session) => {
+    const sessionDate = new Date(session.date);
+    return isPast(sessionDate);
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold sm:text-2xl">Trainingseinheiten</h1>
+      <PageHeader
+        title="Trainingseinheiten"
+        description="Verwalte und bearbeite deine Trainingseinheiten"
+      />
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -186,6 +206,28 @@ export default function TrainerSessionsPage() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+        
+        {/* Toggle for past sessions */}
+        {hasPastSessions && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPastSessions(!showPastSessions)}
+            className="flex items-center gap-2"
+          >
+            {showPastSessions ? (
+              <>
+                <EyeOff className="h-4 w-4" />
+                Vergangene ausblenden
+              </>
+            ) : (
+              <>
+                <Eye className="h-4 w-4" />
+                Vergangene anzeigen
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'calendar')}>
@@ -203,16 +245,29 @@ export default function TrainerSessionsPage() {
         <TabsContent value="list">
           {isLoading ? (
             <Loading />
-          ) : sessions.length === 0 ? (
+          ) : filteredSessions.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center">
                 <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Keine Trainingseinheiten in dieser Woche</p>
+                <p className="text-muted-foreground">
+                  {sessions.length === 0 
+                    ? 'Keine Trainingseinheiten in dieser Woche'
+                    : 'Keine anstehenden Trainingseinheiten in dieser Woche'}
+                </p>
+                {!showPastSessions && sessions.length > 0 && (
+                  <Button
+                    variant="link"
+                    onClick={() => setShowPastSessions(true)}
+                    className="mt-2"
+                  >
+                    Vergangene anzeigen
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-3">
-              {sessions.map((session) => (
+              {filteredSessions.map((session) => (
                 <GroupSessionCard 
                   key={session.id} 
                   session={session} 
@@ -233,47 +288,54 @@ export default function TrainerSessionsPage() {
             <Loading />
           ) : (
             <div className="grid grid-cols-7 gap-2">
-              {getWeekDays().map((day) => (
-                <div key={day.toISOString()} className="min-h-[150px]">
-                  <div
-                    className={`text-center p-2 rounded-t-lg ${
-                      isToday(day)
-                        ? 'bg-primary text-primary-foreground'
-                        : isPast(day)
-                        ? 'bg-muted text-muted-foreground'
-                        : 'bg-muted'
-                    }`}
-                  >
-                    <div className="text-xs">
-                      {day.toLocaleDateString('de-DE', { weekday: 'short' })}
+              {getWeekDays().map((day) => {
+                const daySessions = getSessionsForDate(day);
+                // Filter day sessions based on showPastSessions
+                const filteredDaySessions = showPastSessions 
+                  ? daySessions 
+                  : daySessions.filter(() => !isPast(day));
+                
+                return (
+                  <div key={day.toISOString()} className="min-h-[150px]">
+                    <div
+                      className={`text-center p-2 rounded-t-lg ${
+                        isToday(day)
+                          ? 'bg-primary text-primary-foreground'
+                          : isPast(day)
+                          ? 'bg-muted/50 text-muted-foreground'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      <div className="text-xs">
+                        {day.toLocaleDateString('de-DE', { weekday: 'short' })}
+                      </div>
+                      <div className="font-bold">{day.getDate()}</div>
                     </div>
-                    <div className="font-bold">{day.getDate()}</div>
-                  </div>
-                  <div className="border border-t-0 rounded-b-lg p-1 space-y-1 min-h-[100px]">
-                    {getSessionsForDate(day).map((session) => (
-                      <Link
-                        key={session.id}
-                        href={`/trainer/sessions/${session.id}`}
-                        className="block"
-                      >
-                        <div
-                          className={`p-2 rounded text-xs hover:opacity-80 transition-opacity ${
-                            session.isCancelled
-                              ? 'bg-destructive/20 text-destructive'
-                              : session.attendanceMarked
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
-                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
-                          }`}
+                    <div className="border border-t-0 rounded-b-lg p-1 space-y-1 min-h-[100px]">
+                      {filteredDaySessions.map((session) => (
+                        <Link
+                          key={session.id}
+                          href={`/trainer/sessions/${session.id}`}
                         >
-                          <div className="font-medium truncate">{session.groupName}</div>
-                          <div className="text-[10px] opacity-70">{session.trainingName}</div>
-                          <div>{session.startTime}</div>
-                        </div>
-                      </Link>
-                    ))}
+                          <div
+                            className={`text-xs p-1.5 rounded cursor-pointer hover:opacity-80 ${
+                              session.isCancelled
+                                ? 'bg-destructive/20 text-destructive'
+                                : session.attendanceMarked
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
+                            }`}
+                          >
+                            <div className="font-medium truncate">{session.groupName}</div>
+                            <div className="text-[10px] opacity-70">{session.trainingName}</div>
+                            <div>{session.startTime}</div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -296,13 +358,16 @@ function GroupSessionCard({
   onSessionUpdate: (session: GroupSession) => void;
 }) {
   const sessionDate = new Date(session.date);
-  const isPast = sessionDate < new Date();
+  const sessionIsPast = isPast(sessionDate);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isCancellingSession, setIsCancellingSession] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isEditingEquipment, setIsEditingEquipment] = useState(false);
   const [equipmentValue, setEquipmentValue] = useState(session.equipment || '');
   const [isSavingEquipment, setIsSavingEquipment] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancellingTrainer, setIsCancellingTrainer] = useState(false);
   const { data: authSession } = useSession();
   const isAdmin = authSession?.user?.activeRole === 'ADMIN';
   const currentTrainerId = authSession?.user?.trainerProfileId;
@@ -310,7 +375,11 @@ function GroupSessionCard({
   // Find current trainer in this group's trainers
   const currentTrainer = session.trainers?.find(t => t.id === currentTrainerId);
   const isTrainerInGroup = !!currentTrainer;
-  const isTrainerConfirmed = currentTrainer?.confirmed ?? false;
+  
+  // BUG FIX #1: In AUTO_CONFIRM mode, trainer is considered confirmed unless explicitly declined
+  const isTrainerConfirmed = confirmationMode === 'AUTO_CONFIRM'
+    ? currentTrainer?.confirmed !== false
+    : currentTrainer?.confirmed === true;
 
   // Check if session is within deadline for confirmation changes
   const isWithinDeadline = (() => {
@@ -323,6 +392,18 @@ function GroupSessionCard({
     
     return new Date() <= deadlineTime;
   })();
+  
+  // Check if session has already started
+  const hasSessionStarted = (() => {
+    const sessionDateTime = new Date(session.date);
+    const [hours, minutes] = session.startTime.split(':').map(Number);
+    sessionDateTime.setHours(hours, minutes, 0, 0);
+    return new Date() > sessionDateTime;
+  })();
+
+  // Determine if trainer can cancel (for this group)
+  // BUG FIX #4: Trainers can always cancel before session starts (with late flag if after deadline)
+  const canEdit = isAdmin || session.isOwnGroup;
 
   const handleConfirmTrainer = async (e: React.MouseEvent, confirmed: boolean) => {
     e.preventDefault();
@@ -333,7 +414,7 @@ function GroupSessionCard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: session.id, // Now includes group ID
+          sessionId: session.id,
           confirmed,
         }),
       });
@@ -388,314 +469,349 @@ function GroupSessionCard({
     
     setIsCancellingSession(true);
     try {
-      const res = await fetch(`/api/trainer/sessions/${session.sessionId}/cancel`, {
+      const res = await fetch(`/api/admin/sessions/${session.id}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Fehler beim Absagen');
+        throw new Error('Fehler beim Absagen');
       }
       onRefresh();
     } catch (err) {
       console.error(err);
-      alert('Fehler beim Absagen des Trainings');
     } finally {
       setIsCancellingSession(false);
     }
   };
 
-  const handleUncancelSession = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  // BUG FIX #4: Handler for trainer cancellation with reason
+  const handleTrainerCancel = async () => {
+    if (!cancelReason || cancelReason.length < 10) {
+      alert('Bitte gib einen Grund an (mindestens 10 Zeichen)');
+      return;
+    }
     
-    setIsCancellingSession(true);
+    setIsCancellingTrainer(true);
     try {
-      const res = await fetch(`/api/trainer/sessions/${session.sessionId}/cancel`, {
-        method: 'DELETE',
+      const res = await fetch('/api/trainer/cancellations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.id,
+          reason: cancelReason,
+        }),
       });
+      
+      const data = await res.json();
+      
       if (!res.ok) {
-        throw new Error('Fehler beim Zurücknehmen');
+        throw new Error(data.error || 'Fehler beim Absagen');
       }
+      
+      // Show warning if late
+      if (data.isLate) {
+        alert(data.message);
+      }
+      
+      setShowCancelDialog(false);
+      setCancelReason('');
       onRefresh();
     } catch (err) {
       console.error(err);
-      alert('Fehler beim Zurücknehmen der Absage');
+      alert(err instanceof Error ? err.message : 'Fehler beim Absagen');
     } finally {
-      setIsCancellingSession(false);
+      setIsCancellingTrainer(false);
     }
   };
 
   const handleSaveEquipment = async () => {
     setIsSavingEquipment(true);
     try {
-      // Use session.id which includes the group ID for group-specific equipment
-      const res = await fetch(`/api/trainer/sessions/${session.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/trainer/sessions/${session.id}/equipment`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ equipment: equipmentValue }),
       });
-      if (!res.ok) {
-        throw new Error('Fehler beim Speichern');
-      }
+      if (!res.ok) throw new Error('Failed to save');
+      
+      onSessionUpdate({
+        ...session,
+        equipment: equipmentValue || null,
+      });
       setIsEditingEquipment(false);
-      onRefresh();
     } catch (err) {
       console.error(err);
-      alert('Fehler beim Speichern der Geräte');
     } finally {
       setIsSavingEquipment(false);
     }
   };
 
-  // Get confirmed trainers for this group
-  const confirmedTrainers = session.trainers?.filter(t => t.confirmed && !t.cancelled) || [];
-
-  // Can edit if admin or own group
-  const canEdit = isAdmin || session.isOwnGroup;
-
   return (
-    <Link href={`/trainer/sessions/${session.id}`}>
-      <Card
-        className={`hover:border-primary transition-colors ${
-          session.isCancelled || session.trainerCancelled ? 'opacity-60' : ''
-        } ${session.isOwnGroup ? 'border-l-4 border-l-primary' : 'border-l-4 border-l-transparent'}`}
-      >
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className={`flex flex-col items-center justify-center w-14 h-14 rounded-lg ${session.isOwnGroup ? 'bg-primary/10' : 'bg-muted'}`}>
-                <span className="text-xs text-muted-foreground">
-                  {sessionDate.toLocaleDateString('de-DE', { weekday: 'short' })}
-                </span>
-                <span className="text-lg font-bold">{sessionDate.getDate()}</span>
-                <span className="text-xs text-muted-foreground">
-                  {sessionDate.toLocaleDateString('de-DE', { month: 'short' })}
-                </span>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{session.groupName}</h3>
-                  {session.isOwnGroup && !isAdmin && (
-                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">Meine Gruppe</Badge>
+    <>
+      <Link href={`/trainer/sessions/${session.id}`}>
+        <Card
+          className={`hover:bg-muted/50 transition-colors cursor-pointer ${
+            session.isCancelled ? 'opacity-60' : sessionIsPast ? 'opacity-60' : ''
+          } ${session.isOwnGroup ? 'border-l-4 border-l-primary' : 'border-l-4 border-l-transparent'}`}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`flex flex-col items-center justify-center w-14 h-14 rounded-lg ${session.isOwnGroup ? 'bg-primary/10' : 'bg-muted'}`}>
+                  <span className="text-xs text-muted-foreground">
+                    {sessionDate.toLocaleDateString('de-DE', { weekday: 'short' })}
+                  </span>
+                  <span className="text-lg font-bold">{sessionDate.getDate()}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {sessionDate.toLocaleDateString('de-DE', { month: 'short' })}
+                  </span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{session.groupName}</h3>
+                    {session.isOwnGroup && !isAdmin && (
+                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">Meine Gruppe</Badge>
+                    )}
+                    {session.isCancelled && (
+                      <Badge variant="destructive">Abgesagt</Badge>
+                    )}
+                    {session.trainerCancelled && !session.isCancelled && (
+                      <Badge variant="secondary">Abgemeldet</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {session.trainingName} • {session.startTime} - {session.endTime}
+                  </p>
+                  {session.trainers && session.trainers.length > 0 && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                      <Users className="h-3 w-3" />
+                      <span>
+                        {session.trainers.map((t, idx) => {
+                          // BUG FIX #1: In AUTO_CONFIRM mode, trainer is confirmed unless explicitly declined
+                          const isEffectivelyConfirmed = confirmationMode === 'AUTO_CONFIRM'
+                            ? t.confirmed !== false
+                            : t.confirmed === true;
+                          
+                          return (
+                            <span key={t.id}>
+                              <span className={t.cancelled ? 'line-through text-muted-foreground' : isEffectivelyConfirmed ? 'text-emerald-600' : ''}>
+                                {t.name}
+                                {isEffectivelyConfirmed && !t.cancelled && <Check className="h-3 w-3 inline ml-0.5 text-emerald-600" />}
+                              </span>
+                              {idx < (session.trainers?.length ?? 0) - 1 && ', '}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </div>
                   )}
-                  {session.isCancelled && (
-                    <Badge variant="destructive">Abgesagt</Badge>
+                  {session.equipment && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                      <Dumbbell className="h-3 w-3" />
+                      <div className="flex flex-wrap gap-1">
+                        {session.equipment.split(',').map((item, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs px-1.5 py-0">
+                            {item.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                      {!sessionIsPast && canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-1 ml-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEquipmentValue(session.equipment || '');
+                            setIsEditingEquipment(true);
+                          }}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   )}
-                  {session.trainerCancelled && !session.isCancelled && (
-                    <Badge variant="secondary">Abgemeldet</Badge>
+                  {!session.equipment && !sessionIsPast && canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground h-5 px-1 mt-1"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEquipmentValue('');
+                        setIsEditingEquipment(true);
+                      }}
+                    >
+                      <Dumbbell className="h-3 w-3 mr-1" />
+                      Geräte hinzufügen
+                    </Button>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {session.trainingName} • {session.startTime} - {session.endTime}
-                </p>
-                {session.trainers && session.trainers.length > 0 && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                    <Users className="h-3 w-3" />
-                    <span>
-                      {session.trainers.map((t, idx) => (
-                        <span key={t.id}>
-                          <span className={t.cancelled ? 'line-through text-muted-foreground' : t.confirmed ? 'text-emerald-600' : ''}>
-                            {t.name}
-                            {t.confirmed && !t.cancelled && <Check className="h-3 w-3 inline ml-0.5 text-emerald-600" />}
-                          </span>
-                          {idx < (session.trainers?.length ?? 0) - 1 && ', '}
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                )}
-                {session.equipment && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                    <Dumbbell className="h-3 w-3" />
-                    <div className="flex flex-wrap gap-1">
-                      {session.equipment.split(',').map((item, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs px-1.5 py-0">
-                          {item.trim()}
-                        </Badge>
-                      ))}
-                    </div>
-                    {!isPast && canEdit && (
+              </div>
+              <div className="flex items-center gap-4">
+                {!session.isCancelled && (
+                  <>
+                    {/* Admin cancel entire session button */}
+                    {isAdmin && !sessionIsPast && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-5 px-1 ml-1"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setEquipmentValue(session.equipment || '');
-                          setIsEditingEquipment(true);
-                        }}
+                        onClick={handleCancelSession}
+                        disabled={isCancellingSession}
+                        className="text-destructive hover:text-destructive"
                       >
-                        <Edit className="h-3 w-3" />
+                        <XCircle className="h-4 w-4 mr-1" />
+                        {isCancellingSession ? '...' : 'Absagen'}
                       </Button>
                     )}
-                  </div>
-                )}
-                {!session.equipment && !isPast && canEdit && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-muted-foreground h-5 px-1 mt-1"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setEquipmentValue('');
-                      setIsEditingEquipment(true);
-                    }}
-                  >
-                    <Dumbbell className="h-3 w-3 mr-1" />
-                    Geräte hinzufügen
-                  </Button>
+                    {/* Trainer confirmation/cancel buttons (only if trainer is assigned to this group) */}
+                    {isTrainerInGroup && !isAdmin && !sessionIsPast && !session.trainerCancelled && !hasSessionStarted && (
+                      <div className="flex gap-1">
+                        {/* Show confirm button only within deadline */}
+                        {isWithinDeadline && (
+                          <>
+                            <Button
+                              variant={isTrainerConfirmed ? "default" : "outline"}
+                              size="sm"
+                              onClick={(e) => handleConfirmTrainer(e, true)}
+                              disabled={isConfirming || isTrainerConfirmed}
+                              className={isTrainerConfirmed ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {/* BUG FIX #4: Always show cancel button (will be marked as late if after deadline) */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowCancelDialog(true);
+                          }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    {/* Show deadline passed indicator but still allow cancellation */}
+                    {isTrainerInGroup && !isAdmin && !sessionIsPast && !session.trainerCancelled && !isWithinDeadline && !hasSessionStarted && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Frist abgelaufen
+                        </Badge>
+                        {/* BUG FIX #4: Still allow cancel after deadline */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowCancelDialog(true);
+                          }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    {session.trainerCancelled && !sessionIsPast && !hasSessionStarted && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleUndoCancellation}
+                        disabled={isUndoing}
+                      >
+                        <Undo2 className="h-4 w-4 mr-1" />
+                        {isUndoing ? '...' : 'Zurück'}
+                      </Button>
+                    )}
+                    <div className="flex flex-col items-end gap-0.5">
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Users className="h-4 w-4" />
+                        <span className="text-sm">
+                          {session.attendanceMarked
+                            ? `${session.presentCount}/${session.expectedAthletes}`
+                            : confirmationMode === 'AUTO_CONFIRM'
+                              ? `${session.expectedAthletes - session.declinedAthletes}/${session.expectedAthletes}`
+                              : `${session.confirmedAthletes}/${session.expectedAthletes}`}
+                        </span>
+                      </div>
+                      {/* BUG FIX #3: Removed the red "Anwesenheit" label entirely */}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              {!session.isCancelled && (
-                <>
-                  {/* Admin cancel entire session button */}
-                  {isAdmin && !isPast && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCancelSession}
-                      disabled={isCancellingSession}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <XCircle className="h-4 w-4 mr-1" />
-                      {isCancellingSession ? '...' : 'Absagen'}
-                    </Button>
-                  )}
-                  {/* Trainer confirmation buttons (only if trainer is assigned to this group) */}
-                  {isTrainerInGroup && !isAdmin && !isPast && !session.trainerCancelled && isWithinDeadline && (
-                    <div className="flex gap-1">
-                      <Button
-                        variant={isTrainerConfirmed ? "default" : "outline"}
-                        size="sm"
-                        onClick={(e) => handleConfirmTrainer(e, true)}
-                        disabled={isConfirming || isTrainerConfirmed}
-                        className={isTrainerConfirmed ? "bg-emerald-600 hover:bg-emerald-700" : ""}
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant={!isTrainerConfirmed && currentTrainer ? "destructive" : "outline"}
-                        size="sm"
-                        onClick={(e) => handleConfirmTrainer(e, false)}
-                        disabled={isConfirming}
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                  {/* Show deadline passed indicator for trainer's own group */}
-                  {isTrainerInGroup && !isAdmin && !isPast && !session.trainerCancelled && !isWithinDeadline && (
-                    <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
-                      <Clock className="h-3 w-3 mr-1" />
-                      Frist abgelaufen
-                    </Badge>
-                  )}
-                  {session.trainerCancelled && !isPast && isWithinDeadline && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleUndoCancellation}
-                      disabled={isUndoing}
-                    >
-                      <Undo2 className="h-4 w-4 mr-1" />
-                      {isUndoing ? '...' : 'Zurück'}
-                    </Button>
-                  )}
-                  <div className="flex flex-col items-end gap-0.5">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Users className="h-4 w-4" />
-                      <span className="text-sm">
-                        {session.attendanceMarked
-                          ? `${session.presentCount}/${session.expectedAthletes}`
-                          : confirmationMode === 'AUTO_CONFIRM'
-                            ? `${session.expectedAthletes - session.declinedAthletes}/${session.expectedAthletes} dabei`
-                            : `${session.confirmedAthletes}/${session.expectedAthletes} bestätigt`}
-                      </span>
-                    </div>
-                    {confirmedTrainers.length > 0 && (
-                      <span className="text-xs text-emerald-600">
-                        {confirmedTrainers.length} Trainer ✓
-                      </span>
-                    )}
-                  </div>
-                  {isPast ? (
-                    session.attendanceMarked ? (
-                      <CheckCircle className="h-6 w-6 text-emerald-500" />
-                    ) : (
-                      <Badge variant="destructive">
-                        <Clock className="h-3 w-3 mr-1" />
-                        Anwesenheit
-                      </Badge>
-                    )
-                  ) : (
-                    <Clock className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </>
-              )}
-              {session.isCancelled && isAdmin && !isPast && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleUncancelSession}
-                  disabled={isCancellingSession}
-                >
-                  <Undo2 className="h-4 w-4 mr-1" />
-                  Zurück
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+          </CardContent>
+        </Card>
+      </Link>
+      
       {/* Equipment Edit Dialog */}
       <Dialog open={isEditingEquipment} onOpenChange={setIsEditingEquipment}>
         <DialogContent onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
             <DialogTitle>Geräte bearbeiten</DialogTitle>
             <DialogDescription>
-              Geben Sie die Geräte für diese Trainingseinheit ein (kommagetrennt).
+              Gib die benötigten Geräte für dieses Training ein (kommagetrennt)
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="equipment">Geräte (kommagetrennt)</Label>
-              <Input
-                id="equipment"
-                placeholder="z.B. Reck, Barren, Boden, Sprung"
-                value={equipmentValue}
-                onChange={(e) => setEquipmentValue(e.target.value)}
-              />
-            </div>
-            {equipmentValue && (
-              <div className="space-y-2">
-                <Label>Vorschau</Label>
-                <div className="flex flex-wrap gap-1">
-                  {equipmentValue.split(',').map((item, idx) => (
-                    <Badge key={idx} variant="secondary">
-                      {item.trim()}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-2">
+          <Input
+            value={equipmentValue}
+            onChange={(e) => setEquipmentValue(e.target.value)}
+            placeholder="z.B. Matten, Bälle, Reifen"
+          />
+          <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditingEquipment(false)}>
               Abbrechen
             </Button>
             <Button onClick={handleSaveEquipment} disabled={isSavingEquipment}>
               {isSavingEquipment ? 'Speichern...' : 'Speichern'}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Link>
+      
+      {/* BUG FIX #4: Trainer Cancel Dialog with reason */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Training absagen</DialogTitle>
+            <DialogDescription>
+              {!isWithinDeadline && (
+                <span className="text-orange-600 block mb-2">
+                  Hinweis: Die Absagefrist ist bereits abgelaufen. Diese Absage wird als unentschuldigt gewertet.
+                </span>
+              )}
+              Bitte gib einen Grund für deine Absage an (mindestens 10 Zeichen).
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Grund für die Absage..."
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+              Abbrechen
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleTrainerCancel} 
+              disabled={isCancellingTrainer || cancelReason.length < 10}
+            >
+              {isCancellingTrainer ? 'Absagen...' : 'Absagen'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

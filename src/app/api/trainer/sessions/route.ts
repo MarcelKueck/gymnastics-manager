@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { generateVirtualSessions, getVirtualSessionId } from '@/lib/sessions/virtual-sessions';
 
 interface GroupSessionData {
-  id: string; // Format: sessionId_groupId or virtual_recurringId_date_groupId
+  id: string;
   sessionId: string;
   recurringTrainingId: string;
   trainingGroupId: string;
@@ -15,49 +15,50 @@ interface GroupSessionData {
   startTime: string;
   endTime: string;
   isCancelled: boolean;
+  isCompleted?: boolean;
   attendanceMarked: boolean;
   expectedAthletes: number;
   confirmedAthletes: number;
   declinedAthletes: number;
   presentCount: number;
   equipment: string | null;
-  trainers: {
+  trainers: Array<{
     id: string;
     name: string;
     cancelled: boolean;
-    confirmed: boolean;
-  }[];
+    confirmed: boolean | null;  // BUG FIX #1: Changed to allow null
+  }>;
   trainerCancelled: boolean;
   trainerCancellationId?: string;
+  trainerCancellationReason?: string;
   trainerConfirmed: boolean;
   isVirtual: boolean;
-  isOwnGroup: boolean; // Whether the current trainer is assigned to this group
+  isOwnGroup: boolean;
 }
 
 export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 });
+  }
+
+  if (session.user.activeRole !== 'TRAINER' && session.user.activeRole !== 'ADMIN') {
+    return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
+    const searchParams = request.nextUrl.searchParams;
+    const startDateParam = searchParams.get('from');
+    const endDateParam = searchParams.get('to');
     
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 });
-    }
-
-    if (session.user.activeRole !== 'TRAINER' && session.user.activeRole !== 'ADMIN') {
-      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const startDateParam = searchParams.get('startDate');
-    const endDateParam = searchParams.get('endDate');
-
-    // Default to current week if no dates provided
     const now = new Date();
     const defaultStart = new Date(now);
-    defaultStart.setDate(now.getDate() - now.getDay() + 1); // Monday
+    defaultStart.setDate(defaultStart.getDate() - defaultStart.getDay() + 1);
     defaultStart.setHours(0, 0, 0, 0);
     
     const defaultEnd = new Date(defaultStart);
-    defaultEnd.setDate(defaultStart.getDate() + 6); // Sunday
+    defaultEnd.setDate(defaultEnd.getDate() + 6);
     defaultEnd.setHours(23, 59, 59, 999);
 
     const startDate = startDateParam ? new Date(startDateParam) : defaultStart;
@@ -105,6 +106,13 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+
+    // Fetch system settings for response
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+    });
+    const confirmationMode = settings?.attendanceConfirmationMode || 'AUTO_CONFIRM';
+    const cancellationDeadlineHours = settings?.cancellationDeadlineHours || 2;
 
     // Fetch any stored sessions in this date range (all sessions for visibility)
     const storedSessions = await prisma.trainingSession.findMany({
@@ -166,9 +174,14 @@ export async function GET(request: NextRequest) {
         stored?.trainerCancellations?.map(tc => tc.trainerId) || []
       );
 
-      // Get confirmed trainers for this session
+      // BUG FIX #1: Build proper trainer confirmation maps
+      // Get trainers who explicitly confirmed
       const confirmedTrainerIds = new Set(
-        stored?.sessionConfirmations?.filter(c => c.trainerId && c.confirmed).map(c => c.trainerId) || []
+        stored?.sessionConfirmations?.filter(c => c.trainerId && c.confirmed === true).map(c => c.trainerId) || []
+      );
+      // Get trainers who explicitly declined
+      const declinedTrainerIds = new Set(
+        stored?.sessionConfirmations?.filter(c => c.trainerId && c.confirmed === false).map(c => c.trainerId) || []
       );
 
       // Create one entry per group
@@ -177,12 +190,23 @@ export async function GET(request: NextRequest) {
         const recurringTraining = recurringTrainings.find(rt => rt.id === vs.recurringTrainingId);
         const trainingGroup = recurringTraining?.trainingGroups.find(g => g.id === group.id);
         
-        const groupTrainers = trainingGroup?.trainerAssignments.map(ta => ({
-          id: ta.trainerId,
-          name: `${ta.trainer.user.firstName} ${ta.trainer.user.lastName}`,
-          cancelled: trainerCancellationIds.has(ta.trainerId),
-          confirmed: confirmedTrainerIds.has(ta.trainerId),
-        })) || [];
+        // BUG FIX #1: Return proper confirmation status (true/false/null)
+        const groupTrainers = trainingGroup?.trainerAssignments.map(ta => {
+          let confirmed: boolean | null = null;
+          if (confirmedTrainerIds.has(ta.trainerId)) {
+            confirmed = true;
+          } else if (declinedTrainerIds.has(ta.trainerId)) {
+            confirmed = false;
+          }
+          // null means no explicit response
+          
+          return {
+            id: ta.trainerId,
+            name: `${ta.trainer.user.firstName} ${ta.trainer.user.lastName}`,
+            cancelled: trainerCancellationIds.has(ta.trainerId),
+            confirmed,
+          };
+        }) || [];
 
         // Check if current trainer is cancelled for this session
         const trainerCancelled = trainerProfileId ? trainerCancellationIds.has(trainerProfileId) : false;
@@ -237,6 +261,7 @@ export async function GET(request: NextRequest) {
           startTime: vs.startTime,
           endTime: vs.endTime,
           isCancelled: vs.isCancelled,
+          isCompleted: stored?.isCompleted,
           attendanceMarked: hasAttendance,
           expectedAthletes,
           confirmedAthletes,
@@ -246,6 +271,7 @@ export async function GET(request: NextRequest) {
           trainers: groupTrainers,
           trainerCancelled,
           trainerCancellationId: trainerCancellation?.id,
+          trainerCancellationReason: trainerCancellation?.reason,
           trainerConfirmed,
           isVirtual: vs.id === null,
           isOwnGroup,
@@ -262,7 +288,11 @@ export async function GET(request: NextRequest) {
       return a.groupName.localeCompare(b.groupName);
     });
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ 
+      data,
+      confirmationMode,
+      cancellationDeadlineHours,
+    });
   } catch (error) {
     console.error('Sessions API error:', error);
     return NextResponse.json(

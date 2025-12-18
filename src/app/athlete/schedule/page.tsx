@@ -22,6 +22,8 @@ import {
   Users,
   Check,
   Dumbbell,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -68,6 +70,7 @@ export default function AthleteSchedule() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  const [showPastSessions, setShowPastSessions] = useState(false);
   
   // Cancellation form state
   const [cancellingSessionId, setCancellingSessionId] = useState<string | null>(null);
@@ -178,76 +181,43 @@ export default function AthleteSchedule() {
             : s.confirmed === true;
           const wasDeclined = s.confirmed === false;
           
-          // Calculate new counts based on the change
-          let newConfirmedAthletes = s.confirmedAthletes;
-          let newDeclinedAthletes = s.declinedAthletes;
+          let newConfirmedCount = s.confirmedAthletes;
+          let newDeclinedCount = s.declinedAthletes;
           
           if (confirmed) {
-            // User is confirming
-            if (wasDeclined) {
-              // Was declined, now confirmed: +1 confirmed, -1 declined
-              newConfirmedAthletes += 1;
-              newDeclinedAthletes = Math.max(0, newDeclinedAthletes - 1);
-            } else if (!wasConfirmed && confirmationMode === 'REQUIRE_CONFIRMATION') {
-              // Was pending, now confirmed: +1 confirmed
-              newConfirmedAthletes += 1;
-            }
-            // In AUTO_CONFIRM mode, if was already implicitly confirmed (null), no change needed
+            if (wasDeclined) newDeclinedCount--;
+            if (!wasConfirmed) newConfirmedCount++;
           } else {
-            // User is declining
-            if (wasConfirmed) {
-              // Was confirmed (or implicitly confirmed), now declined: -1 confirmed, +1 declined
-              if (confirmationMode === 'AUTO_CONFIRM' || s.confirmed === true) {
-                newConfirmedAthletes = Math.max(0, newConfirmedAthletes - 1);
-              }
-              newDeclinedAthletes += 1;
-            } else if (!wasDeclined && confirmationMode === 'REQUIRE_CONFIRMATION') {
-              // Was pending, now declined: +1 declined
-              newDeclinedAthletes += 1;
-            }
+            if (wasConfirmed) newConfirmedCount--;
+            if (!wasDeclined) newDeclinedCount++;
           }
           
-          return { 
-            ...s, 
-            confirmed, 
-            confirmedAt: new Date().toISOString(), 
-            declineReason,
-            confirmedAthletes: newConfirmedAthletes,
-            declinedAthletes: newDeclinedAthletes,
+          return {
+            ...s,
+            confirmed,
+            confirmedAt: new Date().toISOString(),
+            declineReason: declineReason || null,
+            confirmedAthletes: Math.max(0, newConfirmedCount),
+            declinedAthletes: Math.max(0, newDeclinedCount),
           };
         }
         return s;
       }));
     } catch (err) {
-      console.error('[ConfirmSession] Error:', err);
       setFormError((err as Error).message);
     } finally {
       setConfirmingSessionId(null);
     }
   };
 
-  const handleCancel = async (sessionId: string) => {
-    setFormError(null);
-
-    if (cancelReason.length < 10) {
-      setFormError('Grund muss mindestens 10 Zeichen haben');
-      return;
-    }
-
+  const handleCancelSession = async (sessionId: string, reason: string) => {
     setIsSubmitting(true);
-
+    setFormError(null);
     try {
-      // Extract the actual session ID from the group session ID
-      const session = sessions.find(s => s.id === sessionId);
-      const actualSessionId = session?.sessionId || sessionId;
-      
       const res = await fetch('/api/athlete/cancellations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trainingSessionId: actualSessionId,
-          reason: cancelReason,
-        }),
+        body: JSON.stringify({ sessionId, reason }),
       });
 
       const data = await res.json();
@@ -256,40 +226,14 @@ export default function AthleteSchedule() {
         throw new Error(data.error || 'Fehler beim Absagen');
       }
 
-      // Reset form and reload
-      setCancellingSessionId(null);
-      setCancelReason('');
-      await loadData();
-    } catch (err) {
-      setFormError((err as Error).message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleEdit = async (cancellationId: string) => {
-    if (editReason.length < 10) {
-      setFormError('Grund muss mindestens 10 Zeichen haben');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const res = await fetch(`/api/athlete/cancellations/${cancellationId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: editReason }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
+      // Show late warning if applicable
+      if (data.isLate) {
+        alert(data.message);
       }
 
-      setEditingSessionId(null);
-      setEditReason('');
-      await loadData();
+      setCancellingSessionId(null);
+      setCancelReason('');
+      loadData();
     } catch (err) {
       setFormError((err as Error).message);
     } finally {
@@ -297,24 +241,24 @@ export default function AthleteSchedule() {
     }
   };
 
-  const handleUndo = async () => {
-    if (!undoSession?.athleteCancellationId) return;
-
+  const handleUndoCancellation = async (session: GroupScheduleSession) => {
+    if (!session.athleteCancellationId) return;
+    
     setIsSubmitting(true);
-
+    setFormError(null);
     try {
-      const res = await fetch(`/api/athlete/cancellations/${undoSession.athleteCancellationId}`, {
+      const res = await fetch(`/api/athlete/cancellations/${session.athleteCancellationId}`, {
         method: 'DELETE',
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error);
+        throw new Error(data.error || 'Fehler beim Rückgängigmachen');
       }
 
       setUndoDialogOpen(false);
       setUndoSession(null);
-      await loadData();
+      loadData();
     } catch (err) {
       setFormError((err as Error).message);
     } finally {
@@ -322,16 +266,42 @@ export default function AthleteSchedule() {
     }
   };
 
-  if (error) return <div className="text-destructive text-sm p-4 bg-destructive/10 rounded-lg">Fehler beim Laden: {error}</div>;
+  const handleEditCancellation = async (sessionId: string, cancellationId: string, newReason: string) => {
+    if (!cancellationId) return;
+    
+    setIsSubmitting(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/athlete/cancellations/${cancellationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: newReason }),
+      });
 
-  const getStatusBadge = (session: GroupScheduleSession) => {
-    if (session.isCancelled) {
-      return <Badge variant="destructive">Training abgesagt</Badge>;
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Fehler beim Bearbeiten');
+      }
+
+      setEditingSessionId(null);
+      setEditReason('');
+      loadData();
+    } catch (err) {
+      setFormError((err as Error).message);
+    } finally {
+      setIsSubmitting(false);
     }
-    if (session.athleteCancelled) {
-      return <Badge variant="secondary">Abgemeldet</Badge>;
-    }
-    if (session.isCompleted) {
+  };
+
+  const formatWeekRange = () => {
+    const start = getWeekStart(currentWeekOffset);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return `${start.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  };
+
+  const getAttendanceBadge = (session: GroupScheduleSession) => {
+    if (session.isCompleted && session.attendanceStatus) {
       switch (session.attendanceStatus) {
         case 'PRESENT':
           return <Badge className="bg-emerald-500">{session.isLate ? 'Verspätet' : 'Anwesend'}</Badge>;
@@ -373,13 +343,6 @@ export default function AthleteSchedule() {
     return days;
   };
 
-  const formatWeekRange = () => {
-    const start = getWeekStart(currentWeekOffset);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    return `${start.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-  };
-
   const getSessionsForDate = (date: Date) => {
     return sessions.filter((session) => {
       const sessionDate = new Date(session.date);
@@ -396,6 +359,24 @@ export default function AthleteSchedule() {
     today.setHours(0, 0, 0, 0);
     return date < today;
   };
+
+  // Check if a session is in the past
+  const isSessionPast = (session: GroupScheduleSession) => {
+    const sessionDate = new Date(session.date);
+    sessionDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return sessionDate < today;
+  };
+
+  // Filter sessions based on showPastSessions toggle
+  const filteredSessions = sessions.filter((session) => {
+    if (showPastSessions) return true;
+    return !isSessionPast(session);
+  });
+
+  // Check if there are any past sessions to show the toggle
+  const hasPastSessions = sessions.some((session) => isSessionPast(session));
 
   const renderSessionActions = (session: GroupScheduleSession) => {
     // Can't modify completed or trainer-cancelled sessions
@@ -498,28 +479,28 @@ export default function AthleteSchedule() {
     return (
       <div className="flex gap-1">
         <Button
-          variant={session.confirmed === true ? "default" : "outline"}
+          variant={session.confirmed === true ? 'default' : 'outline'}
           size="sm"
           onClick={() => handleConfirmSession(session.id, true)}
-          disabled={isLoading}
-          className={session.confirmed === true ? "bg-emerald-600 hover:bg-emerald-700" : "hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300"}
-          title="Ich komme"
+          disabled={isLoading || session.confirmed === true}
+          className={session.confirmed === true ? 'bg-emerald-600 hover:bg-emerald-700' : 'hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300'}
+          title="Zusagen"
         >
-          {isLoading && confirmingSessionId === session.id ? (
+          {isLoading && session.confirmed !== true ? (
             <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
           ) : (
             <Check className="h-4 w-4" />
           )}
         </Button>
         <Button
-          variant={session.confirmed === false ? "destructive" : "outline"}
+          variant={session.confirmed === false ? 'destructive' : 'outline'}
           size="sm"
           onClick={() => handleConfirmSession(session.id, false)}
-          disabled={isLoading}
-          className={session.confirmed === false ? "" : "hover:bg-red-100 hover:text-red-700 hover:border-red-300"}
-          title="Ich komme nicht"
+          disabled={isLoading || session.confirmed === false}
+          className={session.confirmed !== false ? 'hover:bg-red-100 hover:text-red-700 hover:border-red-300' : ''}
+          title="Absagen"
         >
-          {isLoading && confirmingSessionId === session.id ? (
+          {isLoading && session.confirmed === true ? (
             <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
           ) : (
             <XCircle className="h-4 w-4" />
@@ -529,11 +510,18 @@ export default function AthleteSchedule() {
     );
   };
 
+  if (error) {
+    return (
+      <div className="p-4 text-destructive">
+        Fehler beim Laden: {error}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header with week navigation */}
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header with Week Navigation */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-semibold sm:text-2xl">Meine Trainings</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -546,7 +534,7 @@ export default function AthleteSchedule() {
           <Button
             variant="outline"
             onClick={() => setCurrentWeekOffset(0)}
-            className="min-w-[160px] sm:min-w-[200px] text-sm h-10"
+            className="min-w-[180px] sm:min-w-[200px] h-10"
           >
             {formatWeekRange()}
           </Button>
@@ -559,9 +547,33 @@ export default function AthleteSchedule() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Toggle for past sessions */}
+          {hasPastSessions && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPastSessions(!showPastSessions)}
+              className="flex items-center gap-2"
+            >
+              {showPastSessions ? (
+                <>
+                  <EyeOff className="h-4 w-4" />
+                  Vergangene ausblenden
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4" />
+                  Vergangene anzeigen
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* View Toggle */}
+      {/* View Mode Toggle */}
       <div className="flex gap-2">
         <Button
           variant={viewMode === 'list' ? 'default' : 'outline'}
@@ -601,25 +613,40 @@ export default function AthleteSchedule() {
 
       {isLoading ? (
         <Loading />
-      ) : sessions.length === 0 ? (
+      ) : filteredSessions.length === 0 ? (
         <EmptyState
           icon={<Calendar className="h-12 w-12" />}
-          title="Keine Trainings in dieser Woche"
-          description="Navigiere zu einer anderen Woche oder du bist noch keiner Trainingsgruppe zugewiesen."
-        />
+          title={sessions.length === 0 
+            ? "Keine Trainings in dieser Woche"
+            : "Keine anstehenden Trainings in dieser Woche"}
+          description={sessions.length === 0 
+            ? "Navigiere zu einer anderen Woche oder du bist noch keiner Trainingsgruppe zugewiesen."
+            : "Alle Trainings in dieser Woche sind bereits vergangen."}
+        >
+          {!showPastSessions && sessions.length > 0 && (
+            <Button
+              variant="link"
+              onClick={() => setShowPastSessions(true)}
+              className="mt-2"
+            >
+              Vergangene anzeigen
+            </Button>
+          )}
+        </EmptyState>
       ) : viewMode === 'list' ? (
         /* List View */
         <Card>
           <CardContent className="pt-4 sm:pt-6">
             <div className="space-y-3">
-              {sessions.map((session) => (
+              {filteredSessions.map((session) => (
                 <div
                   key={session.id}
                   className={cn(
                     'p-3 sm:p-4 rounded-lg border',
                     session.isCancelled && 'bg-destructive/5 border-destructive/20',
                     session.athleteCancelled && 'bg-muted/50',
-                    !session.isCancelled && !session.athleteCancelled && !session.isCompleted && 'bg-card'
+                    !session.isCancelled && !session.athleteCancelled && !session.isCompleted && 'bg-card',
+                    isSessionPast(session) && 'opacity-60'
                   )}
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -650,46 +677,53 @@ export default function AthleteSchedule() {
                             <Dumbbell className="h-3 w-3" />
                             <div className="flex flex-wrap gap-1">
                               {session.equipment.split(',').map((item, idx) => (
-                                <Badge key={idx} variant="secondary" className="text-xs px-1.5 py-0">
+                                <Badge key={idx} variant="outline" className="text-xs px-1.5 py-0">
                                   {item.trim()}
                                 </Badge>
                               ))}
                             </div>
                           </div>
                         )}
-                        {session.totalAthletes !== undefined && session.confirmedAthletes !== undefined && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                            <Users className="h-3 w-3" />
-                            <span>
-                              {confirmationMode === 'AUTO_CONFIRM' 
-                                ? `${session.totalAthletes - session.declinedAthletes} / ${session.totalAthletes} dabei`
-                                : `${session.confirmedAthletes} / ${session.totalAthletes} zugesagt`
-                              }
-                            </span>
-                          </div>
-                        )}
-                        {session.athleteCancelled && session.athleteCancellationReason && editingSessionId !== session.id && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Grund: {session.athleteCancellationReason}
-                          </p>
-                        )}
                         {session.isCancelled && session.cancellationReason && (
                           <p className="text-xs text-destructive mt-1">
-                            {session.cancellationReason}
+                            Grund: {session.cancellationReason}
+                          </p>
+                        )}
+                        {session.athleteCancelled && session.athleteCancellationReason && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Deine Absage: {session.athleteCancellationReason}
                           </p>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 ml-8 sm:ml-0">
-                      {getStatusBadge(session)}
-                      {cancellingSessionId !== session.id && editingSessionId !== session.id && renderSessionActions(session)}
+                    <div className="flex flex-col items-end gap-2">
+                      {getAttendanceBadge(session)}
+                      {session.isCancelled && (
+                        <Badge variant="destructive">Training abgesagt</Badge>
+                      )}
+                      {session.athleteCancelled && !session.isCancelled && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">Du hast abgesagt</Badge>
+                          {isWithinDeadline(session) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setUndoSession(session);
+                                setUndoDialogOpen(true);
+                              }}
+                              className="h-8 px-2"
+                            >
+                              Zurücknehmen
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {!session.isCancelled && !session.athleteCancelled && !session.isCompleted && (
+                        renderSessionActions(session)
+                      )}
                     </div>
                   </div>
-                  {(cancellingSessionId === session.id || editingSessionId === session.id) && (
-                    <div className="mt-3 ml-8">
-                      {renderSessionActions(session)}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -700,15 +734,21 @@ export default function AthleteSchedule() {
         <div className="grid grid-cols-7 gap-2">
           {getWeekDays().map((day) => {
             const daySessions = getSessionsForDate(day);
+            const dayIsPast = isPast(day);
+            // Filter day sessions based on showPastSessions
+            const filteredDaySessions = showPastSessions 
+              ? daySessions 
+              : daySessions.filter(() => !dayIsPast);
+            
             return (
-              <div key={day.toISOString()} className="min-h-[180px]">
+              <div key={day.toISOString()} className="min-h-[150px]">
                 <div
                   className={cn(
                     'text-center p-2 rounded-t-lg',
                     isToday(day)
                       ? 'bg-primary text-primary-foreground'
-                      : isPast(day)
-                      ? 'bg-muted text-muted-foreground'
+                      : dayIsPast
+                      ? 'bg-muted/50 text-muted-foreground'
                       : 'bg-muted'
                   )}
                 >
@@ -717,52 +757,24 @@ export default function AthleteSchedule() {
                   </div>
                   <div className="font-bold">{day.getDate()}</div>
                 </div>
-                <div className="border border-t-0 rounded-b-lg p-1 space-y-1 min-h-[140px]">
-                  {daySessions.length === 0 ? (
-                    <div className="text-xs text-muted-foreground text-center py-4">
-                      Kein Training
-                    </div>
-                  ) : (
-                    daySessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className={cn(
-                          'p-2 rounded text-xs',
-                          session.isCancelled
-                            ? 'bg-destructive/20 text-destructive'
-                            : session.athleteCancelled
-                            ? 'bg-muted text-muted-foreground'
-                            : session.isCompleted
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
-                        )}
-                      >
-                        <div className="font-medium truncate">{session.groupName}</div>
-                        <div className="text-[10px] opacity-70">{session.trainingName}</div>
-                        <div className="flex items-center gap-1 text-[10px] opacity-80">
-                          <Clock className="h-3 w-3" />
-                          {session.startTime}
-                        </div>
-                        {session.totalAthletes !== undefined && (
-                          <div className="text-[10px] opacity-70 mt-0.5">
-                            <Users className="h-2.5 w-2.5 inline mr-0.5" />
-                            {confirmationMode === 'AUTO_CONFIRM' 
-                              ? `${session.totalAthletes - session.declinedAthletes}/${session.totalAthletes}`
-                              : `${session.confirmedAthletes}/${session.totalAthletes}`
-                            }
-                          </div>
-                        )}
-                        {(session.confirmed !== null || confirmationMode === 'AUTO_CONFIRM') && (
-                          <div className="text-[10px] mt-1">
-                            {confirmationMode === 'AUTO_CONFIRM'
-                              ? (session.confirmed === false ? '✗ Abgesagt' : '✓ Dabei')
-                              : (session.confirmed === true ? '✓ Zugesagt' : session.confirmed === false ? '✗ Abgesagt' : '')
-                            }
-                          </div>
-                        )}
+                <div className="border border-t-0 rounded-b-lg p-1 space-y-1 min-h-[100px]">
+                  {filteredDaySessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={cn(
+                        'text-xs p-1.5 rounded',
+                        session.isCancelled && 'bg-destructive/20 text-destructive',
+                        session.athleteCancelled && 'bg-muted text-muted-foreground',
+                        !session.isCancelled && !session.athleteCancelled && 'bg-primary/10 text-primary'
+                      )}
+                    >
+                      <div className="font-medium truncate">{session.groupName}</div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {session.startTime}
                       </div>
-                    ))
-                  )}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -770,74 +782,16 @@ export default function AthleteSchedule() {
         </div>
       )}
 
-      {/* Cancellation/Edit Dialog for Calendar View */}
-      {(cancellingSessionId || editingSessionId) && viewMode === 'calendar' && (
-        <Card className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50 shadow-lg">
-          <CardContent className="pt-4">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">
-                  {cancellingSessionId ? 'Training absagen' : 'Grund bearbeiten'}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setCancellingSessionId(null);
-                    setEditingSessionId(null);
-                    setCancelReason('');
-                    setEditReason('');
-                    setFormError(null);
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <Input
-                value={cancellingSessionId ? cancelReason : editReason}
-                onChange={(e) => cancellingSessionId ? setCancelReason(e.target.value) : setEditReason(e.target.value)}
-                placeholder="Grund eingeben (mind. 10 Zeichen)..."
-              />
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  {(cancellingSessionId ? cancelReason : editReason).length}/10 Zeichen
-                </span>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    if (cancellingSessionId) {
-                      handleCancel(cancellingSessionId);
-                    } else if (editingSessionId) {
-                      const session = sessions.find(s => s.id === editingSessionId);
-                      if (session?.athleteCancellationId) {
-                        handleEdit(session.athleteCancellationId);
-                      }
-                    }
-                  }}
-                  disabled={isSubmitting || (cancellingSessionId ? cancelReason : editReason).length < 10}
-                >
-                  {isSubmitting ? 'Wird gespeichert...' : cancellingSessionId ? 'Absagen' : 'Speichern'}
-                </Button>
-              </div>
-              {formError && (
-                <div className="flex items-center gap-2 text-destructive text-xs">
-                  <AlertCircle className="h-3 w-3" />
-                  {formError}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Undo Confirmation Dialog */}
+      {/* Undo Cancellation Dialog */}
       <ConfirmDialog
         open={undoDialogOpen}
         onOpenChange={setUndoDialogOpen}
         title="Absage zurücknehmen?"
-        description="Möchtest du die Absage wirklich zurücknehmen? Du wirst dann wieder als teilnehmend geführt."
-        confirmLabel="Zurücknehmen"
-        onConfirm={handleUndo}
+        description="Möchtest du deine Absage für dieses Training zurücknehmen?"
+        confirmText="Ja, zurücknehmen"
+        cancelText="Abbrechen"
+        onConfirm={() => undoSession && handleUndoCancellation(undoSession)}
+        isLoading={isSubmitting}
       />
     </div>
   );
